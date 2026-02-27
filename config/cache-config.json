@@ -1,0 +1,39 @@
+{
+    "cache": {
+        "driver": "array"
+    },
+    "connections": {
+        "cache_test": {
+            "driver": "sqlite",
+            "params": {
+                "path": ":memory:"
+            },
+            "cache": {
+                "defaultPolicy": {
+                    "ttlSeconds": 2,
+                    "minIntervalSeconds": 1,
+                    "allowStaleOnError": true,
+                    "maxStaleSeconds": 5
+                },
+                "namespace": "cache-test",
+                "tables": {
+                    "items": {
+                        "ttlSeconds": 3,
+                        "minIntervalSeconds": 1,
+                        "allowStaleOnError": true,
+                        "maxStaleSeconds": 5
+                    },
+                    "tags": {
+                        "ttlSeconds": 1,
+                        "minIntervalSeconds": 0,
+                        "allowStaleOnError": true,
+                        "maxStaleSeconds": 2
+                    },
+                    "disabled_items": {
+                        "disable": true
+                    }
+                }
+            }
+        }
+    }
+}

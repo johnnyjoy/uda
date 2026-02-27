@@ -1,0 +1,47 @@
+{
+    "default": "primary",
+    "connections": {
+        "primary": {
+            "driver": "mysql",
+            "host": "localhost",
+            "port": 3306,
+            "database": "myapp",
+            "username": "root",
+            "password": "",
+            "charset": "utf8mb4",
+            "collation": "utf8mb4_unicode_ci",
+            "prefix": ""
+        },
+        "analytics": {
+            "driver": "postgresql",
+            "host": "analytics-db.example.com",
+            "port": 5432,
+            "database": "analytics",
+            "username": "analytics_user",
+            "password": "secure_password",
+            "charset": "utf8",
+            "prefix": ""
+        },
+        "reports": {
+            "driver": "sqlite",
+            "database": "/var/lib/reports/database.sqlite"
+        },
+        "legacy": {
+            "driver": "sqlsrv",
+            "server": "legacy-db.example.com",
+            "database": "legacy_app",
+            "username": "legacy_user",
+            "password": "legacy_password",
+            "charset": "utf8"
+        },
+        "oracle": {
+            "driver": "oci",
+            "host": "oracle-db.example.com",
+            "port": 1521,
+            "database": "orcl",
+            "username": "oracle_user",
+            "password": "oracle_password",
+            "charset": "AL32UTF8"
+        }
+    }
+}

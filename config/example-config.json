@@ -1,0 +1,44 @@
+{
+    "connections": {
+        "main_pg": {
+            "driver": "pgsql",
+            "params": {
+                "host": "db1.internal",
+                "port": 5432,
+                "dbname": "app",
+                "sslmode": "require"
+            },
+            "user": {
+                "env": "PG_USER"
+            },
+            "pass": {
+                "env": "PG_PASS"
+            },
+            "dialect": "postgres"
+        },
+        "audit_sqlite": {
+            "driver": "sqlite",
+            "params": {
+                "path": ":memory:"
+            },
+            "user": null,
+            "pass": null,
+            "dialect": "sqlite"
+        },
+        "client_0123": {
+            "driver": "sqlsrv",
+            "params": {
+                "server": "sql01.internal",
+                "port": 1433,
+                "database": "Client0123"
+            },
+            "user": {
+                "env": "SQL_USER"
+            },
+            "pass": {
+                "env": "SQL_PASS"
+            },
+            "dialect": "sqlserver"
+        }
+    }
+}
