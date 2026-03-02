@@ -8,18 +8,58 @@ If code violates this document, it is wrong.
 
 ---
 
-# 1. Purpose Docblock (Mandatory)
+# 1. Purpose Statement (Mandatory)
 
-Every source file must begin with:
+Every source file must begin with a comprehensive purpose statement following John Ousterhout's philosophy:
 
 ```php
 /**
- * Purpose: One sentence describing what this file does.
- * Domain: (Driver | Query | Cache | Config | Dialect | Database)
+ * @package     UDA
+ * @subpackage  [Driver|Query|Cache|Config|SQL|Exception]
+ * @author      James Dornan <james.dornan@uda.example.com>
+ * @license     GPL-2.0-only
+ * @link        https://docs.uda.example.com/[subpackage]/[filename]
+ * @since       1.0.0
+ *
+ * [Clear, detailed description of what this file does and why it exists]
+ *
+ * The purpose of this [class/file] is to [specific responsibility] while
+ * [important constraints or boundaries]. It [interaction with other components]
+ * and [what problem it solves]. This file must not [what it should NOT do]
+ * to maintain architectural integrity and prevent scope creep.
  */
 ````
 
-If you cannot describe the purpose in one sentence, the file is doing too much.
+The purpose statement must include:
+
+1. **Clarity**: Straightforward, non-technical language that any developer can understand
+2. **Functionality**: What the file does and its main responsibilities
+3. **Context**: How it interacts with other components or modules
+4. **Usage**: How to use the file, if applicable
+5. **Boundaries**: What the file should NOT do (to prevent scope creep)
+
+Example for a Query Builder:
+```php
+/**
+ * @package     UDA
+ * @subpackage  Query
+ * @author      James Dornan <james.dornan@uda.example.com>
+ * @license     GPL-2.0-only
+ * @link        https://docs.uda.example.com/query/select
+ * @since       1.0.0
+ *
+ * This file provides a fluent, type-safe SELECT query builder that constructs
+ * parameterized SQL statements without executing them. It offers a chainable API
+ * for building complex SELECT queries with joins, filtering, ordering, and pagination
+ * while preventing SQL injection through parameter binding. The builder produces
+ * Sql objects that are executed by the Driver class, maintaining clear separation
+ * between query construction and execution as required by UDA's architectural principles.
+ */
+````
+
+The purpose statement must be detailed enough to prevent scope creep - if a feature request would cause the file to violate its stated purpose, the request must be rejected or implemented elsewhere.
+
+**Philosophical Basis**: This approach follows John Ousterhout's software design philosophy from "A Philosophy of Software Design." Each module/file should have a clear purpose statement that defines its role within the larger system, guides developers in understanding its functionality, and prevents scope creep by explicitly stating what the file should NOT do.
 
 ---
 

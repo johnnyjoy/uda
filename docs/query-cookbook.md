@@ -40,7 +40,7 @@ When boolean logic becomes complex, `where()` can enter *where-chain mode*.
         $w->and('title')->like('%Engineer%')
           ->and('hire_date')->between('2020-01-01','2024-12-31')
     )
-    ->end()
+    ->rows()
 ```
 
 Notes:
@@ -48,7 +48,6 @@ Notes:
 * `where()` begins the WHERE clause.
 * `and()`, `or()`, `not()` extend it.
 * `in()`, `between()`, `like()`, `exists()` attach operators.
-* `end()` returns to the parent query builder.
 * Closure form groups expressions.
 
 ---
@@ -122,7 +121,7 @@ Optional fluent style:
 ->groupBy('department_id')
 ->having('COUNT(id)')->gt(5)
     ->and('AVG(salary)')->gt(120000)
-    ->end()
+    ->rows()
 ```
 
 ---
@@ -273,7 +272,6 @@ $rows = $db->select('e.id','e.first_name','e.last_name')
             $w->and('e.title')->like('%Engineer%')
               ->and('e.hire_date')->between('2020-01-01','2024-12-31')
         )
-        ->end()
     ->groupBy('e.department_id')
     ->having('COUNT(e.id) > :n', ['n' => 3])
     ->orderBy('e.last_name', 'ASC')

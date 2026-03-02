@@ -3,13 +3,26 @@
 declare(strict_types=1);
 
 /**
- * @purpose Base execution engine – sole PDO owner and single hot path.
+ * @package     UDA
+ * @subpackage  Core
+ * @author      James Dornan <james.dornan@uda.example.com>
+ * @license     GPL-2.0-only
+ * @link        https://docs.uda.example.com/core/driver
+ * @since       1.0.0
+ *
+ * Base execution engine – sole PDO owner and single hot path.
  *
  * This class represents the core driver responsible for establishing a PDO
  * connection, managing the single hot path for statement preparation,
  * binding and execution, handling transactions, and orchestrating cache
  * transparently when enabled. It is the authoritative entry point for all
  * database interactions throughout the library.
+ *
+ * The purpose of this class is to encapsulate all low-level database operations
+ * (query execution, transaction management, caching) in a single class that
+ * provides a consistent interface across different database engines while
+ * maintaining performance through a single execution path and preventing
+ * scope creep into driver-specific concerns.
  */
 
 namespace UDA;
@@ -26,11 +39,11 @@ use UDA\Cache\Setup;
 use UDA\Cache;
 use UDA\Exception\QueryException;
 use UDA\Driver\SqlHelper;
-use UDA\Query\DeleteQuery;
-use UDA\Query\InsertQuery;
-use UDA\Query\SelectQuery;
-use UDA\Query\UpsertQuery;
-use UDA\Query\UpdateQuery;
+use UDA\Query\Delete;
+use UDA\Query\Insert;
+use UDA\Query\Select;
+use UDA\Query\Upsert;
+use UDA\Query\Update;
 use UDA\SQL\SqlMessage;
 
 abstract class Driver
@@ -94,7 +107,7 @@ public function getCache(): Cache
         return $affected;
     }
 
-    public function rows(string|SqlMessage|\UDA\SQL\Sql $sql, array $params = [], ?array $tables = null): array
+    public function rows(string|SqlMessage|\UDA\Query\Sql $sql, array $params = [], ?array $tables = null): array
     {
         // Transparent caching - automatically handled if cache is configured
         if ($this->cache !== null) {
@@ -122,7 +135,7 @@ public function getCache(): Cache
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function row(string|SqlMessage|\UDA\SQL\Sql $sql, array $params = [], ?array $tables = null): ?array
+    public function row(string|SqlMessage|\UDA\Query\Sql $sql, array $params = [], ?array $tables = null): ?array
     {
         // Transparent caching - automatically handled if cache is configured
         if ($this->cache !== null) {
@@ -169,14 +182,14 @@ public function getCache(): Cache
         return $row;
     }
 
-    private function readThroughCache(string $method, string|SqlMessage|\UDA\SQL\Sql $sql, array $params, ?array $tables): mixed
+    private function readThroughCache(string $method, string|SqlMessage|\UDA\Query\Sql $sql, array $params, ?array $tables): mixed
     {
         $scope = $this->cache(null, $tables);
         // Normalize to raw query string and parameters
         if ($sql instanceof SqlMessage) {
             $query = $sql->getQuery();
             $params = array_merge($sql->getParams(), $params);
-        } elseif ($sql instanceof \UDA\SQL\Sql) {
+        } elseif ($sql instanceof \UDA\Query\Sql) {
             $query = $sql->sql;
             $params = array_merge($sql->params, $params);
         } else {
@@ -218,7 +231,13 @@ public function getCache(): Cache
 
     public function list(string|SqlMessage $sql, array $params = [], ?array $tables = null): array
     {
-        return $this->values($sql, $params, $tables);
+        $row = $this->row($sql, $params, $tables);
+        
+        if ($row === null) {
+            return [];
+        }
+        
+        return array_values($row);
     }
 
     public function each(string|SqlMessage $sql, array|callable $params, callable $fn = null): int
@@ -250,9 +269,14 @@ public function getCache(): Cache
         $level = $this->transactionLevel;
         $savepoint = null;
 
+        // Level 0 means we're starting a new root transaction
+        // Level > 0 means we're nested inside an existing transaction
         if ($level === 0) {
             $this->pdo->beginTransaction();
         } else {
+            // Nested transaction: use database savepoints instead of actual transactions
+            // Some databases (PostgreSQL, SQLite) support savepoints natively
+            // Others emulate them - this abstraction provides consistent nested transaction semantics
             $savepoint = $this->createSavepointName();
             $this->pdo->exec("SAVEPOINT {$savepoint}");
         }
@@ -260,12 +284,17 @@ public function getCache(): Cache
         $this->transactionLevel++;
 
         try {
+            // Execute the user's callback with this driver instance
+            // The callback can perform database operations that should be atomic
             $result = $fn($this);
             $this->transactionLevel--;
 
+            // Success path: commit or release savepoint based on nesting level
             if ($level === 0) {
                 $this->pdo->commit();
             } elseif ($savepoint !== null) {
+                // Nested transaction succeeded: release the savepoint
+                // This marks the savepoint as completed without rolling back
                 $this->pdo->exec("RELEASE SAVEPOINT {$savepoint}");
             }
 
@@ -273,9 +302,13 @@ public function getCache(): Cache
         } catch (Throwable $e) {
             $this->transactionLevel--;
 
+            // Failure path: rollback appropriate scope based on nesting
             if ($level === 0) {
+                // Root transaction failed: rollback everything
                 $this->pdo->rollBack();
             } elseif ($savepoint !== null) {
+                // Nested transaction failed: rollback to the savepoint
+                // This undoes only the work done within this nested transaction
                 $this->pdo->exec("ROLLBACK TO SAVEPOINT {$savepoint}");
                 $this->pdo->exec("RELEASE SAVEPOINT {$savepoint}");
             }
@@ -325,14 +358,21 @@ public function orderByAllowed(string $column, array $allowlist, string $directi
 public function limitOffset(int $limit, int $offset): SqlMessage    {        $sql = SqlHelper::limitOffset($limit, $offset);        return new SqlMessage($sql, ['limit' => $limit, 'offset' => $offset]);    }
         public function inList(array $values, string $hint = 'p'): SqlMessage
     {
+        // Empty IN list: return always-false condition '1=0'
+        // This is safer than generating invalid SQL like "IN ()"
         if ($values === []) {
             return new SqlMessage('1=0', []);
         }
         
         $fragments = [];
         $params = [];
+        
+        // Sanitize hint to prevent SQL injection through parameter names
+        // Only alphanumeric and underscores allowed in parameter names
         $safeHint = preg_replace('/[^a-zA-Z0-9_]/', '_', $hint);
         
+        // Generate unique parameter names for each value
+        // This prevents parameter name collisions when combining multiple IN lists
         foreach (array_values($values) as $index => $value) {
             $key = sprintf('%s_%d', $safeHint, $index);
             $fragments[] = ":{$key}";
@@ -357,15 +397,23 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
 
     protected function executeInternal(string|SqlMessage $sql, array $params): PDOStatement
     {
+        // Normalize different SQL representations (string, SqlMessage) to consistent format
+        // This ensures all execution paths go through the same preparation and binding logic
         [$query, $mergedParams] = $this->normalizeSql($sql, $params);
+        
+        // Store for debugging - last executed query and parameters
         $this->lastSql = $query;
         $this->lastParams = $mergedParams;
 
         try {
+            // SINGLE EXECUTION PATH: This is the only place in UDA that calls prepare() and execute()
+            // As mandated by the style guide (Section 3), all query execution flows through this method
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($mergedParams);
             return $stmt;
         } catch (PDOException $ex) {
+            // Wrap PDO exceptions in our domain exception for consistent error handling
+            // This hides database-specific exception details behind a uniform interface
             throw new QueryException('Query execution failed: ' . $ex->getMessage(), 0, $ex);
         }
     }
@@ -377,7 +425,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
         if ($sql instanceof SqlMessage) {
             $query = $sql->getQuery();
             $params = array_merge($sql->getParams(), $params);
-        } elseif ($sql instanceof \UDA\SQL\Sql) {
+        } elseif ($sql instanceof \UDA\Query\Sql) {
             $query = $sql->sql;
             $params = array_merge($sql->params, $params);
         }
@@ -403,7 +451,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute a SELECT query and return all rows
      */
-    public function selectRows(SelectQuery $query, ?array $tables = null): array
+    public function selectRows(Select $query, ?array $tables = null): array
     {
         return $this->rows($query->toSql(), [], $tables);
     }
@@ -411,7 +459,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute a SELECT query and return a single row
      */
-    public function selectRow(SelectQuery $query, ?array $tables = null): ?array
+    public function selectRow(Select $query, ?array $tables = null): ?array
     {
         return $this->row($query->toSql(), [], $tables);
     }
@@ -419,7 +467,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute a SELECT query and return a single value
      */
-    public function selectValue(SelectQuery $query, ?array $tables = null): mixed
+    public function selectValue(Select $query, ?array $tables = null): mixed
     {
         $row = $this->row($query->toSql(), [], $tables);
         if ($row === null) {
@@ -434,7 +482,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute a SELECT query and return values from the first column
      */
-    public function selectValues(SelectQuery $query, ?array $tables = null): array
+    public function selectValues(Select $query, ?array $tables = null): array
     {
         $rows = $this->rows($query->toSql(), [], $tables);
         $values = [];
@@ -447,9 +495,23 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     }
     
     /**
+     * Execute a SELECT query and return single row as numerically indexed array
+     */
+    public function selectList(Select $query, ?array $tables = null): array
+    {
+        $row = $this->row($query->toSql(), [], $tables);
+        
+        if ($row === null) {
+            return [];
+        }
+        
+        return array_values($row);
+    }
+    
+    /**
      * Execute an INSERT query
      */
-    public function insertExec(InsertQuery $query): int
+    public function insertExec(Insert $query): int
     {
         $reflection = new \ReflectionClass($query);
         $tableProperty = $reflection->getProperty('table');
@@ -464,7 +526,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute an UPDATE query
      */
-    public function updateExec(UpdateQuery $query): int
+    public function updateExec(Update $query): int
     {
         $reflection = new \ReflectionClass($query);
         $tableProperty = $reflection->getProperty('table');
@@ -479,7 +541,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute a DELETE query
      */
-    public function deleteExec(DeleteQuery $query): int
+    public function deleteExec(Delete $query): int
     {
         $reflection = new \ReflectionClass($query);
         $tableProperty = $reflection->getProperty('table');
@@ -494,7 +556,7 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
     /**
      * Execute an UPSERT query
      */
-    public function upsertExec(UpsertQuery $query): int
+    public function upsertExec(Upsert $query): int
     {
         $reflection = new \ReflectionClass($query);
         $tableProperty = $reflection->getProperty('table');
@@ -506,41 +568,41 @@ public function limitOffset(int $limit, int $offset): SqlMessage    {        $sq
         return $affected;
     }
     
-    public function select(): SelectQuery
+    public function select(): Select
     {
-        $builder = new SelectQuery();
+        $builder = new Select();
         $builder->driverInstance = $this;
         $builder->driverName = $this->driverName;
         return $builder;
     }
 
-    public function insert(): InsertQuery
+    public function insert(): Insert
     {
-        $builder = new InsertQuery();
+        $builder = new Insert();
         $builder->driverInstance = $this;
         $builder->driverName = $this->driverName;
         return $builder;
     }
 
-    public function update(): UpdateQuery
+    public function update(): Update
     {
-        $builder = new UpdateQuery();
+        $builder = new Update();
         $builder->driverInstance = $this;
         $builder->driverName = $this->driverName;
         return $builder;
     }
 
-    public function delete(): DeleteQuery
+    public function delete(): Delete
     {
-        $builder = new DeleteQuery();
+        $builder = new Delete();
         $builder->driverInstance = $this;
         $builder->driverName = $this->driverName;
         return $builder;
     }
 
-    public function upsert(): UpsertQuery
+    public function upsert(): Upsert
     {
-        $builder = new UpsertQuery();
+        $builder = new Upsert();
         $builder->driverInstance = $this;
         $builder->driverName = $this->driverName;
         return $builder;
@@ -734,7 +796,7 @@ return $this->querySqlRow($sql);
     /**
      * Normalize SQL and parameters for cache key generation
      */
-    private function normalizeSqlForCache(string|SqlMessage|\UDA\SQL\Sql $sql, array $params): array
+    private function normalizeSqlForCache(string|SqlMessage|\UDA\Query\Sql $sql, array $params): array
     {
         $query = $sql;
         $mergedParams = $params;
@@ -742,7 +804,7 @@ return $this->querySqlRow($sql);
         if ($sql instanceof SqlMessage) {
             $query = $sql->getQuery();
             $mergedParams = array_merge($sql->getParams(), $params);
-        } elseif ($sql instanceof \UDA\SQL\Sql) {
+        } elseif ($sql instanceof \UDA\Query\Sql) {
             $query = $sql->sql;
             $mergedParams = array_merge($sql->params, $params);
         }
