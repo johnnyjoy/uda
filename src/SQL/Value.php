@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\Value: Add detailed purpose here */
+/**
+ * SQL value wrapper with type-safe parameter binding. Encapsulates arbitrary values for safe inclusion in SQL queries, handling null values, boolean conversion, and providing a clean interface for value binding that prevents type confusion and injection vulnerabilities.
+ *
+ * PURPOSE: SQL value wrapper with type-safe parameter binding. Encapsulates arbitrary values for safe inclusion in SQL queries, handling null values, boolean conversion, and providing a clean interface for value binding that prevents type confusion and injection vulnerabilities
+ */
 
 namespace UDA\SQL;
 

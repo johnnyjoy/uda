@@ -25,6 +25,37 @@ UDA does not generate magic.
 
 It provides a uniform execution surface.
 
+## Database Doctrine (Non-Negotiable)
+
+**UDA\Database is the database** from the perspective of application code.
+
+- Application code MUST treat `UDA\Database` as the sole ingress and primary handle.
+- Application code MUST NOT use `UDA\Driver` directly.
+- `UDA\Driver` and all `UDA\Driver\*` classes are **internal execution engines** and are not part of the public mental model.
+
+### The One Handle Rule
+- The only handle that user code should hold for data access is a `Database` instance (or query objects created by it).
+- There SHALL NOT be a “two ways to do it” split such as “direct Driver usage” vs “Database usage.”
+
+### What Database Is Allowed To Do
+`Database` is a **Domain Master**: short pathways, minimal hops.
+
+- Select the connection (default or named)
+- Lazily bind the internal execution engine (Driver)
+- Expose uniform execution methods (`row/rows/value/values/list/each/exec/transaction`)
+- Create fluent query objects (`select/insert/update/delete/upsert`) that terminate back into the Database/Driver execution path
+
+### What Database Must Never Do
+`Database` MUST remain thin: **no business logic**, only coordination.
+
+`Database` MUST NOT:
+- build SQL strings (Query does that)
+- touch PDO / PDOStatement (Driver does that)
+- implement caching logic (Driver does that)
+- implement serialization policy (cache backend handles do that)
+- compute DSNs (Driver/Config does that)
+- perform table write tracking logic (Driver informs Cache/Tracker)
+
 ---
 
 # Article II — Driver Doctrine

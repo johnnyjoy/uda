@@ -2,7 +2,19 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\Keyword: Add detailed purpose here */
+/**
+ * SQL keyword token with security whitelist validation.
+ *
+ * This class validates SQL keywords against a predefined whitelist of safe
+ * keywords and explicitly blocks dangerous operations like DROP, TRUNCATE,
+ * and EXECUTE. It ensures that only permitted SQL keywords can be used
+ * in query construction, preventing injection of destructive operations.
+ *
+ * PURPOSE: To provide a secure representation of SQL keywords that prevents
+ *          dangerous database operations from being injected through keyword
+ *          manipulation while allowing safe query construction with validated
+ *          keywords.
+ */
 
 namespace UDA\SQL;
 

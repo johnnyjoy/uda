@@ -46,25 +46,43 @@ All read and write operations MUST converge to this implementation.
 
 If more than one prepare/execute implementation exists, the system is invalid.
 
+## 2.2 Database Domain Master Law
+
+- `Database` may coordinate and delegate.
+- `Database` MUST be thin.
+- `Database` MUST NOT contain SQL compilation logic, caching logic, DSN logic, or any IO logic.
+- `Database` MAY create query objects and forward them to Driver for execution.
+
+If `Database` contains logic beyond delegation, connection selection, and query object creation, it is a violation.
+
 ---
 
-## 2.2 One Read Surface Law
+## Public Surface 2.0 (Hard Contract)
 
-All read terminators SHALL converge to:
+### Database is the public database
+- **Primary ingress:** `UDA\Database`
+- Application code MUST NOT reference or depend on `UDA\Driver` directly.
+- `UDA\Driver` exists to execute; it is not a public concept.
 
-```php
-Driver::readInternal(Sql $sql): mixed
-```
+### Connect returns Database, not Driver
+- `Database::connect(?string $name=null, ?string $configFile=null): Database`
+- “Connection” is a name used to select validated configuration; it is not an object.
 
-These MUST NOT bypass that method:
+### One read/write surface
+All execution entrypoints are methods on `Database`:
 
-* row()
-* rows()
-* value()
-* values()
-* list()
-* each()
-* select()->…->rows()
+- Reads: `row()`, `rows()`, `value()`, `values()`, `list()`, `each()`
+- Writes: `exec()`
+- `transaction(callable $fn)`
+- Debug: `lastSql()`, `lastParams()`
+
+Fluent queries are created from `Database` and terminate through the same execution path:
+- `$db->select()...->rows()`
+- `$db->insert()...->exec()`
+- `$db->upsert()...->exec()`
+
+**No second API** (no “scope objects” or “explicit cache handles” in the public surface).
+Caching is configured; it *happens*.
 
 No alternate read surface SHALL exist.
 
@@ -148,6 +166,8 @@ Builders SHALL NOT hold runtime execution state.
 
 # 4. Configuration
 
+The Config domain, like others is governed by its Doamin Master, the Config class. Everything related to config is in the Config class, or in the Config directory.
+
 ## 4.1 Configuration Source
 
 Exactly one configuration file path SHALL be provided via:
@@ -198,6 +218,11 @@ If enabled:
 If disabled:
 
 * Cache code MUST NOT execute.
+
+### Cache Visibility Rule
+- Callers do not “use cache.” They read/write via `Database`.
+- When caching is enabled by configuration for a connection, the execution path consults cache automatically.
+- Cache decisions are internal: hit/miss/stale/DB-down logic is not a public API surface.
 
 ---
 

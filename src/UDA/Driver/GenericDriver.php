@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\Driver\GenericDriver: Add detailed purpose here */
+/**
+ * Generic database driver fallback implementation. Provides basic database connectivity for unsupported or experimental database drivers, implementing core Driver functionality with minimal assumptions about database-specific features while maintaining the core UDA execution contract.
+ *
+ * PURPOSE: Generic database driver fallback implementation. Provides basic database connectivity for unsupported or experimental database drivers, implementing core Driver functionality with minimal assumptions about database-specific features while maintaining the core UDA execution contract
+ */
 
 namespace UDA\Driver;
 

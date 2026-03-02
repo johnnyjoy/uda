@@ -2,7 +2,19 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\FunctionCall: Add detailed purpose here */
+/**
+ * Function call builder with security whitelist validation.
+ *
+ * This class provides secure SQL function call construction by validating
+ * function names against a predefined whitelist of safe SQL functions.
+ * It prevents injection of dangerous database functions while allowing
+ * common aggregate, string, date, and mathematical functions.
+ *
+ * PURPOSE: To enable safe construction of SQL function calls in queries
+ *          by validating function names against known-safe functions and
+ *          explicitly blocking dangerous operations that could compromise
+ *          database security or integrity.
+ */
 
 namespace UDA\SQL;
 

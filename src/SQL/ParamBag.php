@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\ParamBag: Add detailed purpose here */
+/**
+ * Parameter bag for collecting and managing named SQL parameters. Provides a centralized container for query parameters that ensures unique naming, prevents parameter name collisions, and maintains proper parameter-value associations throughout query construction and execution.
+ *
+ * PURPOSE: Parameter bag for collecting and managing named SQL parameters. Provides a centralized container for query parameters that ensures unique naming, prevents parameter name collisions, and maintains proper parameter-value associations throughout query construction and execution
+ */
 
 namespace UDA\SQL;
 

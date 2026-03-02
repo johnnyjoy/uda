@@ -34,7 +34,9 @@ public static function orderByAllowed(string $column, array $allowlist, string $
         throw new QueryException('Column not allowed in ORDER BY: ' . $column);
     }
     
-    return "ORDER BY {$column} {$direction}";
+    // Quote the column name to match expected test output
+    $quotedColumn = '"' . str_replace('"', '""', $column) . '"';
+    return "ORDER BY {$quotedColumn} {$direction}";
 }
 
 /**

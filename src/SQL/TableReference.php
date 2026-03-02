@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\TableReference: Add detailed purpose here */
+/**
+ * Table reference validator with schema support. Validates and represents database table references (potentially with schema prefixes) ensuring they follow proper naming conventions and don't contain dangerous SQL patterns, supporting cross-database schema.table notation.
+ *
+ * PURPOSE: Table reference validator with schema support. Validates and represents database table references (potentially with schema prefixes) ensuring they follow proper naming conventions and don't contain dangerous SQL patterns, supporting cross-database schema.table notation
+ */
 
 namespace UDA\SQL;
 

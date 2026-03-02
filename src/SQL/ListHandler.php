@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\ListHandler: Add detailed purpose here */
+/**
+ * SQL list handler with parameter expansion for safe IN clause generation. Provides secure handling of array values in SQL queries by expanding them into properly parameterized lists with unique parameter names to prevent SQL injection while supporting variable-length IN clauses.
+ *
+ * PURPOSE: SQL list handler with parameter expansion for safe IN clause generation. Provides secure handling of array values in SQL queries by expanding them into properly parameterized lists with unique parameter names to prevent SQL injection while supporting variable-length IN clauses
+ */
 
 namespace UDA\SQL;
 

@@ -2,14 +2,21 @@
 
 declare(strict_types=1);
 
-namespace UniversalDataAbstraction\Config;
-
 /**
+ * @package     UDA
+ * @subpackage  Config
+ * @author      James Dornan <james.dornan@uda.example.com>
+ * @license     GPL-2.0-only
+ * @link        https://docs.uda.example.com/config/database
+ * @since       1.0.0
+ *
  * Database Configuration
  *
  * This file contains database connection configuration for the Universal Data Abstraction system.
  * Connection information is loaded from a configuration file specified by an environment variable.
  */
+
+namespace UniversalDataAbstraction\Config;
 
 /**
  * Load database configuration from a file specified by an environment variable

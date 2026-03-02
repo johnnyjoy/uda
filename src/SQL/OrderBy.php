@@ -2,7 +2,16 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\OrderBy: Add detailed purpose here */
+/**
+ * ORDER BY clause builder with allowlist enforcement for safe,
+ *          injection-proof sorting in SQL queries.
+ *
+ * This class provides a secure, immutable representation of ORDER BY clauses
+ * that validates column names against a predefined allowlist. It prevents SQL
+ * injection by ensuring only explicitly permitted columns can be used for
+ * sorting, making it ideal for user-facing sort interfaces or APIs where
+ * sorting parameters come from untrusted sources.
+ */
 
 namespace UDA\SQL;
 

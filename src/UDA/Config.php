@@ -2,7 +2,16 @@
 
 declare(strict_types=1);
 
-/** @purpose Config façade - provides static API for loading and accessing configuration */
+/**
+ * Configuration façade providing a static, immutable API for loading,
+ *          validating, and accessing database connection configurations.
+ *
+ * This class serves as the primary entry point for configuration management
+ * throughout UDA. It enforces a singleton pattern for configuration state,
+ * ensuring consistency across the application lifecycle. The façade abstracts
+ * away JSON parsing, validation, and environment variable handling, providing
+ * a clean, type-safe interface for accessing connection details and defaults.
+ */
 
 namespace UDA;
 

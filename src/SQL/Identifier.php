@@ -2,7 +2,18 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\SQL\Identifier: Add detailed purpose here */
+/**
+ * Database identifier validator and quoter with security validation.
+ *
+ * This class validates database identifiers (table names, column names, etc.)
+ * against SQL injection patterns and provides driver-specific quoting.
+ * It prevents dangerous identifiers containing SQL keywords and ensures
+ * identifiers follow proper naming conventions across different database engines.
+ *
+ * PURPOSE: To provide a secure, validated representation of database identifiers
+ *          that prevents SQL injection through identifier names while supporting
+ *          driver-specific quoting rules for cross-database compatibility.
+ */
 
 namespace UDA\SQL;
 

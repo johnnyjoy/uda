@@ -2,15 +2,27 @@
 
 declare(strict_types=1);
 
-/** @purpose UDA\Cache\Store\RedisStore: Add detailed purpose here */
+/**
+ * Redis-based cache store implementation
+ */
 
 namespace UDA\Cache\Store;
 
 use Redis;
 use RuntimeException;
 
+/**
+ * Redis-based cache store implementation
+ */
 final class RedisStore implements CacheStoreInterface
 {
+    /**
+     * 
+     * @param Redis $redis The Redis connection
+     * @param string $prefix The key prefix
+     * @param string $serializer The serializer to use
+     * @throws RuntimeException If Redis extension is not loaded or serializer is unsupported
+     */
     public function __construct(private Redis $redis, private string $prefix = 'UDA:', private string $serializer = 'php')
     {
         if (!extension_loaded('redis')) {
@@ -34,12 +46,24 @@ final class RedisStore implements CacheStoreInterface
         }
     }
 
+    /**
+     * 
+     * @param string $key The cache key
+     * @return ?string The cached value or null
+     */
     public function fetch(string $key): ?string
     {
         $value = $this->redis->get($this->prefix . $key);
         return $value === false ? null : $value;
     }
 
+    /**
+     * 
+     * @param string $key The cache key
+     * @param string $value The value to cache
+     * @param int $ttlSeconds Time-to-live in seconds
+     * @return void
+     */
     public function store(string $key, string $value, int $ttlSeconds): void
     {
         $prefixed = $this->prefix . $key;
@@ -50,6 +74,11 @@ final class RedisStore implements CacheStoreInterface
         }
     }
 
+    /**
+     * 
+     * @param string $key The cache key
+     * @return void
+     */
     public function delete(string $key): void
     {
         $this->redis->del($this->prefix . $key);

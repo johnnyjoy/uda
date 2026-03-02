@@ -2,16 +2,40 @@
 
 declare(strict_types=1);
 
-/** @purpose Config validation - ensures JSON structure and types are correct */
+/**
+ * @package     UDA
+ * @subpackage  Config
+ * @author      James Dornan <james.dornan@uda.example.com>
+ * @license     GPL-2.0-only
+ * @link        https://docs.uda.example.com/config/validator
+ * @since       1.0.0
+ *
+ * This file validates JSON configuration files for database connections, ensuring
+ * structural correctness, proper data types, and required fields. It performs
+ * comprehensive validation on connection configurations, default settings, and
+ * driver-specific parameters, producing validated Snapshot objects that guarantee
+ * configuration integrity throughout the UDA system. The validator prevents
+ * runtime errors by catching configuration issues early in the setup process.
+ */
 
 namespace UDA\Config;
 
 use UDA\Exception\ConfigException;
 
+/**
+ * Config validator that ensures JSON structure and types are correct
+ */
 final class Validator
 {
+    /** @var array Validation errors */
     private array $errors = [];
     
+    /**
+     * 
+     * @param array $config The configuration to validate
+     * @return Snapshot The validated configuration snapshot
+     * @throws ConfigException If validation fails
+     */
     public function validate(array $config): Snapshot
     {
         $this->errors = [];
@@ -32,6 +56,11 @@ final class Validator
         );
     }
     
+    /**
+     * 
+     * @param array $config The configuration to validate
+     * @return void
+     */
     private function validateTopLevel(array $config): void
     {
         if (!isset($config['connections']) || !is_array($config['connections'])) {
@@ -39,6 +68,11 @@ final class Validator
         }
     }
     
+    /**
+     * 
+     * @param array $config The configuration to validate
+     * @return array The validated default configuration values
+     */
     private function validateAndExtractDefaults(array $config): array
     {
         $defaults = $config['defaults'] ?? [];
@@ -59,6 +93,11 @@ final class Validator
         return $defaults;
     }
     
+    /**
+     * 
+     * @param array $config The configuration to validate
+     * @return array The validated connection configurations
+     */
     private function validateConnections(array $config): array
     {
         $connections = $config['connections'];

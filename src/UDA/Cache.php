@@ -3,7 +3,14 @@
 declare(strict_types=1);
 
 /**
- * @purpose Cache domain controller – entry point for cache operations.
+ * @package     UDA
+ * @subpackage  Cache
+ * @author      James Dornan <james.dornan@uda.example.com>
+ * @license     GPL-2.0-only
+ * @link        https://docs.uda.example.com/cache/controller
+ * @since       1.0.0
+ *
+ * Cache domain controller – entry point for cache operations.
  *
  * This class serves as the central façade for the caching subsystem.
  * It owns the `CacheBridge`, resolves the appropriate `Scope` for a given
@@ -11,6 +18,11 @@ declare(strict_types=1);
  * accessing the scope, touching tables to invalidate entries, and gathering
  * statistics. All cache activity flows through this class, keeping the driver
  * implementation free from cache‑specific concerns.
+ *
+ * The purpose of this class is to provide a transparent caching layer
+ * that automatically handles query result caching when configured,
+ * while maintaining clean separation from query execution logic and
+ * preventing cache concerns from leaking into the Driver domain.
  */
 
 
