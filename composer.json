@@ -15,7 +15,9 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",
-        "phpstan/phpstan": "^1.0"
+        "phpstan/phpstan": "^1.0",
+        "symfony/finder": "^6.0",
+        "friendsofphp/php-cs-fixer": "^3.94"
     },
     "autoload": {
         "psr-4": {
@@ -25,12 +27,20 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "UniversalDataAbstraction\\Tests\\": "tests/"
+            "UniversalDataAbstraction\\Tests\\": "tests/",
+            "Tests\\": "tests/"
         }
     },
     "scripts": {
         "test": "vendor/bin/phpunit",
-        "stan": "vendor/bin/phpstan analyse src/"
+        "stan": "vendor/bin/phpstan analyse src/",
+        "check": [
+            "@php tools/check-purpose.php",
+            "@php tools/check-pdo-usage.php",
+            "@php tools/check-execution-path.php",
+            "@php tools/check-imports.php",
+            "@php tools/check-forbidden-names.php"
+        ]
     },
     "minimum-stability": "stable",
     "prefer-stable": true
