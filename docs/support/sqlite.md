@@ -11,8 +11,8 @@
 | Window functions | ✅ | Exercised via builders + snapshots |
 | UNION/INTERSECT/EXCEPT | ✅ | Dialect fixtures cover `UNION ALL` etc. |
 | EXPLAIN / EXPLAIN ANALYZE | ✅ | Database `explain*` routes verified |
-| Result cache integration | ⚠️ Blocked | R00x exposes `tableHints`/trace propagation; full cache certification (Array/Redis/Memcached harness) still pending |
-| Guardrails | ⚠️ Blocked | Guardrail module not committed; tests pending R01b |
-| Tracing / Replay / Metrics / Retry | ⚠️ Blocked | Modules absent; add once merged |
+| Result cache integration | ⚠️ Blocked | Harness exists (Redis/Memcached tests) and runs in `sqlite-cert` workflow; CI depends on services/extensions being available |
+| Guardrails | ✅ | Guardrail violation + unsafe bypass covered in `SQLiteOperationalTest` (enforced via CI) |
+| Tracing / Replay / Metrics / Retry | ✅ | Operational suite covers replay capture, metrics aggregator, retry policy (enforced via `sqlite-cert` workflow) |
 
 **Legend**: ✅ implemented & tested · ⚠️ pending/blocker

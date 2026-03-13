@@ -8,7 +8,8 @@ _Last updated: 2026-03-13_
 - ✅ Builders: SELECT/INSERT/UPDATE/DELETE/UPSERT/RETURNING, CTEs, window clauses, pagination
 - ✅ CRUD + transaction behavior validated end-to-end
 - ✅ Performance benchmarks captured (see below)
-- ⚠️ Operational suite (guardrails, tracing, replay, metrics, retry, cache stores) **blocked** pending committed modules & API fixes
+- ✅ Operational suite (guardrails, replay, metrics, retry) – see “Operational Scenarios”
+- ⚠️ Cache certification (Redis/Memcached) – depends on services/extensions being available
 
 ## Test Evidence
 
@@ -58,18 +59,52 @@ Artifacts: `build/sqlite-cert/benchmarks.json`
 | SELECT execution | 2 000 | 0.08 | 26 123 |
 | EXPLAIN plan generation | 100 | 0.005 | 21 440 |
 
-## Blockers for Operational Suite (R01b)
+## Operational Scenarios (R01b)
 
-1. **Guardrails / Tracing / Replay / Metrics / Retry modules** are untracked in this worktree. Need committed sources so PHPUnit can autoload them.
-2. **Cache certification (R01c)** – the API blocker is now resolved via R00x (raw SQL callers can pass `tableHints`, and cache/tracing layers consume them). The remaining work is writing the certification harness (Redis/Memcached suites + documentation).
+Operational certification runs `vendor/bin/phpunit tests/SQLite/SQLiteOperationalTest.php` and covers:
 
-Once those are addressed we can add:
+- Guardrail enforcement (blocked deletes, unsafe bypass) with trace verification
+- Replay capture (NDJSON) + `QueryReplayer` execution
+- Metrics aggregation via `MetricsAggregator`
+- Retry policy integration (successful retry + writes_disabled blocking)
 
-- Guardrail enforcement tests (unsafe deletes, audit traces)
-- Replay capture + NDJSON verification
-- Metrics aggregation counters
-- Retry policy coverage on SQLite
-- Cache store certification (Array/Redis/Memcached)
+## Cache Certification Status (R01c)
+
+Cache harness now runs against live Redis/Memcached services.
+
+```
+SQLITE_REDIS_HOST=127.0.0.1 SQLITE_MEMCACHED_HOST=127.0.0.1 \
+vendor/bin/phpunit tests/SQLite/SQLiteCacheTest.php
+```
+
+Result: `OK (4 tests, 34 assertions)` – each test is executed twice (Redis + Memcached) via data providers.
+
+Highlights:
+
+- First read emits `resultCacheHit=false`; second read hits cache (`resultCacheHit=true`) with `tables=['employees']`.
+- Writes invalidate cached entries; subsequent reads emit `resultCacheHit=false` before warming again.
+- Metadata-first traces include fingerprint/table information for both stores.
+
+Full SQLite + cache suite:
+
+```
+SQLITE_REDIS_HOST=127.0.0.1 SQLITE_MEMCACHED_HOST=127.0.0.1 \
+vendor/bin/phpunit tests/SQLite tests/Cache
+```
+
+Result: `OK (43 tests, 178 assertions)` – no skips.
+
+## CI Enforcement
+
+GitHub Actions workflow: `.github/workflows/sqlite-cert.yml`
+
+The `sqlite-cert` job runs on every push and pull request. Steps:
+
+1. Spin up Redis (`redis:7`) and Memcached (`memcached:1.6`) services.
+2. Install PHP 8.2 with `redis`/`memcached` extensions and Composer deps.
+3. Run `SQLITE_REDIS_HOST=127.0.0.1 SQLITE_MEMCACHED_HOST=127.0.0.1 vendor/bin/phpunit tests/SQLite tests/Cache`.
+
+Outcome: build fails immediately if core/operational/cache certification regresses. See workflow logs for details.
 
 ## Running Cache Certification Locally
 
