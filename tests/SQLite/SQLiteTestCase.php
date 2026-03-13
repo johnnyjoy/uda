@@ -9,9 +9,11 @@ use PHPUnit\Framework\TestCase;
 use ReflectionObject;
 use ReflectionProperty;
 use Throwable;
+use UDA\Cache;
 use UDA\Config;
 use UDA\Database;
 use UDA\Driver;
+use UDA\Driver\SQLite as SQLiteDriver;
 use UDA\Query\Sql as BuilderSql;
 use UDA\SQL\SqlMessage;
 
@@ -44,6 +46,40 @@ abstract class SQLiteTestCase extends TestCase
 
         try {
             return $this->runWithDatabase($tempPath, $fn);
+        } finally {
+            if (is_file($tempPath)) {
+                @unlink($tempPath);
+            }
+        }
+    }
+
+    /**
+     * @template TValue
+     * @param array $connectionOverride
+     * @param callable(Database $db):TValue $fn
+     * @return TValue
+     */
+    protected function withMemoryDbConfig(array $connectionOverride, callable $fn): mixed
+    {
+        return $this->runWithDatabase(':memory:', $fn, $connectionOverride);
+    }
+
+    /**
+     * @template TValue
+     * @param array $connectionOverride
+     * @param callable(Database $db):TValue $fn
+     * @return TValue
+     */
+    protected function withTempDbConfig(array $connectionOverride, callable $fn): mixed
+    {
+        $tempPath = tempnam(sys_get_temp_dir(), 'uda-sqlite-db-');
+
+        if ($tempPath === false) {
+            self::fail('Unable to create temporary SQLite database path');
+        }
+
+        try {
+            return $this->runWithDatabase($tempPath, $fn, $connectionOverride);
         } finally {
             if (is_file($tempPath)) {
                 @unlink($tempPath);
@@ -132,7 +168,7 @@ SQL
 
     protected function retryStubDriver(Database $db, ?callable $beforeAttempt = null, ?callable $afterAttempt = null): SQLiteRetryDriverStub
     {
-        $driver = $this->extractDriver($db);
+        $driver = $this->getDriver($db);
 
         $stub = new SQLiteRetryDriverStub(
             $driver,
@@ -146,30 +182,52 @@ SQL
         return $stub;
     }
 
+    protected function cacheController(Database $db): Cache
+    {
+        $property = new ReflectionProperty(Driver::class, 'cache');
+        $property->setAccessible(true);
+
+        /** @var Cache $cache */
+        $cache = $property->getValue($this->getDriver($db));
+
+        return $cache;
+    }
+
+    protected function consumeResultCacheHit(Database $db): bool
+    {
+        return $this->getDriver($db)->consumeResultCacheHit();
+    }
+
     /**
      * @template TValue
      * @param callable(Database $db):TValue $fn
      * @return TValue
      */
-    private function runWithDatabase(string $path, callable $fn): mixed
+    private function runWithDatabase(string $path, callable $fn, array $connectionOverride = []): mixed
     {
-        $db = $this->createDatabase($path);
+        $db = $this->createDatabase($path, $connectionOverride);
         $this->createSchema($db);
 
-        return $fn($db);
+        try {
+            return $fn($db);
+        } finally {
+            Config::clearForTests();
+        }
     }
 
-    private function createDatabase(string $path): Database
+    private function createDatabase(string $path, array $connectionOverride = []): Database
     {
         Config::clearForTests();
+
+        $connection = array_replace_recursive([
+            'driver' => 'sqlite',
+            'params' => ['path' => $path],
+        ], $connectionOverride);
 
         $config = [
             'defaults' => ['connection' => self::CONNECTION_NAME],
             'connections' => [
-                self::CONNECTION_NAME => [
-                    'driver' => 'sqlite',
-                    'params' => ['path' => $path],
-                ],
+                self::CONNECTION_NAME => $connection,
             ],
         ];
 
@@ -200,7 +258,7 @@ SQL
         return $configPath;
     }
 
-    private function extractDriver(Database $db): Driver
+    protected function getDriver(Database $db): Driver
     {
         $property = new ReflectionProperty(Database::class, 'driver');
         $property->setAccessible(true);
@@ -219,7 +277,7 @@ SQL
     }
 }
 
-final class SQLiteRetryDriverStub extends Driver
+final class SQLiteRetryDriverStub extends SQLiteDriver
 {
     private Closure $before;
     private ?Closure $after;
@@ -267,9 +325,9 @@ final class SQLiteRetryDriverStub extends Driver
         return $this->wrap(__FUNCTION__, fn () => parent::list($sql, $params, $tables));
     }
 
-    public function each(string|SqlMessage|BuilderSql $sql, array|callable $params, callable $fn = null): int
+    public function each(string|SqlMessage|BuilderSql $sql, array|callable $params, callable $fn = null, ?array $tables = null): int
     {
-        return $this->wrap(__FUNCTION__, fn () => parent::each($sql, $params, $fn));
+        return $this->wrap(__FUNCTION__, fn () => parent::each($sql, $params, $fn, $tables));
     }
 
     public function exec(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): int
