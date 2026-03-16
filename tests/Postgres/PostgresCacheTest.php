@@ -19,25 +19,7 @@ final class PostgresCacheTest extends PostgresTestCase
     public function testReadsUseCacheAndEmitTables(string $label, CacheService $service): void
     {
         $serviceConfig = $service->bootOrSkip($this);
-
         $this->withPostgresDb(function (Database $db) use ($label, $serviceConfig): void {
-            Config::clearForTests();
-            $baseConfig = $this->baseConnectionConfig();
-            $config = [
-                'defaults' => ['connection' => self::CONNECTION_NAME],
-                'connections' => [
-                    self::CONNECTION_NAME => array_replace_recursive([
-                        'driver' => 'pgsql',
-                        'params' => $baseConfig['params'],
-                        'user' => $baseConfig['user'],
-                        'pass' => $baseConfig['pass'],
-                        'cache' => $this->postgresCacheConfig($serviceConfig),
-                    ], $baseConfig),
-                ],
-            ];
-            $configPath = $this->writeTempConfig($config);
-            Config::init($configPath);
-
             $collector = $this->registerTraceCollector();
 
             $sql = 'SELECT name, title FROM employees WHERE id = :id';
@@ -55,7 +37,7 @@ final class PostgresCacheTest extends PostgresTestCase
             self::assertTrue($secondTrace->resultCacheHit,
                 sprintf('[%s] second SELECT should hit cache', $label));
             $this->assertTraceTables($secondTrace, $tableHints, $label);
-        });
+        }, [], isolateSchema: true);
     }
 
     #[DataProvider('cacheProvider')]
@@ -64,23 +46,6 @@ final class PostgresCacheTest extends PostgresTestCase
         $serviceConfig = $service->bootOrSkip($this);
 
         $this->withPostgresDb(function (Database $db) use ($label, $serviceConfig): void {
-            Config::clearForTests();
-            $baseConfig = $this->baseConnectionConfig();
-            $config = [
-                'defaults' => ['connection' => self::CONNECTION_NAME],
-                'connections' => [
-                    self::CONNECTION_NAME => array_replace_recursive([
-                        'driver' => 'pgsql',
-                        'params' => $baseConfig['params'],
-                        'user' => $baseConfig['user'],
-                        'pass' => $baseConfig['pass'],
-                        'cache' => $this->postgresCacheConfig($serviceConfig),
-                    ], $baseConfig),
-                ],
-            ];
-            $configPath = $this->writeTempConfig($config);
-            Config::init($configPath);
-
             $collector = $this->registerTraceCollector();
 
             $baseline = $db->rows('SELECT name FROM employees WHERE id = :id', ['id' => 1], ['employees']);
@@ -104,7 +69,7 @@ final class PostgresCacheTest extends PostgresTestCase
             self::assertFalse($traceAfter->resultCacheHit,
                 sprintf('[%s] SELECT after UPDATE should invalidate cache and hit DB', $label));
             $this->assertTraceTables($traceAfter, ['employees'], $label);
-        });
+        }, [], isolateSchema: true);
     }
 
     #[DataProvider('cacheProvider')]
@@ -113,23 +78,6 @@ final class PostgresCacheTest extends PostgresTestCase
         $serviceConfig = $service->bootOrSkip($this);
 
         $this->withPostgresDb(function (Database $db) use ($label, $serviceConfig): void {
-            Config::clearForTests();
-            $baseConfig = $this->baseConnectionConfig();
-            $config = [
-                'defaults' => ['connection' => self::CONNECTION_NAME],
-                'connections' => [
-                    self::CONNECTION_NAME => array_replace_recursive([
-                        'driver' => 'pgsql',
-                        'params' => $baseConfig['params'],
-                        'user' => $baseConfig['user'],
-                        'pass' => $baseConfig['pass'],
-                        'cache' => $this->postgresCacheConfig($serviceConfig),
-                    ], $baseConfig),
-                ],
-            ];
-            $configPath = $this->writeTempConfig($config);
-            Config::init($configPath);
-
             $collector = $this->registerTraceCollector();
             $transactionId = (int) $db->value(
                 'INSERT INTO transactions (account, amount) VALUES (:account, :amount) RETURNING id',
@@ -157,7 +105,7 @@ final class PostgresCacheTest extends PostgresTestCase
             $secondTrace = $this->lastTrace($collector);
             self::assertFalse($secondTrace->resultCacheHit,
                 sprintf('[%s] SELECT should hit DB (RETURNING fingerprint bisects cache key)', $label));
-        });
+        }, [], isolateSchema: true);
     }
 
     #[DataProvider('cacheProvider')]
@@ -166,23 +114,6 @@ final class PostgresCacheTest extends PostgresTestCase
         $serviceConfig = $service->bootOrSkip($this);
 
         $this->withPostgresDb(function (Database $db) use ($label, $serviceConfig): void {
-            Config::clearForTests();
-            $baseConfig = $this->baseConnectionConfig();
-            $config = [
-                'defaults' => ['connection' => self::CONNECTION_NAME],
-                'connections' => [
-                    self::CONNECTION_NAME => array_replace_recursive([
-                        'driver' => 'pgsql',
-                        'params' => $baseConfig['params'],
-                        'user' => $baseConfig['user'],
-                        'pass' => $baseConfig['pass'],
-                        'cache' => $this->postgresCacheConfig($serviceConfig),
-                    ], $baseConfig),
-                ],
-            ];
-            $configPath = $this->writeTempConfig($config);
-            Config::init($configPath);
-
             $collector = $this->registerTraceCollector();
 
             $db->select()
@@ -206,7 +137,7 @@ final class PostgresCacheTest extends PostgresTestCase
             self::assertTrue($secondTrace->resultCacheHit,
                 sprintf('[%s] Second builder SELECT should hit cache', $label));
             $this->assertTraceTables($secondTrace, ['employees'], $label);
-        });
+        }, [], isolateSchema: true);
     }
 
     public static function cacheProvider(): array
