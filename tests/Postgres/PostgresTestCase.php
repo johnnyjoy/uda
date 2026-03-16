@@ -131,63 +131,63 @@ abstract class PostgresTestCase extends TestCase
             $db->exec(sprintf('DROP TABLE IF EXISTS %s CASCADE', $table));
         }
 
-        $db->exec(<<<'SQL'
-CREATE TABLE departments (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
-)
-SQL
-        );
-
-        $db->exec(<<<'SQL'
-CREATE TABLE employees (
-    id SERIAL PRIMARY KEY,
-    department_id INT NOT NULL REFERENCES departments(id),
-    employee_no TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    title TEXT NOT NULL,
-    hired_at TIMESTAMPTZ NOT NULL,
-    salary NUMERIC(12,2) NOT NULL
-)
-SQL
-        );
-
-        $db->exec(<<<'SQL'
-CREATE TABLE audit_log (
-    id BIGSERIAL PRIMARY KEY,
-    employee_id INT REFERENCES employees(id),
-    action TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
-SQL
-        );
-
-        $db->exec(<<<'SQL'
-CREATE TABLE tree_nodes (
-    id SERIAL PRIMARY KEY,
-    parent_id INT REFERENCES tree_nodes(id) ON DELETE CASCADE,
-    name TEXT NOT NULL
-)
-SQL
-        );
-
-        $db->exec(<<<'SQL'
-CREATE TABLE transactions (
-    id BIGSERIAL PRIMARY KEY,
-    account TEXT NOT NULL,
-    amount NUMERIC(12,2) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+$db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS departments (
+id SERIAL PRIMARY KEY,
+name TEXT NOT NULL UNIQUE
 )
 SQL
 );
 
-        $db->exec(<<<'SQL'
-CREATE TABLE salaries (
-    id BIGSERIAL PRIMARY KEY,
-    employee_id INT NOT NULL REFERENCES employees(id),
-    department_id INT NOT NULL REFERENCES departments(id),
-    amount NUMERIC(12,2) NOT NULL,
-    paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+$db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS employees (
+id SERIAL PRIMARY KEY,
+department_id INT NOT NULL REFERENCES departments(id),
+employee_no TEXT NOT NULL UNIQUE,
+name TEXT NOT NULL,
+title TEXT NOT NULL,
+hired_at TIMESTAMPTZ NOT NULL,
+salary NUMERIC(12,2) NOT NULL
+)
+SQL
+);
+
+$db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS audit_log (
+id BIGSERIAL PRIMARY KEY,
+employee_id INT REFERENCES employees(id),
+action TEXT NOT NULL,
+created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+SQL
+);
+
+$db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS tree_nodes (
+id SERIAL PRIMARY KEY,
+parent_id INT REFERENCES tree_nodes(id) ON DELETE CASCADE,
+name TEXT NOT NULL
+)
+SQL
+);
+
+$db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS transactions (
+id BIGSERIAL PRIMARY KEY,
+account TEXT NOT NULL,
+amount NUMERIC(12,2) NOT NULL,
+created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+SQL
+);
+
+$db->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS salaries (
+id BIGSERIAL PRIMARY KEY,
+employee_id INT NOT NULL REFERENCES employees(id),
+department_id INT NOT NULL REFERENCES departments(id),
+amount NUMERIC(12,2) NOT NULL,
+paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 SQL
 );

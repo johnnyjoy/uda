@@ -88,15 +88,31 @@ final class PostgresTestCaseTest extends PostgresTestCase
 
             $nextEmployeeId = $db->value(
                 <<<SQL
-INSERT INTO employees (department_id, employee_no, name, title, hired_at, salary)
-VALUES (10, 'ENG-999', 'Sequence Witness', 'QA', NOW(), 1)
-RETURNING id
-SQL
+                INSERT INTO employees (department_id, employee_no, name, title, hired_at, salary)
+                VALUES (10, 'ENG-999', 'Sequence Witness', 'QA', NOW(), 1)
+                RETURNING id
+                SQL
             );
 
             self::assertSame(3, (int) $nextEmployeeId);
         });
 
         self::assertGreaterThan(0, count($collector->getTraces()));
+    }
+
+    public function testSchemaCreationIdempotence(): void
+    {
+        $this->withPostgresDb(function (Database $db): void {
+            // Runs createSchema() once
+            $departments = $db->rows('SELECT name FROM departments ORDER BY id');
+            self::assertNotEmpty($departments);
+
+            // Should not throw: $this->createSchema($db); // Second run
+            $this->createSchema($db);
+
+            // Verify data consistency across runs
+            $departmentsAfter = $db->rows('SELECT name FROM departments ORDER BY id');
+            self::assertSame($departments, $departmentsAfter);
+        });
     }
 }
