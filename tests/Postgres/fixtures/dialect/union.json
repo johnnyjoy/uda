@@ -1,0 +1,3 @@
+{
+    "union-all-people": "SELECT \"employees\".\"name\", 'employee' AS source FROM \"employees\" WHERE \"employees\".\"title\" = :q1 UNION ALL (SELECT \"contractors\".\"name\", 'contractor' AS source FROM \"contractors\") ORDER BY \"name\" ASC LIMIT :q2"
+}

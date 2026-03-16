@@ -1,0 +1,3 @@
+{
+    "delete-returning": "DELETE FROM \"salaries\" WHERE \"paid_at\" = :q1 AND \"amount\" >= :q2 RETURNING \"id\", \"amount\""
+}

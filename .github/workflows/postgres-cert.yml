@@ -1,0 +1,68 @@
+name: PostgreSQL Certification
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  postgres-cert:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.1
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d testdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      memcached:
+        image: memcached:1.6
+        ports:
+          - 11211:11211
+        options: >-
+          --health-cmd "memcached-tool localhost stats"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql, redis, memcached
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+        
+      - name: Run PostgreSQL certification suites
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGDATABASE: testdb
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          POSTGRES_REDIS_HOST: 127.0.0.1
+          POSTGRES_MEMCACHED_HOST: 127.0.0.1
+        run: vendor/bin/phpunit tests/Postgres
+        
+      - name: Reference Postgres certification docs
+        run: echo "See docs/certification/postgresql.md for details"
