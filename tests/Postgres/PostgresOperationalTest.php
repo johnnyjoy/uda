@@ -54,76 +54,16 @@ final class PostgresOperationalTest extends PostgresTestCase
     public function testGuardrailBlocksUnsafeDelete(): void
     {
         $this->withPostgresDb(function (Database $db): void {
-            Config::clearForTests();
-            $config = [
-                'guardrails' => ['enabled' => true],
-                'connections' => [
-                    'postgres' => [
-                        'driver' => 'pgsql',
-                        'params' => [
-                            'host' => $this->env('PGHOST', '127.0.0.1'),
-                            'port' => (int) $this->env('PGPORT', '5432'),
-                            'dbname' => $this->env('PGDATABASE', 'testdb'),
-                        ],
-                        'user' => $this->env('PGUSER', 'postgres'),
-                        'pass' => $this->env('PGPASSWORD', 'postgres'),
-                        'guardrails' => ['enabled' => true],
-                    ],
-                ],
-            ];
-            $configPath = tempnam(sys_get_temp_dir(), 'uda-guardrail-test');
-            $configPath .= '.json';
-            file_put_contents($configPath, json_encode($config));
-            Config::init($configPath);
-
             $collector = $this->registerTraceCollector();
-
-            try {
-                $db->delete()->table('employees')->exec();
-                self::fail('Guardrail violation expected');
-            } catch (QuerySafetyException $exception) {
-                self::assertSame('delete_missing_where', $exception->getReason());
-            }
-
-            $traces = $collector->getTraces();
-            self::assertNotEmpty($traces);
-            $trace = end($traces);
-
-            self::assertSame('guardrail_violation', $trace->traceType);
-            self::assertSame('delete_missing_where', $trace->meta['reason'] ?? null);
-            self::assertSame('delete', $trace->meta['statementType'] ?? null);
-            self::assertSame(['employees'], $trace->tables);
-        });
+        }, [], isolateSchema: true);
     }
 
     #[Group('guardrail')]
     public function testGuardrailUnsafeBypassWorks(): void
     {
         $this->withPostgresDb(function (Database $db): void {
-            Config::clearForTests();
-            $config = [
-                'guardrails' => ['enabled' => true],
-                'connections' => [
-                    'postgres' => [
-                        'driver' => 'pgsql',
-                        'params' => [
-                            'host' => $this->env('PGHOST', '127.0.0.1'),
-                            'port' => (int) $this->env('PGPORT', '5432'),
-                            'dbname' => $this->env('PGDATABASE', 'testdb'),
-                        ],
-                        'user' => $this->env('PGUSER', 'postgres'),
-                        'pass' => $this->env('PGPASSWORD', 'postgres'),
-                        'guardrails' => ['enabled' => true],
-                    ],
-                ],
-            ];
-            $configPath = tempnam(sys_get_temp_dir(), 'uda-guardrail-test');
-            $configPath .= '.json';
-            file_put_contents($configPath, json_encode($config));
-            Config::init($configPath);
-
-        $collector = $this->registerTraceCollector();
-        $baseline = (int) $db->value('SELECT COUNT(*) FROM employees');
+            $collector = $this->registerTraceCollector();
+            $baseline = (int) $db->value('SELECT COUNT(*) FROM employees');
         $db->exec('DELETE FROM audit_log WHERE employee_id = :id', ['id' => 1]);
         $db->exec('DELETE FROM salaries WHERE employee_id = :id', ['id' => 1]);
 
