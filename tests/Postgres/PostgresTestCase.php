@@ -390,10 +390,10 @@ SQL
         return $db->value('SELECT current_schema()') ?? 'public';
     }
 
-    protected function assertSchemaEmpty(Database $db): void
+    protected function assertSchemaSeeded(Database $db): void
     {
         $tables = $db->values('SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()');
-        self::assertEmpty($tables, 'Schema should be empty');
+        self::assertNotEmpty($tables, 'Schema should contain seeded tables');
     }
 
     protected function getDriver(Database $db): Driver

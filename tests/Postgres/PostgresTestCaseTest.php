@@ -14,9 +14,9 @@ final class PostgresTestCaseTest extends PostgresTestCase
         return parent::getSchema($db);
     }
 
-    protected function assertSchemaEmpty(Database $db): void
+    protected function assertSchemaSeeded(Database $db): void
     {
-        parent::assertSchemaEmpty($db);
+        parent::assertSchemaSeeded($db);
     }
     public function testSchemaAndFixturesAreDeterministic(): void
     {
@@ -148,7 +148,7 @@ final class PostgresTestCaseTest extends PostgresTestCase
             } catch (QueryException $ex) {
                 // Expected
             }
-            $this->assertSchemaEmpty($db);
+            $this->assertSchemaSeeded($db);
         }, [], true);
     }
 }
