@@ -28,7 +28,14 @@ abstract class PostgresTestCase extends TestCase
      * @param callable(Database $db):TValue $fn
      * @return TValue
      */
-    protected function withPostgresDb(callable $fn, array $connectionOverride = []): mixed
+    /**
+     * @template TValue
+     * @param callable(Database $db):TValue $fn
+     * @param array $connectionOverride
+     * @param bool $isolateSchema
+     * @return TValue
+     */
+    protected function withPostgresDb(callable $fn, array $connectionOverride = [], bool $isolateSchema = false): mixed
     {
         if (! extension_loaded('pdo_pgsql')) {
             $this->markTestSkipped('pdo_pgsql extension required; install php-pgsql or enable in php.ini');
@@ -36,33 +43,53 @@ abstract class PostgresTestCase extends TestCase
 
         $connectionConfig = array_replace_recursive($this->baseConnectionConfig(), $connectionOverride);
 
-        try {
-            $db = $this->createDatabase($connectionConfig);
-            $this->createSchema($db);
-        } catch (Throwable $exception) {
+    try {
+        $db = $this->createDatabase($connectionConfig);
+
+        // Schema setup with isolation support
+        if ($isolateSchema) {
+            $shortClass = (new \ReflectionClass($this))->getShortName();
+            $schemaName = "test_schema_{$shortClass}_" . substr(md5(uniqid('', true)), 0, 8);
+            $db->exec("CREATE SCHEMA IF NOT EXISTS \"{$schemaName}\"");
+            $db->exec("SET search_path TO \"{$schemaName}\"");
             Config::clearForTests();
+        }
 
-            if ($exception instanceof SkippedTest) {
-                throw $exception;
+        $this->createSchema($db);
+        $result = $fn($db);
+
+        // Schema cleanup (isolated only)
+        if ($isolateSchema) {
+            $schemaName = $db->value('SELECT current_schema()');
+            if ($schemaName && $schemaName !== 'public') {
+                $db->exec("DROP SCHEMA \"{$schemaName}\" CASCADE");
             }
+            Config::clearForTests();
+        }
 
-            $params = $connectionConfig['params'];
-            $dsn = sprintf(
-                '%s@%s:%s/%s',
-                $params['username'],
-                $params['host'],
-                $params['port'],
-                $params['database']
-            );
+        return $result;
+    } catch (Throwable $exception) {
+        Config::clearForTests();
+
+        if ($exception instanceof SkippedTest) {
+            throw $exception;
+        }
+
+        $params = $connectionConfig['params'];
+        $dsn = sprintf(
+            '%s@%s:%s/%s',
+            $params['user'] ?? $params['username'],
+            $params['host'],
+            $params['port'],
+            $params['dbname'] ?? $params['database']
+        );
 
             $this->markTestSkipped(sprintf('PostgreSQL unavailable (%s): %s', $dsn, $exception->getMessage()));
-        }
-
-        try {
-            return $fn($db);
         } finally {
-            Config::clearForTests();
-        }
+        Config::clearForTests();
+    }
+    
+    return null;  // Unreachable, satisfies static analysis
     }
 
     protected function registerTraceCollector(): QueryTraceCollector
@@ -283,6 +310,10 @@ SQL
 
     private function resetSequence(Database $db, string $table, string $column = 'id'): void
     {
+        $currentSchema = $db->value('SELECT current_schema()');
+        if ($currentSchema !== null && str_starts_with($currentSchema, 'test_schema_')) {
+            return; // Skip for isolated schemas
+        }
         $sequence = sprintf('%s_%s_seq', $table, $column);
         $sql = sprintf(
             "SELECT setval('%s', (SELECT COALESCE(MAX(%s), 0) FROM %s))",
@@ -319,12 +350,12 @@ SQL
         return [
             'driver' => 'pgsql',
             'params' => [
-                'host' => $this->env('PGHOST', '127.0.0.1'),
-                'port' => (int) $this->env('PGPORT', '5432'),
-                'dbname' => $this->env('PGDATABASE', 'testdb'),
+                'host' => '127.0.0.1',
+                'port' => 5432,
+                'dbname' => 'testdb',
             ],
-            'user' => $this->env('PGUSER', 'postgres'),
-            'pass' => $this->env('PGPASSWORD', 'postgres'),
+            'user' => 'postgres',
+            'pass' => 'postgres',
             'guardrails' => ['enabled' => false],
         ];
     }
@@ -352,6 +383,17 @@ SQL
         file_put_contents($path, (string) json_encode($config, JSON_PRETTY_PRINT));
 
         return $path;
+    }
+
+    protected function getSchema(Database $db): string
+    {
+        return $db->value('SELECT current_schema()') ?? 'public';
+    }
+
+    protected function assertSchemaEmpty(Database $db): void
+    {
+        $tables = $db->values('SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()');
+        self::assertEmpty($tables, 'Schema should be empty');
     }
 
     protected function getDriver(Database $db): Driver

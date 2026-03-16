@@ -5,9 +5,19 @@ declare(strict_types=1);
 namespace Tests\Postgres;
 
 use UDA\Database;
+use UDA\Exception\QueryException;
 
 final class PostgresTestCaseTest extends PostgresTestCase
 {
+    protected function getSchema(Database $db): string
+    {
+        return parent::getSchema($db);
+    }
+
+    protected function assertSchemaEmpty(Database $db): void
+    {
+        parent::assertSchemaEmpty($db);
+    }
     public function testSchemaAndFixturesAreDeterministic(): void
     {
         $collector = $this->registerTraceCollector();
@@ -114,5 +124,31 @@ final class PostgresTestCaseTest extends PostgresTestCase
             $departmentsAfter = $db->rows('SELECT name FROM departments ORDER BY id');
             self::assertSame($departments, $departmentsAfter);
         });
+    }
+
+    public function testSchemaIsolationFlag(): void
+    {
+        $count = count($this->registerTraceCollector()->getTraces());  // Ensure trace collector is initialized
+        $schemaWitness = null;
+        $firstSchema = null;
+
+        // First run: non-isolated (setup witness)
+        $this->withPostgresDb(function (Database $db) use (&$firstSchema): void {
+            $db->exec('CREATE TABLE witness (id INT PRIMARY KEY);');
+            $db->exec('INSERT INTO witness (id) VALUES (999);');
+            $firstSchema = $this->getSchema($db);
+        }, [], false);
+
+        // Second run: isolated (should be clean)
+        $this->withPostgresDb(function (Database $db) use ($firstSchema): void {
+            self::assertNotSame($firstSchema, $this->getSchema($db), 'Schema should change under isolation');
+            try {
+                $db->row('SELECT id FROM witness');
+                self::fail('Witness table should not exist in isolated schema');
+            } catch (QueryException $ex) {
+                // Expected
+            }
+            $this->assertSchemaEmpty($db);
+        }, [], true);
     }
 }
