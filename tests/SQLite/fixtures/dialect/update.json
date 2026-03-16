@@ -1,0 +1,3 @@
+{
+    "update-returning": "UPDATE \"employees\" SET \"title\" = :q3, \"hired_at\" = :q4 WHERE \"name\" = :q1 AND \"title\" = :q2 RETURNING \"id\", \"title\""
+}

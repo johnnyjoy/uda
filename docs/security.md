@@ -1,50 +1,279 @@
 # UDA Security
 
-**Purpose:** Security model: parameterized only, identifier allowlist, no raw interpolation, executor single path.
+**Purpose:** Define the security model of UDA.
 
-See [spec.md](spec.md) Security Model.
+UDA’s security posture is based on four core rules:
 
-## Binding and SQL injection avoidance
+1. **All runtime values are parameterized.**
+2. **Identifiers are validated before inclusion in SQL.**
+3. **SQL execution occurs through exactly one execution path.**
+4. **Configuration and infrastructure are validated at ingestion time.**
 
-### 1. Values are always bound (never concatenated)
+UDA is designed so that **SQL injection, parameter confusion, and driver misuse are structurally difficult to introduce.**
 
-All runtime values go through **parameters**, not into the SQL string.
+See: `spec.md` → Security Model.
 
-- **Sql** holds `sql` (string with `?` or `:name` placeholders) and `params` (array).
-- **Executor** is the only place that runs queries. It does:
-  - `$stmt = $this->pdo->prepare($sql->sql);`
-  - `foreach ($sql->params as $key => $value) { $stmt->bindValue(...); }`
-  - `$stmt->execute();`
+---
 
-So user input and any dynamic values must be in `$params`; the SQL string must only contain placeholders. Example:
+# 1. Parameterized Queries (Mandatory)
+
+All runtime values must be passed as **named parameters**.
+
+SQL strings must never contain interpolated values.
+
+### Correct
 
 ```php
-// Safe: value is bound
-Sql::of('SELECT * FROM users WHERE id = ?', [$userId]);
-
-// Unsafe: value is concatenated (do not do this)
-Sql::of("SELECT * FROM users WHERE id = $userId", []);  // BAD
+$row = $db->row(
+    'SELECT * FROM users WHERE id = :id',
+    ['id' => $userId]
+);
 ```
 
-Builders (Where, SelectBuilder, SelectQuery) never concatenate values: they emit `?` and append to the params array (see `Where::append()`).
+### Incorrect
 
-### 2. Identifiers are validated and quoted (not user input as SQL)
+```php
+// BAD — value interpolated into SQL
+$db->row("SELECT * FROM users WHERE id = $userId");
+```
 
-Table and column names never come from raw user input into the SQL string. They go through **Identifier**:
+UDA only binds values that appear in the **params array**.
 
-- **Constructor:** Each segment must match `[a-zA-Z_][a-zA-Z0-9_]*`. Otherwise `QueryException` is thrown (e.g. `"; DROP TABLE users--"` is rejected).
-- **quoted():** Segments are passed to the driver’s `quoteIdentifier()` (e.g. double-quote or brackets), then joined with `.`. So even valid-looking names are never interpolated as raw SQL.
+SQL strings must contain only:
 
-So: identifiers are constrained and quoted; only **values** are bound. There is no way in the builder path to turn arbitrary user input into identifier or SQL text.
+* SQL syntax
+* named parameter placeholders
 
-### 3. Raw SQL you pass to Sql::of()
+---
 
-If you build the SQL string yourself (e.g. for a CTE or complex query), **you** must use placeholders and pass values in the second argument. UDA will only bind that param array; it does not sanitize or parse the string. Rule: **any user or dynamic value must be in the params array, not in the SQL string.**
+## Named Parameters Only
 
-### 4. Exceptions
+The public API supports **named parameters only**.
 
-QueryException can include `sqlState` and a sanitized SQL snippet (whitespace normalized). Passwords and secrets are never included.
+Positional placeholders (`?`) are not part of the public API.
 
-### 5. Tests
+This rule prevents subtle parameter ordering bugs and improves readability.
+`Driver::executeInternal()` enforces this rule and throws a `QueryException`
+if a positional placeholder is detected before the statement is prepared.
 
-SecurityTest verifies that a value that looks like SQL in a parameter is treated as a literal (no execution of that value as SQL).
+---
+
+# 2. Single Execution Path
+
+All SQL execution occurs through one internal pipeline:
+
+```
+Repository
+   ↓
+Database
+   ↓
+Driver
+   ↓
+Executor
+   ↓
+PDO
+```
+
+The **Executor** is the only place where SQL reaches PDO.
+
+Internally it performs:
+
+```php
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+```
+
+No other component may:
+
+* call `prepare`
+* call `execute`
+* bind parameters
+* access PDO
+
+This guarantees that parameter binding and execution are always performed safely.
+
+---
+
+# 3. Identifier Safety
+
+Values and identifiers have different security rules.
+
+| Type                             | Handling           |
+| -------------------------------- | ------------------ |
+| Values                           | bound parameters   |
+| Identifiers (table/column names) | validated + quoted |
+
+Identifiers must never come directly from user input.
+
+When dynamic identifiers are required (e.g., sorting), they must be validated against an allowlist.
+
+Example:
+
+```php
+$allowed = ['name','created_at'];
+
+$sort = in_array($sort, $allowed, true)
+    ? $sort
+    : 'name';
+
+$rows = $db->select()
+    ->from('users')
+    ->orderBy($sort)
+    ->rows();
+```
+
+UDA provides helpers to make this safe.
+
+---
+
+# 4. Safe SQL Fragment Helpers
+
+When raw SQL is necessary, UDA provides helpers that safely construct dynamic SQL fragments.
+
+| Helper             | Purpose                             |
+| ------------------ | ----------------------------------- |
+| `q()`              | validate + quote identifier         |
+| `orderByAllowed()` | allowlisted ORDER BY                |
+| `limitOffset()`    | safe pagination fragments           |
+| `inList()`         | safe IN-list placeholder generation |
+
+Example:
+
+```php
+$order = $db->orderByAllowed($col, ['name','created_at']);
+$page  = $db->limitOffset(20,0);
+
+$sql = "SELECT * FROM users WHERE active = :a $order " . $page->sql;
+
+$rows = $db->rows($sql, ['a' => 1] + $page->params);
+```
+
+These helpers allow safe dynamic SQL **without requiring developers to build SQL strings manually**.
+
+---
+
+# 5. Raw SQL Responsibility
+
+UDA allows raw SQL through:
+
+```php
+Sql::of($sql, $params, $tables)
+```
+
+UDA does **not** parse or sanitize SQL strings.
+
+Therefore:
+
+* all dynamic values must appear in `$params`
+* SQL strings must not contain interpolated values
+
+Example:
+
+```php
+$q = Sql::of(
+    'SELECT * FROM users WHERE created_at > :d',
+    ['d' => $date],
+    ['users']
+);
+
+$rows = $db->rows($q);
+```
+
+The optional table list enables correct cache invalidation without SQL parsing.
+
+---
+
+# 6. Exception Safety
+
+When SQL errors occur, UDA throws `QueryException`.
+
+A QueryException may include:
+
+* SQLSTATE
+* sanitized SQL snippet
+* driver error message
+
+It must **never include**:
+
+* passwords
+* connection secrets
+* full raw queries with sensitive data
+
+---
+
+# 7. Query Tracing Hygiene
+
+The new query tracing system exposes SQL text and parameter metadata for observability. To keep sensitive values protected:
+
+* Tracing is **disabled by default**. Enable it per connection (via `trace.enabled`) only when needed.
+* Use `trace.redact_parameters = true` in production to replace every parameter value with `***` before a trace is dispatched or logged.
+* Restrict slow-query logging to trusted destinations. `trace.log_slow_queries` writes summaries to the PHP error log; ensure that log target is access-controlled.
+* Traces include table names and connection identifiers so they can be correlated with cache invalidation without leaking raw data. Avoid attaching request IDs or user data unless they are sanitized.
+
+The trace payload deliberately omits actual result sets. Only metadata (SQL text, timing, row counts, cache flags) is exposed to listeners so observability stays safe-by-default.
+
+This prevents sensitive information from leaking into logs.
+
+---
+
+# 7. Configuration Security
+
+Configuration is validated at ingestion time.
+
+Requirements:
+
+* configuration must come from JSON
+* DSN strings are never supplied by application code
+* environment variables may supply credentials
+* connections must be validated before runtime
+
+This prevents configuration-driven injection or runtime misconfiguration.
+
+---
+
+# 8. Cache Safety
+
+The cache subsystem does not introduce new SQL execution paths.
+
+All cached queries still originate from the same execution pipeline.
+
+Cache stores:
+
+* result payload
+* metadata (TTL, table timestamps)
+
+Cache never executes SQL and never modifies query text.
+
+---
+
+# 9. Test Enforcement
+
+Security invariants are enforced through automated tests.
+
+Examples include:
+
+| Test                           | Purpose                                                 |
+| ------------------------------ | ------------------------------------------------------- |
+| Parameter injection test       | ensure injected SQL inside params is treated as literal |
+| Duplicate execution path test  | ensure only one prepare/execute implementation exists   |
+| Raw SQL table attribution test | ensure invalidation rules remain correct                |
+| Forbidden placeholder test     | ensure positional `?` placeholders are rejected         |
+
+Security failures must be detectable by automated tests.
+
+---
+
+# Security Philosophy
+
+UDA security is based on **structural guarantees rather than developer discipline**.
+
+Developers should not need to remember security rules.
+
+Instead:
+
+* values are always bound
+* identifiers are validated
+* execution path is centralized
+* unsafe patterns are difficult to express
+
+If an application can accidentally create SQL injection through the normal API, the system has failed its design goals.

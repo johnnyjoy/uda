@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\SQLite;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use Throwable;
 use UDA\Database;
 
 #[CoversClass(SQLiteTestCase::class)]
@@ -42,6 +43,43 @@ final class SQLiteTestCaseTest extends SQLiteTestCase
         );
         self::assertTrue($existsDuringTest, 'Temporary database file should exist while callback runs');
         self::assertFalse(file_exists($tempPath), 'Temporary database file must be deleted after callback');
+    }
+
+    public function testRetryStubDriverWrapsOperations(): void
+    {
+        $events = [];
+
+        $this->withMemoryDb(function (Database $db) use (&$events): void {
+            $stub = $this->retryStubDriver(
+                $db,
+                function (string $operation, int $attempt) use (&$events): void {
+                    $events[] = ['before', $operation, $attempt];
+                },
+                function (string $operation, int $attempts, mixed $result) use (&$events): void {
+                    $events[] = ['after', $operation, $attempts, $result instanceof Throwable];
+                }
+            );
+
+            $db->row('SELECT name FROM employees WHERE id = :id', ['id' => 1]);
+
+            try {
+                $db->exec('INSERT INTO missing_table (id) VALUES (1)');
+            } catch (Throwable $exception) {
+                // expected: verify after hook records throwable
+            }
+
+            self::assertSame(2, $stub->attempts, 'Stub should count both operations');
+        });
+
+        self::assertSame(
+            [
+                ['before', 'row', 1],
+                ['after', 'row', 1, false],
+                ['before', 'exec', 2],
+                ['after', 'exec', 2, true],
+            ],
+            $events
+        );
     }
 
     private function mainDatabasePath(Database $db): string

@@ -3,7 +3,16 @@
 declare(strict_types=1);
 
 /**
- * In-memory array-based cache store implementation
+ * @package UDA
+ * @subpackage Cache\Store
+ * @author James Dornan <james.dornan@uda.example.com>
+ * @license GPL-2.0-only
+ * @link https://docs.uda.example.com/cache/implementations
+ * @since 1.0.0
+ */
+
+/*
+ * Purpose: In-memory array-based cache store implementation for UDA.
  */
 
 namespace UDA\Cache\Store;
@@ -19,8 +28,8 @@ final class ArrayStore implements CacheStoreInterface
     private array $items = [];
 
     /**
-     * 
-     * @param string $key The cache key
+     *
+     * @param  string  $key The cache key
      * @return ?string The cached value or null
      */
     public function fetch(string $key): ?string
@@ -33,6 +42,7 @@ final class ArrayStore implements CacheStoreInterface
 
         if ($entry['expires'] !== null && $entry['expires'] <= new DateTimeImmutable()) {
             unset($this->items[$key]);
+
             return null;
         }
 
@@ -40,10 +50,10 @@ final class ArrayStore implements CacheStoreInterface
     }
 
     /**
-     * 
-     * @param string $key The cache key
-     * @param string $value The value to cache
-     * @param int $ttlSeconds Time-to-live in seconds
+     *
+     * @param  string $key        The cache key
+     * @param  string $value      The value to cache
+     * @param  int    $ttlSeconds Time-to-live in seconds
      * @return void
      */
     public function store(string $key, string $value, int $ttlSeconds): void
@@ -53,8 +63,8 @@ final class ArrayStore implements CacheStoreInterface
     }
 
     /**
-     * 
-     * @param string $key The cache key
+     *
+     * @param  string $key The cache key
      * @return void
      */
     public function delete(string $key): void

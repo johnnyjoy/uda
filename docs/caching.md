@@ -1,115 +1,398 @@
 # UDA Caching
 
-**Purpose:** Transparent caching support: when the connection config enables a `cache` block, the default read helpers (`$driver->row`, `$driver->rows`, `select()->rows()`) automatically run through a cached scope that honors the configured policy. The cache stack is completely skipped when caching is disabled or the scope resolves to `ttlSeconds <= 0`.
+## Purpose
 
-Caching is **opt-in via configuration**, but it is **implicit at the API level**: you can keep calling `$driver->row` and the cache will be used whenever allowed. **Driver::cache(...)** still exists for per-call overrides (custom TTL/policy/namespace/tables) and for targeting multiple tables at once. Always call `Driver::touchTables(...)` after raw writes so cached rows become stale (fluent write helpers already do this).
+Caching in UDA provides **transparent read acceleration**.
 
-## Shared store (process-wide)
+Caching exists for exactly two reasons:
 
-* Configure the cache store via the top-level `cache` block in config or override it through `Database::connect(..., $options)`.
-* The shared **Infra** (store, serializer, tracker, key builder) is built once per process and passed to drivers. Each driver keeps a single entrypoint (`UDA\Cache`) created via `Cache::forDriver()` when the driver binds to a connection.
+1. **Speed**
+2. **Resilience**
 
-## Store backends
+Caching must not introduce alternate execution paths or additional public APIs.
 
-Three `CacheStore` implementations live under `UDA\Cache\Store`:
+---
 
-| Backend | Class | Extension | Notes |
-|--------|--------|-----------|--------|
-| Redis | `Redis` | ext-redis | Prefix optional (default `UDA:`). Throws if ext-redis missing. |
-| Memcached | `Memcached` | ext-memcached | Prefix optional (default `UDA:`). TTL > 30 days uses absolute expiry. |
-| Process-local | `ArrayStore` | none | In-memory, TTL with oldest-first eviction. Single process only. |
+# Core Principle
 
-Configure via the top-level `cache` section or pass a fully built `Infra` instance into `Driver::fromConfig(..., $infra)`. See [configuration.md](configuration.md).
+> Cache is not called. Cache happens.
 
-## Public API (explicit cache scope)
+Caching is **configuration-driven**.
 
-Driver read helpers already run through a cache scope when the connection enables caching. You only need to call `Driver::cache(...)` when you require per-call overrides (custom TTL/policy/namespace or explicit `tables`). The method accepts an `int` (TTL), an `array` (policy + optional `tables`/`namespace`), a `Policy`, a `Hint`, or `null` (links to the connection/global default). Named arguments `tables` and `namespace` are also supported.
+If caching is enabled for a connection:
+
+* read helpers automatically consult cache
+* write helpers automatically trigger invalidation
+
+Application code continues to use the same methods:
+
+```
+row()
+rows()
+value()
+values()
+list()
+each()
+```
+
+No public cache API exists.
+
+The caching system is **completely transparent** to callers.
+
+---
+
+# Runtime Ownership
+
+Only the **Driver domain** interacts with Cache during execution.
+
+Driver responsibilities:
+
+1. evaluate cache policy
+2. retrieve cache metadata
+3. determine cache usability
+4. execute database query when required
+5. populate cache after successful reads
+6. notify cache of writes
+
+The runtime pipeline is fixed:
+
+```
+Repository → Database → Driver → Cache → Executor → PDO
+```
+
+No alternate cache execution path may exist.
+
+---
+
+# Shared Cache Infrastructure
+
+Each Driver receives a **connection-scoped cache controller** during construction.
+
+The controller is created via configuration wiring:
+
+```
+$setup = new \UDA\Cache\Setup($store, $tracker, $serializer, ...);
+$cache = Cache::fromSetup($connectionName, $setup);
+```
+
+The setup encapsulates the cache store, serializer, table write tracker, namespace, and policy data for that connection.
+The controller is private to the Driver and never exposed publicly.
+
+---
+
+# Store Backends
+
+Cache stores live under:
+
+```
+UDA\Cache\Store
+```
+
+Supported backends:
+
+| Backend       | Class            | Extension     | Notes                              |
+| ------------- | ---------------- | ------------- | ---------------------------------- |
+| Redis         | `RedisStore`     | ext-redis     | Prefix optional (default `UDA:`)   |
+| Memcached     | `MemcachedStore` | ext-memcached | TTL > 30 days uses absolute expiry |
+| Process-local | `ArrayStore`     | none          | In-memory only                     |
+
+Store configuration occurs in the **top-level config cache block**.
+
+---
+
+# Transparent Read Behavior
+
+When caching is enabled for a connection:
+
+```
+Repository
+    ↓
+Database
+    ↓
+Driver
+    ↓
+Cache metadata decision
+    ↓
+Cache hit → return result
+Cache miss → Executor → PDO
+    ↓
+Cache store update
+```
+
+If caching is disabled, the path becomes:
+
+```
+Repository → Database → Driver → Executor → PDO
+```
+
+Cache code must not execute.
+
+---
+
+# Metadata-First Doctrine
+
+Cache decisions must use **metadata only**.
+
+Payload retrieval must occur only if the metadata indicates the cached entry is usable.
+
+Decision sequence:
+
+1. retrieve metadata
+2. evaluate TTL
+3. evaluate table write timestamps
+4. determine usability
+5. retrieve cached payload if selected
+
+Deserializing unused payload is forbidden.
+
+---
+
+# Cache Key Scheme
+
+```
+UDA|{serializer_id}|v{format_version}|{connection}|{tables}|{query_hash}
+```
+
+Components:
+
+| Component      | Description                          |
+| -------------- | ------------------------------------ |
+| serializer_id  | serializer implementation identifier |
+| format_version | cache format version                 |
+| connection     | connection name                      |
+| tables         | normalized table list                |
+| query_hash     | hash of SQL and parameters           |
+
+---
+
+## Table Segment
+
+Tables are:
+
+* normalized
+* sorted
+* joined with `+`
+
+If the segment exceeds `MAX_TABLES_SEGMENT_LENGTH`, it becomes:
+
+```
+t:{sha256(tablesJoined)}
+```
+
+---
+
+## Query Hash
+
+```
+sha256(normalized_sql + "\n" + stable_param_encoding)
+```
+
+This ensures deterministic cache keys.
+
+---
+
+# Serializer
+
+Serialization strategy:
+
+1. igbinary (if available)
+2. PHP `serialize()`
+
+Serializer identity is embedded in the cache key to prevent collisions between formats.
+
+---
+
+# TTL Model
+
+Every cached entry must have a TTL.
+
+Infinite TTL is forbidden.
+
+TTL resolution order:
+
+1. per-call override
+2. per-table override
+3. per-connection default
+4. global default
+
+```
+ttlSeconds <= 0
+```
+
+disables caching.
+
+---
+
+# Interval Gating
+
+`minIntervalSeconds` throttles repeated database queries.
+
+Within the interval window:
+
+* cached results are served
+* database queries are suppressed
+
+This reduces load for frequently requested queries.
+
+---
+
+# Stale-on-Error
+
+If a database execution fails and the error is considered transient:
+
+```
+allowStaleOnError = true
+```
+
+and:
+
+```
+cache_age <= maxStaleSeconds
+```
+
+then stale results may be returned.
+
+Otherwise the database exception propagates.
+
+Transient detection occurs in:
+
+```
+Driver::isTransient()
+```
+
+---
+
+# Table Write Tracking
+
+Cache invalidation relies on table write timestamps.
+
+Driver must notify the tracker when a write succeeds.
+
+Tracked operations:
+
+* INSERT
+* UPDATE
+* DELETE
+* UPSERT
+
+Write tracking occurs only when:
+
+```
+affectedRows > 0
+```
+
+Fluent write helpers automatically notify the tracker.
+
+For raw SQL writes:
+
+```
+$driver->touchTables(['table1','table2'])
+```
+
+must be called.
+
+## Raw SQL table hints
+
+All public read helpers on `UDA\Database` now accept an optional `$tableHints` array argument. When you execute literal SQL outside the query builders, pass the list of tables touched by the statement so the cache and tracing layers receive accurate metadata:
 
 ```php
-$driver = Database::connect('clientA');
-
-$rows = $driver->cache(300)->rows('SELECT * FROM events WHERE id = :id', ['id' => 1]);
-$rows = $driver->cache(['ttlSeconds' => 60, 'tables' => ['events'], 'namespace' => 'tenant1'])->rows('SELECT * FROM events', []);
-$rows = $driver->cache(null)->rows('SELECT * FROM events', []); // uses connection default
+$db->rows('SELECT * FROM users WHERE id = :id', ['id' => 7], ['users']);
 ```
 
-## Goals
+Providing hints keeps cache invalidation and query traces accurate even before the builders can infer table names. If you omit the parameter, UDA falls back to whatever metadata it can derive from builders or cached plans.
 
-1. **Result cache** — `row` / `rows` executed through a scope hit cache when populated.
-2. **Interval gating** — repeated requests within `minIntervalSeconds` serve cached data (no DB hit).
-3. **Stale-on-error** — on transient DB failures, clients may serve stale data when allowed (`allowStaleOnError`, `maxStaleSeconds`).
+---
 
-## TTL (mandatory)
+# Table Staleness
 
-* Every cache entry **must** have a TTL; infinite TTL is forbidden.
-* Resolution order: (1) per-query `Policy->ttlSeconds`, (2) per-connection default (`cache.defaultPolicy`), (3) global default (`Scope::DEFAULT_CACHE_TTL_SECONDS`).
-* `ttlSeconds <= 0` disables caching for that scope call.
-
-## Key scheme
+A cached entry becomes stale when:
 
 ```
-UDA|{serializer_id}|v{format_version}|{connection_name}|{tables_segment}|{query_hash}
+lastTouched(table) >= cachedEntry.createdAt
 ```
 
-* Segments split by `|`; tables inside `tables_segment` use `+`.
-* **Tables segment:** normalized, sorted. When length > `MAX_TABLES_SEGMENT_LENGTH`, use `t:{sha256(tablesJoined)}`.
-* **query_hash:** `sha256(normalized_sql + "\n" + stable_param_encoding)`.
-* `serializer_id` and `format_version` live in the key so format evolution stays safe.
+This comparison is performed for every table involved in the query.
 
-## Serializer
+---
 
-* `getSerializer()` prefers igbinary (if available) else falls back to PHP `serialize()`.
-* Serializer `id()` is baked into the key so serializers never collide.
+# Per-Connection Policy
 
-## Table write invalidation
+Connections may define default caching policy.
 
-* `TableWriteTracker::touch(connectionName, table)` and `lastTouched(connectionName, table): ?int` track mutations.
-* Fluent write helpers (`insert`, `update`, `delete`, `upsert`) touch their tables automatically after executing successfully.
-* After raw SQL writes, call `$driver->touchTables(['table1', 'table2'])` so cached reads know the tables are stale.
-* A cached entry is stale if any involved table’s `lastTouched` timestamp ≥ the cached `createdAt`.
-
-## Config-driven defaults and per-table rules
-
-Connections can specify cache defaults and per-table overrides:
+Example:
 
 ```json
-{
-  "connections": {
-    "mem": {
-      "driver": "sqlite",
-      "params": {"path": ":memory:"},
-      "cache": {
-        "defaultPolicy": {
-          "ttlSeconds": 60,
-          "minIntervalSeconds": 5,
-          "allowStaleOnError": false,
-          "maxStaleSeconds": 0
-        },
-        "namespace": "app1",
-        "tables": {
-          "users": {"disable": false, "ttlSeconds": 30},
-          "audit_log": {"disable": true}
-        }
-      }
-    }
+"cache": {
+  "defaultPolicy": {
+    "ttlSeconds": 60,
+    "minIntervalSeconds": 5,
+    "allowStaleOnError": false,
+    "maxStaleSeconds": 0
+  },
+  "namespace": "app1",
+  "tables": {
+    "users": {"ttlSeconds": 30},
+    "audit_log": {"disable": true}
   }
 }
 ```
 
-* `defaultPolicy` applies when `cache(null)` is called or no per-call policy exists. `ttlSeconds` must be > 0.
-* `tables` maps table names to `{disable, ttlSeconds, minIntervalSeconds, allowStaleOnError, maxStaleSeconds}`.
-* Table rules merge strictly: if any table is `disable: true`, caching is disabled. Otherwise `ttlSeconds` = min, `minIntervalSeconds` = max, `allowStaleOnError` = AND, `maxStaleSeconds` = min. Table names are normalized to lowercase.
+---
 
-## Performance: lastServedAt persistence
+# Table Policy Merge
 
-* **TTL-only** reads do not update the store on hits; only initial writes and refills update the cache.
-* **Interval gating** (`minIntervalSeconds > 0`) updates the store at most once per interval boundary to minimize write amplification.
+When multiple tables appear in a query, policies are merged conservatively.
 
-## Stale-on-error
+| Field              | Merge Rule  |
+| ------------------ | ----------- |
+| ttlSeconds         | minimum     |
+| minIntervalSeconds | maximum     |
+| allowStaleOnError  | logical AND |
+| maxStaleSeconds    | minimum     |
 
-* On cache miss/stale, Driver reads the DB. If a transient exception occurs, `allowStaleOnError` and `maxStaleSeconds` control whether stale data is returned.
-* `Driver::isTransient(QueryException)` identifies recoverable errors (disconnects, deadlocks); engine drivers can override it.
+If any table rule specifies:
 
-## Config (reserved)
+```
+disable: true
+```
 
-Reserved for future options: connection-level overrides for `serializer`, `formatVersion`, or `maxTablesSegmentLength`. Currently only `defaultPolicy`, `tables`, and `namespace` are used.
+caching is disabled.
+
+---
+
+# Performance Behavior
+
+Cache writes occur:
+
+* on initial cache population
+* on cache refill
+
+Cache hits do not rewrite entries unless interval gating requires it.
+
+This minimizes write amplification.
+
+---
+
+# Anti-Goals
+
+The caching system must never introduce:
+
+* Scope classes
+* alternate read APIs
+* explicit cache invocation
+* SQL parsing for table discovery
+* application-controlled cache execution
+
+Caching must remain **fully transparent**.
+
+---
+
+# Architectural Invariant
+
+All cached reads must follow:
+
+```
+Repository → Database → Driver → Cache → Executor → PDO
+```
+
+If any component bypasses this path, the architecture is invalid.

@@ -1,0 +1,3 @@
+{
+    "insert-returning": "INSERT INTO \"employees\" (\"id\", \"name\", \"title\", \"hired_at\") VALUES (:q1, :q2, :q3, :q4) RETURNING \"id\", \"name\""
+}

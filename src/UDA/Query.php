@@ -1,20 +1,26 @@
 <?php
+
 declare(strict_types=1);
 
 /**
- * Domain root controller for the Query domain.
- *
- * This class acts as the constitutional façade for the Query domain.
- * It provides static factory methods for query builders that delegate
- * to Database for execution, ensuring application code never touches Driver directly.
+ * @package UDA
+ * @subpackage Query
+ * @author James Dornan <james.dornan@uda.example.com>
+ * @license GPL-2.0-only
+ * @link https://docs.uda.example.com/query/controller
+ * @since 1.0.0
+ */
+
+/*
+ * Purpose: Primary public interface for UDA's query building system.
  */
 
 namespace UDA;
 
-use UDA\Query\Select;
-use UDA\Query\Insert;
-use UDA\Query\Update;
 use UDA\Query\Delete;
+use UDA\Query\Insert;
+use UDA\Query\Select;
+use UDA\Query\Update;
 use UDA\Query\Upsert;
 
 final class Query
@@ -24,6 +30,7 @@ final class Query
     public static function select(?string $connection = null): Select
     {
         $database = Database::connect($connection);
+
         return $database->select();
     }
 
@@ -32,6 +39,7 @@ final class Query
     public static function insert(?string $connection = null): Insert
     {
         $database = Database::connect($connection);
+
         return $database->insert();
     }
 
@@ -40,6 +48,7 @@ final class Query
     public static function update(?string $connection = null): Update
     {
         $database = Database::connect($connection);
+
         return $database->update();
     }
 
@@ -48,6 +57,7 @@ final class Query
     public static function delete(?string $connection = null): Delete
     {
         $database = Database::connect($connection);
+
         return $database->delete();
     }
 
@@ -56,6 +66,7 @@ final class Query
     public static function upsert(?string $connection = null): Upsert
     {
         $database = Database::connect($connection);
+
         return $database->upsert();
     }
 
@@ -64,6 +75,7 @@ final class Query
     public static function rows(string $sql, array $params = [], ?array $tables = null, ?string $connection = null): array
     {
         $database = Database::connect($connection);
+
         return $database->rows($sql, $params, $tables);
     }
 
@@ -72,6 +84,7 @@ final class Query
     public static function row(string $sql, array $params = [], ?array $tables = null, ?string $connection = null): ?array
     {
         $database = Database::connect($connection);
+
         return $database->row($sql, $params, $tables);
     }
 
@@ -80,6 +93,7 @@ final class Query
     public static function value(string $sql, array $params = [], ?array $tables = null, ?string $connection = null)
     {
         $database = Database::connect($connection);
+
         return $database->value($sql, $params, $tables);
     }
 
@@ -88,6 +102,7 @@ final class Query
     public static function values(string $sql, array $params = [], ?array $tables = null, ?string $connection = null): array
     {
         $database = Database::connect($connection);
+
         return $database->values($sql, $params, $tables);
     }
 
@@ -96,6 +111,7 @@ final class Query
     public static function list(string $sql, array $params = [], ?array $tables = null, ?string $connection = null): array
     {
         $database = Database::connect($connection);
+
         return $database->list($sql, $params, $tables);
     }
 
@@ -104,6 +120,7 @@ final class Query
     public static function exec(string $sql, array $params = [], ?array $tables = null, ?string $connection = null): int
     {
         $database = Database::connect($connection);
+
         return $database->exec($sql, $params, $tables);
     }
 }

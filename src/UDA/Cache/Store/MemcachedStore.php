@@ -3,7 +3,16 @@
 declare(strict_types=1);
 
 /**
- * Memcached-based cache store implementation
+ * @package UDA
+ * @subpackage Cache\Store
+ * @author James Dornan <james.dornan@uda.example.com>
+ * @license GPL-2.0-only
+ * @link https://docs.uda.example.com/cache/implementations
+ * @since 1.0.0
+ */
+
+/*
+ * Purpose: Memcached-based cache store implementation for UDA.
  */
 
 namespace UDA\Cache\Store;
@@ -17,10 +26,10 @@ use RuntimeException;
 final class MemcachedStore implements CacheStoreInterface
 {
     /**
-     * 
-     * @param Memcached $memcached The Memcached connection
-     * @param string $prefix The key prefix
-     * @param string $serializer The serializer to use
+     *
+     * @param  Memcached        $memcached  The Memcached connection
+     * @param  string           $prefix     The key prefix
+     * @param  string           $serializer The serializer to use
      * @throws RuntimeException If Memcached extension is not loaded or serializer is unsupported
      */
     public function __construct(private Memcached $memcached, private string $prefix = 'UDA:', private string $serializer = 'php')
@@ -42,21 +51,22 @@ final class MemcachedStore implements CacheStoreInterface
     }
 
     /**
-     * 
-     * @param string $key The cache key
+     *
+     * @param  string  $key The cache key
      * @return ?string The cached value or null
      */
     public function fetch(string $key): ?string
     {
         $value = $this->memcached->get($this->prefix . $key);
+
         return $value === false ? null : $value;
     }
 
     /**
-     * 
-     * @param string $key The cache key
-     * @param string $value The value to cache
-     * @param int $ttlSeconds Time-to-live in seconds
+     *
+     * @param  string $key        The cache key
+     * @param  string $value      The value to cache
+     * @param  int    $ttlSeconds Time-to-live in seconds
      * @return void
      */
     public function store(string $key, string $value, int $ttlSeconds): void
@@ -65,8 +75,8 @@ final class MemcachedStore implements CacheStoreInterface
     }
 
     /**
-     * 
-     * @param string $key The cache key
+     *
+     * @param  string $key The cache key
      * @return void
      */
     public function delete(string $key): void

@@ -18,7 +18,6 @@
 - docs/repositories.md
 
 ## Drivers / Config / Security
-- docs/drivers.md
 - docs/driver.md
 - docs/configuration.md
 - docs/security.md

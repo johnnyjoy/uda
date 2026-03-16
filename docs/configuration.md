@@ -1,97 +1,268 @@
 # UDA Configuration
 
-**Purpose:** Config model: one file, JSON, env UDA_CONFIG, structure, connections, secrets, cache, validation.
+**Purpose:**
+Defines the configuration model for UDA. Configuration is loaded from a single JSON file and validated once at startup. The configuration describes database connections, secrets, cache store configuration, and per-connection cache policy.
 
-## Source
+Configuration is **sanitized during ingestion**, producing an immutable internal snapshot used by all UDA domains.
 
-- **Path:** From environment variable `UDA_CONFIG` (file path to JSON), or override via `Database::connect(null, $configFile)`.
-- **Format:** JSON only. File must have `.json` extension. Root must be a JSON object. PHP config is not supported.
-- **Loading:** `UDA\Config\Snapshot::fromEnv()` reads `UDA_CONFIG` and throws `ConfigException` if unset/empty. `Snapshot::fromFile($path)` loads from a given path. The `UDA\Config` facade wraps a Snapshot and is used by `Database::connect()`.
+---
 
-## Top-level structure
+# Source
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| **defaults** | no | String. Name of the default connection. Must equal a key in `connections`. When set, `Database::connect()` with no name uses this connection. |
-| **connections** | yes | Object. Map of connection name (string) → connection object. Must be non-empty. Each key must be a non-empty string. |
-| **templates** | no | Array. Reserved for mass database patterns. Passed through unchanged in `Snapshot`. |
+Configuration is loaded from exactly **one JSON file**.
 
-Validation: missing or empty `connections` throws `ConfigException`. If `defaults` is set, it must exist in `connections`.
+Two loading routes exist:
 
-## Connection entry
+1. **Environment route (production default)**
+   The environment variable `UDA_CONFIG` contains the path to the JSON configuration file.
 
-Each value in `connections` must be an object with:
+2. **Explicit file override**
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| **driver** | yes | String. One of: `sqlite`, `pgsql`, `postgresql`, `mysql`, `sqlsrv`, `dblib`. Case-insensitive. |
-| **dsn** | no* | String. Full PDO DSN. If set, used as-is; otherwise `Driver::buildDsn(params)` is used. |
-| **params** | no* | Object. Driver-specific params for DSN when `dsn` is not set (e.g. `path`, `host`, `dbname`). See [drivers.md](drivers.md). At least one of `dsn` or `params` required unless the driver provides default params (e.g. SQLite `:memory:`). |
-| **user** | no | String. Username. May be `{env:VAR_NAME}` to resolve from environment. |
-| **pass** | no | String. Password. May be `{env:VAR_NAME}`. |
-| **options** | no | Object. PDO options; keys must be integers (PDO::* constants). |
-| **dialect** | no | String. Dialect override name. |
-| **init_sql** | no | Array of strings. Safe SQL statements run after connection. Empty strings are ignored. |
-| **cache** | no | Object. Optional per-connection cache defaults and per-table rules. See [Connection cache](#connection-cache) below. |
+   ```php
+   Database::connect('connectionName', '/path/to/config.json');
+   ```
 
-Driver name is validated only when UDA must construct a DSN (dsn absent/null and params absent/empty); if dsn is provided, validation is deferred to bind/connect time.
+If no config file argument is supplied, the system loads from `UDA_CONFIG`.
 
-Secrets: `user` and `pass` support `{env:VAR}`; unresolved env reference throws `ConfigException`.
+### Rules
 
-## Connection cache
+* Configuration format **must be JSON**
+* File **must have `.json` extension**
+* Root **must be a JSON object**
+* Configuration is **validated once during ingestion**
+* After loading, configuration becomes **immutable**
 
-When present, `connections.<name>.cache` configures default cache policy and per-table overrides for `$driver->cache(null)` and policy merge when tables are specified.
+Any failure during loading or validation throws **`ConfigException`**.
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| **defaultPolicy** | yes (if cache present) | Object. Default policy when using `cache(null)` or when no per-call policy is given. |
-| **defaultPolicy.ttlSeconds** | yes | Integer. Must be > 0. |
-| **defaultPolicy.minIntervalSeconds** | no | Integer. Default 0. Must be >= 0. |
-| **defaultPolicy.allowStaleOnError** | no | Boolean. Default false. |
-| **defaultPolicy.maxStaleSeconds** | no | Integer. Default 0. Must be >= 0. |
-| **namespace** | no | String. Default key namespace for this connection. |
-| **tables** | no | Object. Map of table name (string) → table rule object. Table names are normalized (lowercase). |
+---
 
-**Per-table rule** (each value under `tables`):
+# Top-Level Structure
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| **disable** | no | Boolean. Default false. If true, any query involving this table has caching disabled (ttl ≤ 0). |
-| **ttlSeconds** | no | Integer. Override; merged as MIN across involved tables. |
-| **minIntervalSeconds** | no | Integer. Override; merged as MAX. |
-| **allowStaleOnError** | no | Boolean. Override; merged with AND. |
-| **maxStaleSeconds** | no | Integer. Override; merged as MIN. |
+| Key             | Required | Description                                                                                                                             |
+| --------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **defaults**    | no       | String. Name of the default connection. Must exist in `connections`. Used when `Database::connect()` is called with no connection name. |
+| **connections** | yes      | Object mapping connection name → connection definition. Must contain at least one entry.                                                |
+| **templates**   | no       | Object reserved for future mass-database generation patterns. Stored but not interpreted by Config.                                     |
+| **cache**       | no       | Object defining the process-wide cache store (Redis/Memcached/Array).                                                                   |
 
-Validation: if `cache` is present, `cache.defaultPolicy` must be an array with `ttlSeconds` integer > 0. Other policy fields validated as above. Invalid shape throws `ConfigException`. See [caching.md](caching.md) for merge semantics and usage.
+### Validation Rules
 
-**Note:** The cache *store* (Redis, Memcached, Array) is configured at the **top level** (see [Top-level cache store](#top-level-cache-store)). This section only sets per-connection policy defaults and table rules.
+* `connections` **must exist and be non-empty**
+* connection names **must be non-empty strings**
+* if `defaults` is defined, it **must reference an existing connection**
 
-## Top-level cache store
+---
 
-Optional root key `cache` configures the single process-wide cache store. If missing or `cache.driver` is `off`, no cache store is used (pass-through).
+# Connection Definition
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| **cache** | no | Object. Cache store and driver options. |
-| **cache.driver** | yes (if cache present) | String. One of: `redis`, `memcached`, `array`, `off`. Case-insensitive. |
-| **cache.redis** | no | Object. Redis connection: `host`, `port`, `timeout`, `persistent`, `auth`, `db`. |
-| **cache.memcached** | no | Object. `servers` (array of `{host, port, weight}`), `options` (int-keyed). |
-| **cache.array** | no | Object. `maxItems` (int, default 5000). |
+Each entry in `connections` describes how a database connection is created.
 
-Validation: `cache.driver` = `redis` requires ext-redis; `memcached` requires ext-memcached. Serializer is chosen automatically (igbinary if available, else php serialize).
+| Key          | Required | Description                                                                                             |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| **driver**   | yes      | Database driver. One of: `sqlite`, `pgsql`, `postgresql`, `mysql`, `mariadb`, `sqlsrv`, `dblib`, `oci`, `oracle`. Case-insensitive. |
+| **params**   | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
+| **user**     | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
+| **pass**     | no       | Password. May reference environment variable `{env:VAR_NAME}`.                                          |
+| **options**  | no       | Object of PDO options. Keys must be integers (`PDO::*`).                                                |
+| **dialect**  | no       | SQL dialect override.                                                                                   |
+| **init_sql** | no       | Array of SQL statements executed after connection.                                                      |
+| **cache**    | no       | Connection-specific cache policy configuration.                                                         |
 
-Override at connect time: `Database::connect(null, null, ['cache' => [...same shape...]])` uses that cache config for that connection only.
+### Important Rule
 
-## Loading and validation
+The configuration **never contains a DSN string**.
 
-- **UDA\Config\Loader::load(string $path):** Reads file, decodes JSON, returns array. Throws if path empty, file missing/unreadable, extension not `.json`, invalid JSON, or root not an array.
-- **UDA\Config\Validator::validate(array $config):** Validates structure and connections, resolves secrets, returns **Snapshot**. Throws **ConfigException** on any validation failure. No raw config escapes; only validated connection config arrays and value objects (ConnectionCacheConfig, etc.).
-- **Snapshot::fromEnv():** Uses `getenv('UDA_CONFIG')` as path; throws if unset or empty, then loads and validates.
-- **Snapshot::fromFile(string $path):** Loads and validates from the given path.
-- **Database::connect(?string $connectionName, ?string $configFile, ?array $options = null):** Boots **Config** (via `Config::boot($configFile)` or `Config::boot()`) which uses Snapshot::fromFile/fromEnv internally. Optional `$options['cache']` overrides top-level cache config for this connect. Returns a bound **Driver**.
-- **UDA\Core\ConfigLoader::load(string $path):** Loads and validates the JSON once per canonical path and caches it. Call `ConfigLoader::clearCache($path)` to force a reload during deployment or testing.
+The DSN is constructed by the driver using the `params` object.
+Drivers own the transport-specific knowledge for PostgreSQL, Oracle, SQLite, MariaDB/MySQL, SQL Server, and Dblib transports.
+Configuration only provides normalized parameters (host, port, path, service, etc.).
 
-## Example (minimal)
+Example parameters:
+
+```json
+{
+  "driver": "pgsql",
+  "params": {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "test"
+  }
+}
+```
+
+---
+
+# Secrets
+
+Connection credentials support environment variable resolution.
+
+Example:
+
+```json
+"user": "{env:DB_USER}",
+"pass": "{env:DB_PASS}"
+```
+
+Resolution occurs **during validation**.
+
+Rules:
+
+* `{env:VAR}` is replaced by `getenv('VAR')`
+* Missing environment variables throw `ConfigException`
+
+Secrets are **resolved during ingestion** so downstream code never handles placeholders.
+
+---
+
+# Connection Cache Configuration
+
+When present, `connections.<name>.cache` defines default caching policy and per-table overrides.
+
+This controls behavior of:
+
+```php
+$driver->cache()
+```
+
+## Structure
+
+| Key               | Required | Description                              |
+| ----------------- | -------- | ---------------------------------------- |
+| **defaultPolicy** | yes      | Default cache policy for this connection |
+| **namespace**     | no       | Cache namespace prefix                   |
+| **tables**        | no       | Per-table cache rules                    |
+
+---
+
+## Default Policy
+
+| Key                    | Required | Description                     |
+| ---------------------- | -------- | ------------------------------- |
+| **ttlSeconds**         | yes      | Cache lifetime. Must be > 0     |
+| **minIntervalSeconds** | no       | Minimum refresh interval        |
+| **allowStaleOnError**  | no       | Serve stale data if query fails |
+| **maxStaleSeconds**    | no       | Maximum stale window            |
+
+---
+
+## Per-Table Rules
+
+Tables override the default policy.
+
+Example:
+
+```json
+"tables": {
+  "users": { "ttlSeconds": 30 },
+  "audit_log": { "disable": true }
+}
+```
+
+### Rule Fields
+
+| Key                    | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| **disable**            | Disables caching if query references the table |
+| **ttlSeconds**         | Overrides TTL                                  |
+| **minIntervalSeconds** | Overrides minimum interval                     |
+| **allowStaleOnError**  | Overrides stale policy                         |
+| **maxStaleSeconds**    | Overrides stale window                         |
+
+### Merge Semantics
+
+When a query references multiple tables:
+
+| Field              | Merge Rule      |
+| ------------------ | --------------- |
+| ttlSeconds         | **minimum**     |
+| minIntervalSeconds | **maximum**     |
+| allowStaleOnError  | **logical AND** |
+| maxStaleSeconds    | **minimum**     |
+
+---
+
+# Top-Level Cache Store
+
+The root `cache` key defines the **process-wide cache backend**.
+
+If omitted or `driver = off`, caching is disabled.
+
+## Structure
+
+| Key           | Required | Description                          |
+| ------------- | -------- | ------------------------------------ |
+| **driver**    | yes      | `redis`, `memcached`, `array`, `off` |
+| **redis**     | no       | Redis connection options             |
+| **memcached** | no       | Memcached servers and options        |
+| **array**     | no       | In-memory cache settings             |
+
+---
+
+## Redis Example
+
+```json
+"cache": {
+  "driver": "redis",
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "timeout": 1
+  }
+}
+```
+
+---
+
+## Memcached Example
+
+```json
+"cache": {
+  "driver": "memcached",
+  "memcached": {
+    "servers": [
+      { "host": "localhost", "port": 11211, "weight": 1 }
+    ]
+  }
+}
+```
+
+---
+
+# Loading Process
+
+Configuration loading occurs exactly once per process.
+
+### Steps
+
+1. **Resolve config file path**
+
+   * explicit path from `Database::connect()`
+   * otherwise `UDA_CONFIG` environment variable
+
+2. **Load JSON file**
+
+3. **Validate structure**
+
+   * top-level keys
+   * connections
+   * driver values
+   * secrets resolution
+   * cache configuration
+
+4. **Build immutable Snapshot**
+
+The resulting Snapshot is used by:
+
+* `Database`
+* `Driver`
+* `Cache`
+
+No further configuration processing occurs after this stage.
+
+---
+
+# Example Configuration
+
+## Minimal Example
 
 ```json
 {
@@ -100,50 +271,58 @@ Override at connect time: `Database::connect(null, null, ['cache' => [...same sh
     "sqlite_mem": {
       "driver": "sqlite",
       "params": { "path": ":memory:" }
-    },
-    "pgsql_test": {
-      "driver": "pgsql",
-      "params": { "host": "localhost", "dbname": "test" },
-      "user": "u",
-      "pass": "p"
     }
   }
 }
 ```
 
-## Example (with connection cache)
+---
+
+## Example with Cache
 
 ```json
 {
-  "defaults": "mem",
+  "defaults": "app",
   "connections": {
-    "mem": {
-      "driver": "sqlite",
-      "params": { "path": ":memory:" },
+    "app": {
+      "driver": "pgsql",
+      "params": {
+        "host": "localhost",
+        "dbname": "appdb"
+      },
+      "user": "{env:DB_USER}",
+      "pass": "{env:DB_PASS}",
       "cache": {
         "defaultPolicy": {
           "ttlSeconds": 60,
-          "minIntervalSeconds": 5,
-          "allowStaleOnError": false,
-          "maxStaleSeconds": 0
+          "minIntervalSeconds": 5
         },
-        "namespace": "app1",
         "tables": {
-          "users": { "disable": false, "ttlSeconds": 30 },
+          "users": { "ttlSeconds": 30 },
           "audit_log": { "disable": true }
         }
       }
     }
+  },
+  "cache": {
+    "driver": "redis",
+    "redis": {
+      "host": "localhost",
+      "port": 6379
+    }
   }
 }
 ```
 
-## Using config
+---
+
+# Using Configuration
 
 ```php
-$driver = Database::connect();                        // default connection (uses UDA_CONFIG)
-$driver = Database::connect('pgsql_test');            // named connection
-$driver = Database::connect(null, '/path/to/config.json');  // config file override
+$driver = Database::connect();                  // default connection (UDA_CONFIG)
+$driver = Database::connect('pgsql_test');      // named connection
+$driver = Database::connect('/config/app.json'); // explicit config file
+$driver = Database::connect('pgsql_test', '/config/app.json');
 ```
 
-See [spec.md](spec.md) for canonical rules and [caching.md](caching.md) for cache behavior.
+Argument order is **position-independent**.

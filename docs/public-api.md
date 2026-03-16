@@ -2,224 +2,294 @@
 
 One clear way to do common database operations. Cross-DB, migration-friendly, no ceremony.
 
-**Purpose:** Public API surface: connect, raw SQL (named params), fluent builders, Param, safe fragments; no Identifier/Driver in public API.
-
-**Entry point:** `Database::connect(?string $name = null, ?string $configFile = null)` — returns a bound **Driver**. That Driver is the **only** SQL execution domain: use it for raw SQL (row, rows, value, values, list, each, exec, transaction) and for fluent builders (select(), insert(), update(), delete(), upsert()). There are **no Connection objects**; "connection" in config is just the name used to look up a validated connection config (array). Driver selection is via `Driver::fromName($def['driver'])`; no engine branching outside Driver and `src/UDA/Driver/*`.
+**Purpose:** Define the only public API surface: connect, raw SQL (named params), fluent builders, safe fragments, optional typed parameters.
+**Anti-goals:** No `Driver` in userland. No `Identifier` objects. No cache API. No “Connection” objects.
 
 ---
 
-## 1. Raw SQL API (named parameters only)
+## 0. The One Handle Rule
 
-All raw SQL uses **named parameters** only. Example: `WHERE id = :id` with `['id' => 1]`. Positional `?` is not part of the public API.
+**`UDA\Database` is the database** from the perspective of application code.
 
-| Method | Description |
-|--------|-------------|
-| `row(string|Sql $sql, array $params = []): ?array` | Run query; at most one row or null; throws if >1 row. |
-| `rows(string|Sql $sql, array $params = []): array` | Run query; return all rows (buffered). |
-| `value(string|Sql $sql, array $params = []): mixed` | Single column, at most one row; null if 0 rows; throws if >1 row or >1 column. |
-| `values(string|Sql $sql, array $params = []): array` | Single column across rows; [] if 0 rows. |
-| `list(string|Sql $sql, array $params = []): array` | Alias of values(). |
-| `each(string|Sql $sql, array|callable $params, callable $fn = null): int` | Stream rows to callable; returns row count. |
-| `exec(string|Sql $sql, array $params = []): int` | Run INSERT/UPDATE/DELETE; return rows affected. |
-| `transaction(callable $fn): mixed` | Run callback in a transaction; receives the Driver; commits or rolls back; supports nesting. |
-| `lastSql(): ?string` | Last executed SQL string (debugging). |
-| `lastParams(): array` | Last bound parameters (debugging). |
+* Application code **MUST** treat `Database` as the only ingress and only handle.
+* Application code **MUST NOT** reference or depend on `UDA\Driver` or `UDA\Driver\*`.
+* There are **no Connection objects** in the public model.
 
-**Example**
+“Connection” means **a config name**, nothing more.
+
+---
+
+## 1. Entry point
+
+### `Database::connect(...)`
+
+`Database::connect()` is the only supported entry into UDA.
+
+* Default path: `UDA_CONFIG` environment variable points to the JSON config file.
+* Optional: pass a config file path to connect using a specific config file.
+* Optional: pass a connection name to select a non-default connection from that config.
+
+> Config is validated and normalized at ingestion. UDA does not “sanitize on use.”
+
+**Signature (public contract):**
 
 ```php
-$driver = Database::connect();
+Database::connect(string ...$args): Database
+```
 
-$row = $driver->row('SELECT * FROM users WHERE id = :id', ['id' => 1]);
-$rows = $driver->rows('SELECT * FROM users WHERE ctime > :since', ['since' => '2026-01-01']);
+**Argument rules (ergonomic + deterministic):**
 
-$driver->each('SELECT id, name FROM users', [], function (array $row): void {
+* If an argument is a JSON file path (ends in `.json` or `is_file($arg)`), it is treated as the config file.
+* Otherwise it is treated as the connection name.
+* Passing neither uses the default connection from the config.
+* Passing only a config file uses that file and its default connection.
+* Passing only a connection name uses env config + that connection.
+* Passing both uses that config file + that connection.
+
+Examples:
+
+```php
+$db = Database::connect();                          // env config + default connection
+$db = Database::connect('reporting');               // env config + named connection
+$db = Database::connect('/tmp/uda.generated.json'); // file config + default connection
+$db = Database::connect('gen_001', '/tmp/uda.generated.json'); // file + named connection
+```
+
+---
+
+## 2. Raw SQL API (named parameters only)
+
+Raw SQL is first-class. It must use **named parameters only**.
+
+* ✅ `WHERE id = :id` with `['id' => 1]`
+* ❌ positional `?` is forbidden in public API
+
+### Methods
+
+| Method                             | Description                                                             |                                                                               |                                             |
+| ---------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
+| `row(string                        | Sql $sql, array $params = []): ?array`                                  | Run query; return at most one row or null; throw if >1 row.                   |                                             |
+| `rows(string                       | Sql $sql, array $params = []): array`                                   | Run query; return all rows (buffered).                                        |                                             |
+| `value(string                      | Sql $sql, array $params = []): mixed`                                   | Single column; at most one row; null if 0 rows; throw if >1 row or >1 column. |                                             |
+| `values(string                     | Sql $sql, array $params = []): array`                                   | First column across all rows; `[]` if 0 rows.                                 |                                             |
+| `list(string                       | Sql $sql, array $params = []): array`                                   | Alias of `values()`.                                                          |                                             |
+| `each(string                       | Sql $sql, array                                                         | callable $params, callable $fn = null): int`                                  | Stream rows to callable; returns row count. |
+| `exec(string                       | Sql $sql, array $params = []): int`                                     | Run INSERT/UPDATE/DELETE; return affected rows.                               |                                             |
+| `transaction(callable $fn): mixed` | Run callback in a transaction; receives a `Database`; supports nesting. |                                                                               |                                             |
+| `lastSql(): ?string`               | Last executed SQL string (debug).                                       |                                                                               |                                             |
+| `lastParams(): array`              | Last bound parameters (debug).                                          |                                                                               |                                             |
+
+### Example
+
+```php
+$db = Database::connect();
+
+$row = $db->row('SELECT * FROM users WHERE id = :id', ['id' => 1]);
+
+$rows = $db->rows(
+    'SELECT * FROM users WHERE ctime > :since',
+    ['since' => '2026-01-01']
+);
+
+$db->each('SELECT id, name FROM users', [], function (array $row): void {
     // process each row
 });
 
-$affected = $driver->exec('INSERT INTO logs (msg) VALUES (:msg)', ['msg' => 'done']);
-$affected = $driver->exec('UPDATE users SET name = :name WHERE id = :id', ['name' => 'Jane', 'id' => 1]);
+$affected = $db->exec(
+    'INSERT INTO logs (msg) VALUES (:msg)',
+    ['msg' => 'done']
+);
 
-$driver->transaction(function ($driver): void {
-    $driver->exec('INSERT INTO orders (user_id) VALUES (:uid)', ['uid' => 42]);
-    $driver->exec('UPDATE users SET last_order_at = :t', ['t' => date('c')]);
+$db->transaction(function (Database $tx): void {
+    $tx->exec('INSERT INTO orders (user_id) VALUES (:uid)', ['uid' => 42]);
+    $tx->exec('UPDATE users SET last_order_at = :t', ['t' => date('c')]);
 });
-// lastSql() / lastParams() available on the Driver for debugging.
 ```
 
-Results are **associative arrays** (e.g. `$row['id']`). Business code never touches PDO.
+Results are associative arrays. Business code never touches PDO.
 
 ---
 
-## 2. Fluent queries (driver-bound, execute directly)
+## 3. Fluent queries (Database-created, execute via the same path)
 
-Query objects are created from the **Driver** returned by `Database::connect()`. Call `$driver->select()`, `$driver->insert()`, etc. They validate and quote identifiers internally (strings only).
+Query objects are created from `Database`:
 
-| Entry | Returns | Execution methods |
-|-------|---------|--------------------|
-| `$driver->select()` | SelectQuery | `row()`, `rows()`, `value()`, `values()`, `list()`, `count(?expr)`, `each(callable)`, `toSql()` (debug) |
-| `$driver->insert()` | InsertQuery | `exec()`, `executeReturning()` (where supported) |
-| `$driver->update()` | UpdateQuery | `exec()` |
-| `$driver->delete()` | DeleteQuery | `exec()` |
-| `$driver->upsert()` | UpsertQuery | `exec()` |
+* `$db->select()`
+* `$db->insert()`
+* `$db->update()`
+* `$db->delete()`
+* `$db->upsert()`
 
-**SelectQuery:** `from(table, ?alias)`, `join(...)`, `select(...columns)`, `where(column, value)`, `whereColumn(left, right)`, `groupBy(...)`, `having(column, value)`, `orderBy(column, direction)`, `limit(n)`, `offset(n)`, then `row()`, `rows()`, `value()`, `values()`, `list()`, `count(?expr)`, `each(fn)`, or `toSql()`.
+They compile to SQL + params and **terminate back into the same execution path**.
 
-**InsertQuery:** `into(table)`, `set(column, value)` (chain), then `exec()` or `executeReturning()`.
+> Builders never execute directly. Execution always converges through the same internal hot path.
 
-**UpdateQuery:** `table(name)`, `set(column, value)`, `where(column, value)`, then `exec()`.
+### Builder entrypoints
 
-**DeleteQuery:** `table(name)`, `where(column, value)`, then `exec()`.
+| Entry           | Returns     | Terminators                                                                                     |
+| --------------- | ----------- | ----------------------------------------------------------------------------------------------- |
+| `$db->select()` | SelectQuery | `row()`, `rows()`, `value()`, `values()`, `list()`, `count(?expr)`, `each(callable)`, `toSql()` |
+| `$db->insert()` | InsertQuery | `exec()`, optional `returning(...)` + `row()`/`value()` where supported                         |
+| `$db->update()` | UpdateQuery | `exec()`                                                                                        |
+| `$db->delete()` | DeleteQuery | `exec()`                                                                                        |
+| `$db->upsert()` | UpsertQuery | `exec()`                                                                                        |
 
-**UpsertQuery:** `into(table)`, `values(row)`, `key(cols)`, `update(cols)` or `doNothing()`, then `exec()`.
-
-**Example** (Driver from `Database::connect()` does everything)
+### Example
 
 ```php
-$driver = Database::connect();
+$db = Database::connect();
 
-$row = $driver->select()->from('users')->where('id', 1)->row();
-$rows = $driver->select()->from('users')->orderBy('name', 'ASC')->limit(10)->rows();
-$driver->select()->from('users')->each(fn (array $r) => print_r($r));
+$row = $db->select()
+    ->from('users')
+    ->where('id', 1)
+    ->row();
 
-$driver->insert()->into('users')->set('name', $n)->set('email', $e)->exec();
-$id = $driver->insert()->into('users')->set('name', $n)->executeReturning(); // when supported
+$rows = $db->select()
+    ->from('users')
+    ->orderBy('name', 'ASC')
+    ->limit(10)
+    ->rows();
 
-$driver->update()->table('users')->set('name', $n)->where('id', $id)->exec();
-$driver->delete()->table('users')->where('id', $id)->exec();
+$db->insert()
+    ->into('users')
+    ->set('name', $name)
+    ->set('email', $email)
+    ->exec();
+
+$db->update()
+    ->table('users')
+    ->set('name', $name)
+    ->where('id', $id)
+    ->exec();
+
+$db->delete()
+    ->table('users')
+    ->where('id', $id)
+    ->exec();
 ```
 
-`toSql()` returns the parameterized SQL (and params) for debugging/logging only; execution uses `row()`, `rows()`, `each()`, or `exec()`.
+`toSql()` exists for debugging/logging; it does not execute.
 
 ---
 
-## 3. Massive queries (raw SQL + safe fragments)
+## 4. Massive queries (raw SQL + safe fragments)
 
-For CTEs, window functions, engine-specific SQL: keep the query as raw SQL (e.g. heredoc) and use **safe fragment helpers** for the dangerous dynamic parts.
+For CTEs, window functions, or engine-specific SQL: keep the query as raw SQL and use **safe fragment helpers** for the dangerous dynamic parts.
 
-| Helper | Purpose |
-|--------|---------|
-| `$driver->q(string $identifier): string` | Validate and quote identifier (table/column). |
-| `$driver->orderByAllowed(string $col, array $allowlist, string $dir = 'ASC'): string` | ORDER BY clause with allowlist. |
-| `$driver->limitOffset(int $limit, int $offset): SqlFragment` | LIMIT/OFFSET fragment (driver-specific). |
-| `$driver->inList(array $values, string $hint = 'p'): SqlFragment` | Placeholders and params for IN (...); empty → 1=0. |
+These helpers exist to prevent developers from “escaping the system” into string concatenation.
 
-**Pattern:** Keep the big query as a string; splice in ORDER BY and pagination via helpers; keep all values in named parameters.
+### Helpers
 
-**Example (skeleton)**
+| Helper                                                                            | Purpose                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `$db->q(string $identifier): string`                                              | Validate + quote identifier (table/column).        |
+| `$db->orderByAllowed(string $col, array $allowlist, string $dir = 'ASC'): string` | Safe ORDER BY clause from allowlist.               |
+| `$db->limitOffset(int $limit, int $offset): SqlFragment`                          | LIMIT/OFFSET fragment (engine correct).            |
+| `$db->inList(array $values, string $hint = 'p'): SqlFragment`                     | IN-list placeholders + params; empty list → `1=0`. |
+
+> All values still bind through named parameters. These helpers only produce safe SQL structure.
+
+### Example (CTE + safe ordering + pagination)
 
 ```php
-$driver = Database::connect();
-$allowlist = ['name' => true, 'created_at' => true];
-$orderCol = 'name'; // from request, validated against allowlist
-$dir = 'DESC';
-$limit = 20;
-$offset = 0;
+$db = Database::connect();
 
-$orderClause = $driver->orderByAllowed($orderCol, $allowlist, $dir);
-$page = $driver->limitOffset($limit, $offset);
+$allow = ['name' => true, 'created_at' => true];
+$orderCol = 'name';     // from request
+$dir      = 'DESC';
+$limit    = 20;
+$offset   = 0;
+
+$orderClause = $db->orderByAllowed($orderCol, $allow, $dir);
+$page        = $db->limitOffset($limit, $offset);
 
 $sql = <<<SQL
 WITH ranked AS (
-  SELECT id, name, ROW_NUMBER() OVER (ORDER BY created_at) AS rn
+  SELECT id, name,
+         ROW_NUMBER() OVER (ORDER BY created_at) AS rn
   FROM users
   WHERE status = :status
 )
-SELECT * FROM ranked
+SELECT *
+FROM ranked
 SQL;
+
 $sql .= ' ' . $orderClause . ' ' . $page->sql;
 
-$params = ['status' => 'active'];
-$rows = $driver->rows($sql, $params);
+$params = ['status' => 'active'] + $page->params;
+
+$rows = $db->rows($sql, $params);
 ```
 
-Use `$driver->q($identifier)` when building table/column names from variables. Use `$driver->inList($ids, 'id')` to build `IN (:id_0, :id_1, ...)` and merge `$frag->params` into your params.
-
----
-
-## 4. Debug / inspection
-
-- **`$driver->lastSql(): ?string`** — Last executed SQL string. For logging/debugging.
-- **`$driver->lastParams(): array`** — Last bound parameters.
-- **`$query->toSql()`** on a fluent query — Returns the built SQL (and params) without executing.
-
----
-
-## 4.1 Optional result caching (transparent + explicit scopes)
-
-When a connection specifies a `cache` section, the default read helpers (`$driver->row`, `$driver->rows`, `select()->rows()`) automatically build a cache scope that respects the connection defaults, table rules, TTL, and min-interval settings. You do not need to call `Driver::cache()` to use caching—just read through the normal API and the cache will be consulted whenever the scope resolves to a TTL > 0. Use **Driver::cache(...)** only when you need to override TTL/policy/namespace or pass custom `tables`/`hint` data for a single fetch. See [caching.md](caching.md) for the policy/key/invalidations details.
-
-**Ergonomic API:** `cache()` accepts TTL (int), policy array, `Policy`, `Hint`, or `null` (connection/global default). Optional `tables` and `namespace` improve invalidation and key isolation; **tables are recommended** in repositories for write invalidation.
+### Example (IN list safely)
 
 ```php
-use UDA\Cache\CacheDefaults;
+$db = Database::connect();
 
-$driver = Database::connect();
-CacheDefaults::setStore($yourStore);
+$ids = [10, 20, 30];
+$in  = $db->inList($ids, 'id');
 
-// TTL only (simplest)
-$rows = $conn->cache(300)->rows('SELECT * FROM users WHERE active = :a', ['a' => 1]);
+$sql = 'SELECT * FROM users WHERE id ' . $in->sql;
 
-// Policy array + optional tables/namespace
-$rows = $conn->cache([
-    'ttlSeconds' => 60,
-    'minIntervalSeconds' => 5,
-    'allowStaleOnError' => true,
-    'maxStaleSeconds' => 3600,
-    'tables' => ['users'],
-    'namespace' => 'tenantA',
-])->rows('SELECT * FROM users', []);
-
-// Named params: tables/namespace without full array
-$rows = $conn->cache(60, tables: ['users'])->rows('SELECT * FROM users', []);
-
-// Connection default when configured in config (cache(null))
-$rows = $conn->cache(null)->rows('SELECT * FROM users', []);
-
-// Backward compatible: Hint still works
-$rows = $conn->cache(new Hint(new Policy(60), ['users'], null))->rows('SELECT * FROM users', []);
-
-// Uncached (always hits DB)
-$rows = $driver->rows('SELECT * FROM users', []);
+$rows = $db->rows($sql, $in->params);
 ```
 
----
-
-## 5. Exceptions
-
-| Exception | When |
-|-----------|------|
-| `ConfigException` | Missing/invalid config, missing `UDA_CONFIG`. |
-| `ConnectionException` | Cannot connect. |
-| `QueryException` | Execution failure; includes SQLSTATE and sanitized SQL snippet; never includes secrets. |
+Empty list becomes a deterministic `WHERE 1=0` behavior, not invalid SQL.
 
 ---
 
-## 6. API stability rules
+## 5. Debug / inspection
 
-- **Named parameters only** in raw SQL (public API and docs).
-- **No public Identifier objects** — identifiers are strings; quoting is internal.
-- **Query objects are driver-bound** — created only via `$driver->select()`, `$driver->insert()`, etc.
-- **Raw SQL is first-class** — use `row` / `rows` / `each` / `exec` for complex or engine-specific SQL.
-- **Safe fragments** exist for dynamic ORDER BY, LIMIT/OFFSET, IN lists, and identifier quoting.
+* `lastSql(): ?string` — last executed SQL string
+* `lastParams(): array` — last bound parameters
+* `$query->toSql()` — view SQL+params before execution (debug only)
 
 ---
 
-## 7. Cross-DB contract
+## 6. Caching behavior (transparent)
 
-- **Common operations** behave the same across engines: parameter binding (named), result shape (associative arrays), `each()` streaming, transaction API, pagination and order-by helpers.
-- **Differences** (e.g. LIMIT/OFFSET vs OFFSET/FETCH) are handled by the driver.
-- **Engine-specific features** (e.g. `executeReturning()`) are opt-in and fail clearly when unsupported.
+Caching is **configuration-driven** and **implicit**.
+
+* If caching is enabled for the connection, reads automatically consult cache.
+* If disabled, cache code must not run.
+* There is no public “cache API” and no explicit cache invocation in userland.
+
+> Cache is not called. Cache happens.
+
+Repository code remains identical whether cache is enabled or not.
 
 ---
 
-## 8. Advanced: typed parameters (transport-level)
+## 7. Exceptions
 
-UDA does not implement a schema type system. For transport correctness (LOB, JSON, UUID, datetime), an optional **Param** wrapper can be used so the driver binds values with the correct type and optional cast.
+| Exception             | When                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `ConfigException`     | Missing/invalid config, missing `UDA_CONFIG`, missing connection definition.          |
+| `ConnectionException` | Cannot connect.                                                                       |
+| `QueryException`      | Execution failure; includes SQLSTATE and a sanitized snippet; never includes secrets. |
 
-- `Param::binary(string|resource)` — BLOB.
-- `Param::json(mixed)` — JSON-encoded string.
-- `Param::uuid(string)` — UUID (format validation).
-- `Param::dateTimeImmutable(DateTimeImmutable)` — ISO string.
+---
 
-Normal scalars remain the default; Param is for edge cases only.
+## 8. Optional typed parameters (transport-level)
+
+UDA does not implement schema typing. For edge cases where bind type matters, a lightweight `Param` wrapper may be used.
+
+Examples (conceptual):
+
+* `Param::binary(...)` — BLOB
+* `Param::json(...)` — JSON encoding
+* `Param::uuid(...)` — UUID validation
+* `Param::dateTimeImmutable(...)` — consistent formatting
+
+Most code should use scalars normally; `Param` exists for correctness at boundaries.
+
+---
+
+## 9. API stability rules
+
+* Named parameters only (public API).
+* Database is the only user handle.
+* No public Driver / Identifier / Connection concepts.
+* One execution path, always.
+* Cache remains transparent.
+* Helpers exist to keep dynamic SQL safe without framework sprawl.

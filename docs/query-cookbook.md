@@ -1,37 +1,93 @@
-# Query Cookbook
+# UDA Query Cookbook
 
-This document demonstrates how to express common SQL patterns in UDA.
+This document demonstrates how to express common SQL patterns in **UDA**.
 
 Goals:
 
-- Keep SQL centralized in repositories.
-- Keep grammar readable and predictable.
-- Support complex logic without abstraction sprawl.
-- Avoid raw SQL unless necessary.
+* Keep SQL centralized in repositories.
+* Keep grammar readable and predictable.
+* Support complex logic without abstraction sprawl.
+* Avoid raw SQL unless necessary.
+* Empower developers to express complex queries **without escaping the system**.
+* Keep query syntax identical across databases—dialects handle vendor-specific clauses.
+
+> **Dialect note:** Builders never embed vendor branching. When you call `$db->select()` or `$db->insert()`, UDA binds the connection’s SQL dialect behind the scenes so LIMIT/OFFSET, `ON CONFLICT`, `MERGE`, etc. are emitted correctly for PostgreSQL, SQLite, SQL Server, Sybase, Oracle, MariaDB, or DB2 (stub). Stick to the fluent API; the dialect layer takes care of the SQL nuances.
+
+> **Cache hint:** Every `Database` helper (`rows`, `row`, `value`, `values`, `list`, `each`, `exec`, `returning`, `explain`, `explainAnalyze`) now accepts an optional `$tableHints` array. Pass table names when issuing raw SQL so caching/tracing stay accurate; see `docs/caching.md#raw-sql-table-hints` for details.
 
 ---
 
-## Basic SELECT
+# Basic SELECT
 
 ```php
 $rows = $db->select()
     ->from('employees')
     ->rows();
-````
+```
 
----
+Equivalent SQL:
 
-## WHERE (Simple)
-
-```php
-->where('id', 5)
+```sql
+SELECT * FROM employees
 ```
 
 ---
 
-## WHERE (Boolean Composition – Fluent)
+# Selecting Specific Columns
 
-When boolean logic becomes complex, `where()` can enter *where-chain mode*.
+```php
+$rows = $db->select(
+        'id',
+        'first_name',
+        'last_name'
+    )
+    ->from('employees')
+    ->rows();
+```
+
+Produces:
+
+```sql
+SELECT id, first_name, last_name
+FROM employees
+```
+
+---
+
+# Table Aliases
+
+```php
+$db->select('e.id','e.first_name')
+   ->from('employees e')
+   ->rows();
+```
+
+Produces:
+
+```sql
+SELECT e.id, e.first_name
+FROM employees e
+```
+
+---
+
+# WHERE (Simple)
+
+```php
+->where('id', $id)
+```
+
+Produces:
+
+```sql
+WHERE id = :p1
+```
+
+---
+
+# WHERE (Boolean Composition)
+
+Complex boolean logic uses a **fluent expression chain**.
 
 ```php
 ->where('active', 1)
@@ -40,25 +96,80 @@ When boolean logic becomes complex, `where()` can enter *where-chain mode*.
         $w->and('title')->like('%Engineer%')
           ->and('hire_date')->between('2020-01-01','2024-12-31')
     )
-    ->rows()
+    ->rows();
 ```
 
-Notes:
+Equivalent SQL:
 
-* `where()` begins the WHERE clause.
-* `and()`, `or()`, `not()` extend it.
-* `in()`, `between()`, `like()`, `exists()` attach operators.
-* Closure form groups expressions.
+```sql
+WHERE active = :p1
+AND department_id IN (:p2,:p3,:p4)
+OR (
+    title LIKE :p5
+    AND hire_date BETWEEN :p6 AND :p7
+)
+```
 
 ---
 
-## IN
+# Optional Filters (Dynamic Queries)
+
+A common real-world pattern is **optional filters**.
+
+```php
+$q = $db->select()
+    ->from('employees');
+
+if ($deptId) {
+    $q->where('department_id', $deptId);
+}
+
+if ($title) {
+    $q->and('title')->like("%$title%");
+}
+
+return $q->rows();
+```
+
+No SQL concatenation required.
+
+---
+
+# Conditional Query Blocks
+
+Closure blocks make complex filters readable.
+
+```php
+->where(fn($w) =>
+    $w->and('active',1)
+      ->and('department_id')->in([1,2,3])
+)
+```
+
+Produces:
+
+```sql
+WHERE (
+    active = :p1
+    AND department_id IN (:p2,:p3,:p4)
+)
+```
+
+---
+
+# IN
 
 ```php
 ->where('department_id')->in([1,2,3])
 ```
 
-Empty list behavior:
+Produces:
+
+```sql
+WHERE department_id IN (:p1,:p2,:p3)
+```
+
+### Empty Lists
 
 ```php
 ->where('department_id')->in([])
@@ -70,211 +181,501 @@ Produces:
 WHERE 1 = 0
 ```
 
----
-
-## BETWEEN
-
-```php
-->where('hire_date')->between('2020-01-01', '2024-01-01')
-```
+This prevents invalid SQL.
 
 ---
 
-## EXISTS
+# WHERE IN (subquery)
 
 ```php
-->whereExists(
-    $db->select('1')
-       ->from('payroll p')
-       ->whereRaw('p.employee_id = e.id')
-)
-```
+$allowedDepartments = $db->select('id')
+    ->from('departments')
+    ->where('name', 'Engineering')
+    ->end();
 
----
-
-## DISTINCT
-
-```php
-->select('DISTINCT department_id')
-```
-
----
-
-## GROUP BY
-
-```php
-->groupBy('department_id')
-```
-
----
-
-## HAVING
-
-```php
-->groupBy('department_id')
-->having('COUNT(id) > :n', ['n' => 5])
-```
-
-Optional fluent style:
-
-```php
-->groupBy('department_id')
-->having('COUNT(id)')->gt(5)
-    ->and('AVG(salary)')->gt(120000)
-    ->rows()
-```
-
----
-
-## ORDER BY (Safe)
-
-Always validate externally supplied column names.
-
-```php
-$allowed = ['last_name','hire_date','salary'];
-$sort = in_array($sort, $allowed, true) ? $sort : 'last_name';
-
-$rows = $db->select()
+$db->select('id')
     ->from('employees')
-    ->orderBy($sort, 'ASC')
+    ->where('status','active')
+        ->and('department_id')->in($allowedDepartments)
+        ->end()
     ->rows();
 ```
 
 ---
 
-## Pagination
+# BETWEEN
+
+```php
+->where('hire_date')->between('2020-01-01','2024-01-01')
+```
+
+Produces:
+
+```sql
+WHERE hire_date BETWEEN :p1 AND :p2
+```
+
+---
+
+# LIKE
+
+```php
+->where('title')->like('%Engineer%')
+```
+
+Produces:
+
+```sql
+WHERE title LIKE :p1
+```
+
+---
+
+# EXISTS
+
+```php
+->whereExists(
+    $db->select('1')
+        ->from('payroll p')
+        ->whereRaw('p.employee_id = e.id')
+)
+```
+
+Produces:
+
+```sql
+WHERE EXISTS (
+    SELECT 1
+    FROM payroll p
+    WHERE p.employee_id = e.id
+)
+```
+
+---
+
+# NOT EXISTS
+
+```php
+$db->select('e.id')
+    ->from('employees e')
+    ->whereNotExists(
+        $db->select('1')
+            ->from('terminations t')
+            ->whereRaw('t.employee_id = e.id')
+            ->end()
+    )
+    ->rows();
+```
+
+---
+
+# JOIN
+
+Joins remain explicit and readable.
+
+```php
+$db->select(
+        'e.id',
+        'e.first_name',
+        'd.name as department'
+    )
+    ->from('employees e')
+    ->join('departments d','d.id = e.department_id')
+    ->rows();
+```
+
+Produces:
+
+```sql
+SELECT e.id, e.first_name, d.name as department
+FROM employees e
+JOIN departments d ON d.id = e.department_id
+```
+
+---
+
+# LEFT JOIN
+
+```php
+->leftJoin('payroll p','p.employee_id = e.id')
+```
+
+Produces:
+
+```sql
+LEFT JOIN payroll p ON p.employee_id = e.id
+```
+
+---
+
+# Derived Tables
+
+```php
+$totals = $db->select('payroll.employee_id')
+    ->selectRaw('SUM(amount) AS total')
+    ->from('payroll')
+    ->groupBy('payroll.employee_id');
+
+$db->select('p.employee_id','p.total')
+    ->fromSub($totals,'p')
+    ->rows();
+```
+
+Alias (`'p'`) is required when using `fromSub()`.
+
+---
+
+# Subquery JOIN
+
+```php
+$totals = $db->select('payroll.employee_id')
+    ->selectRaw('SUM(amount) AS total')
+    ->from('payroll')
+    ->groupBy('payroll.employee_id');
+
+$db->select('e.id','t.total')
+    ->from('employees','e')
+    ->joinSub($totals,'t','t.employee_id = e.id')
+    ->rows();
+```
+
+---
+
+# GROUP BY
+
+```php
+->groupBy('department_id')
+```
+
+Produces:
+
+```sql
+GROUP BY department_id
+```
+
+---
+
+# HAVING
+
+```php
+->groupBy('department_id')
+->havingRaw('COUNT(id) > ?', [5])
+```
+
+Or fluent:
+
+```php
+->groupBy('department_id')
+->having('COUNT(id)')->gt(5)
+    ->and('AVG(salary)')->gt(120000)
+    ->rows();
+```
+
+---
+
+# ORDER BY (Safe Dynamic Sorting)
+
+Always validate external column input.
+
+```php
+$allowed = ['last_name','hire_date','salary'];
+
+$sort = in_array($sort,$allowed,true)
+    ? $sort
+    : 'last_name';
+
+$rows = $db->select()
+    ->from('employees')
+    ->orderBy($sort,'ASC')
+    ->rows();
+```
+
+---
+
+# Pagination
 
 ```php
 ->limit(50)
 ->offset(0)
 ```
 
+Produces:
+
+```sql
+LIMIT 50 OFFSET 0
+```
+
 ---
 
-## INSERT
+# Streaming Large Result Sets
+
+For very large datasets:
+
+```php
+$db->select()
+   ->from('employees')
+   ->each(function($row){
+       process($row);
+   });
+```
+
+Benefits:
+
+* iterates rows directly from the PDO cursor
+* avoids materializing the full result set at once
+
+> Memory usage still depends on the PDO driver and cursor type. Use forward-only cursors for the most predictable footprint.
+
+---
+
+# INSERT
 
 ```php
 $db->insert()
     ->into('employees')
+    ->set('employee_no',$empNo)
+    ->set('first_name',$first)
+    ->set('last_name',$last)
+    ->set('department_id',$deptId)
+    ->exec();
+```
+
+Produces:
+
+```sql
+INSERT INTO employees
+(employee_no, first_name, last_name, department_id)
+VALUES (:p1,:p2,:p3,:p4)
+```
+
+---
+
+# INSERT with RETURNING / OUTPUT
+
+Builders support returning rows even though each engine implements it differently (PostgreSQL/SQLite use `RETURNING`, SQL Server/Sybase use `OUTPUT`, Oracle uses `RETURNING ... INTO`). You always write the same fluent code:
+
+```php
+$row = $db->insert()
+    ->into('employees')
     ->set('employee_no', $empNo)
     ->set('first_name', $first)
     ->set('last_name', $last)
-    ->set('department_id', $deptId)
+    ->returning('id', 'employee_no')
+    ->row();
+
+// $row === ['id' => 123, 'employee_no' => 'E999']
+```
+
+Need multiple rows (e.g., bulk insert)? Use `->rows([...])` with your payload and then call `rows()` (no arguments) to fetch all returned values.
+
+Supported engines for `returning()`:
+
+- PostgreSQL
+- SQLite (3.35+)
+- SQL Server
+- Sybase
+- Oracle
+
+Unsupported (calling `returning()` throws a `QueryException`):
+
+- MariaDB
+- DB2
+
+This produces a vendor-specific statement via the dialect—for example PostgreSQL emits `RETURNING`, SQL Server emits `OUTPUT INSERTED...`. You never hand-roll those clauses yourself.
+
+> **Fast failure**: Capability checks now run when you call `returning()`. If the active dialect cannot satisfy the request (e.g., MariaDB), UDA throws `MariaDB dialect does not support RETURNING clauses.` immediately, long before SQL reaches PDO.
+
+**Oracle specifics (WO021):** Oracle’s dialect compiles the plain `INSERT/UPDATE/DELETE` while the driver appends `RETURNING ... INTO` at execution time. PDO OCI requires binding those `INTO` placeholders as input/output strings *before* running the statement, so UDA seeds empty strings, trims the results, and casts numerics back to PHP ints/floats. Oracle forbids multi-row `VALUES (...), (...) RETURNING` statements (ORA-63809); the driver automatically rewrites multi-row inserts into N individual statements and concatenates the returned rows so your builder API remains consistent.
+
+Refer to `docs/spec.md#dialect-capability-matrix` for the authoritative feature grid (RETURNING, MERGE, writable CTEs, window functions, etc.). Every builder references those capabilities before generating SQL so unsupported features fail fast.
+
+---
+
+# Bulk INSERT
+
+```php
+$db->insert()
+    ->into('employees')
+    ->rows([
+        ['employee_no'=>'E100','first_name'=>'A','last_name'=>'One'],
+        ['employee_no'=>'E101','first_name'=>'B','last_name'=>'Two']
+    ])
     ->exec();
 ```
 
 ---
 
-## UPDATE
+# UPDATE
 
 ```php
 $db->update()
     ->table('employees')
-    ->set('title', $title)
-    ->set('updated_at', $now)
-    ->where('id', $id)
+    ->set('title',$title)
+    ->set('updated_at',$now)
+    ->where('id',$id)
     ->exec();
 ```
 
 ---
 
-## DELETE
+# DELETE
 
 ```php
 $db->delete()
     ->table('employees')
-    ->where('id', $id)
+    ->where('id',$id)
     ->exec();
 ```
 
 ---
 
-## UPSERT
+# UPSERT
 
-Upsert semantics: “insert if missing; otherwise update specific columns.”
-
-### 1) Basic UPSERT (insert + update on conflict)
+Insert if missing, update if conflict occurs.
 
 ```php
 $db->upsert()
     ->into('employees')
     ->values([
-        'employee_no'   => $empNo,
-        'first_name'    => $first,
-        'last_name'     => $last,
-        'department_id' => $deptId,
-        'updated_at'    => $now,
+        'employee_no'=>$empNo,
+        'first_name'=>$first,
+        'last_name'=>$last
     ])
-    ->key(['employee_no'])                 // conflict target
-    ->update(['first_name','last_name','department_id','updated_at'])
+    ->key(['employee_no'])
+    ->update(['first_name','last_name'])
     ->exec();
 ```
 
-Notes:
+---
 
-* `key([...])` is mandatory: it defines *how* we detect conflict.
-* `update([...])` defines which columns to update on conflict.
-* Execution is always `exec(): int` (affected rows).
-
-### 2) UPSERT “DO NOTHING” (insert if missing, ignore if exists)
+# UPSERT DO NOTHING
 
 ```php
 $db->upsert()
     ->into('employees')
     ->values([
-        'employee_no' => $empNo,
-        'first_name'  => $first,
-        'last_name'   => $last,
+        'employee_no'=>$empNo,
+        'first_name'=>$first
     ])
     ->key(['employee_no'])
     ->doNothing()
     ->exec();
 ```
 
-### 3) Bulk UPSERT (many rows)
+---
 
-If supported by the builder:
+# Window Functions
+
+Window helpers live in `UDA\Query\Expr`. Chain `over()` and fluent partition/order/frame helpers on any expression.
+
+## Ranking
 
 ```php
-$db->upsert()
-    ->into('employees')
-    ->rows([
-        ['employee_no' => 'E100', 'first_name' => 'A', 'last_name' => 'One', 'department_id' => 10],
-        ['employee_no' => 'E101', 'first_name' => 'B', 'last_name' => 'Two', 'department_id' => 20],
-    ])
-    ->key(['employee_no'])
-    ->update(['first_name','last_name','department_id'])
-    ->exec();
+$rows = $db->select(
+        'employee_id',
+        Expr::rowNumber()
+            ->over()
+            ->partitionBy('department_id')
+            ->orderBy('salary', 'DESC')
+            ->as('dept_rank')
+    )
+    ->from('employees')
+    ->rows();
 ```
 
-If bulk isn’t supported yet, loop rows explicitly in repository code and keep it obvious.
+SQL:
 
-### 4) Engine-specific behavior
+```sql
+SELECT
+    employee_id,
+    ROW_NUMBER() OVER (
+        PARTITION BY department_id
+        ORDER BY salary DESC
+    ) AS "dept_rank"
+FROM "employees"
+```
 
-UDA compiles UPSERT through the dialect/driver strategy:
+## Lag / Lead
 
-* Postgres: `INSERT ... ON CONFLICT (...) DO UPDATE ...`
-* SQLite: modern UPSERT (no `INSERT OR REPLACE` unless explicitly requested)
-* SQL Server: update-then-insert strategy (or MERGE only if enabled)
+```php
+Expr::lag('price')
+    ->over()
+    ->orderBy('captured_at')
+```
 
-If unsupported: throw `NotSupportedException` (clear failure).
+→ `LAG(price) OVER (ORDER BY captured_at ASC)`
+
+## Running Totals
+
+```php
+Expr::sum('sales')
+    ->over()
+    ->orderBy('sale_date')
+    ->rowsBetweenUnboundedPreceding()
+```
+
+→ `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`
+
+Use `rowsBetween('1 PRECEDING','CURRENT ROW')` for sliding windows or `rangeBetween('INTERVAL 7 DAY PRECEDING','CURRENT ROW')` for RANGE frames. Helpers `rowsBetweenUnboundedPreceding()`, `rowsCurrentRow()`, `rangeBetweenUnboundedPreceding()`, and `rangeCurrentRow()` keep the grammar terse.
+
+> All supported dialects (PostgreSQL, SQLite, SQL Server, Sybase, Oracle, MariaDB, DB2) advertise `supportsWindowFunctions()`, so capability enforcement from WO022 never blocks window usage.
 
 ---
 
-## Complex Example (SELECT)
+# Transactions
 
 ```php
-$rows = $db->select('e.id','e.first_name','e.last_name')
-    ->from('employees e')
-    ->where('e.active', 1)
-        ->and('e.department_id')->in([10,20,30])
-        ->or(fn($w) =>
-            $w->and('e.title')->like('%Engineer%')
-              ->and('e.hire_date')->between('2020-01-01','2024-12-31')
-        )
-    ->groupBy('e.department_id')
-    ->having('COUNT(e.id) > :n', ['n' => 3])
-    ->orderBy('e.last_name', 'ASC')
+$db->transaction(function($tx){
+
+    $tx->insert()
+        ->into('employees')
+        ->set('first_name','Alice')
+        ->exec();
+
+    $tx->insert()
+        ->into('audit_log')
+        ->set('event','employee_created')
+        ->exec();
+});
+```
+
+Nested transactions are supported automatically.
+
+---
+
+# UNION
+
+```php
+$active = $db->select('id','name')
+    ->from('employees')
+    ->where('active',1)
+    ->end();
+
+$retired = $db->select('id','name')
+    ->from('retirees');
+
+$rows = $active
+    ->union($retired)
+    ->rows();
+```
+
+---
+
+# UNION ALL
+
+```php
+$rows = $active
+    ->unionAll($retired)
+    ->orderBy('name')
+    ->rows();
+```
+
+Ordering and pagination apply to the combined result:
+
+```php
+$active
+    ->unionAll($retired)
+    ->orderBy('name')
     ->limit(50)
     ->offset(0)
     ->rows();
@@ -282,28 +683,567 @@ $rows = $db->select('e.id','e.first_name','e.last_name')
 
 ---
 
-## Raw SQL (with table attribution)
+# Raw SQL (When Necessary)
 
-When necessary, use Sql value objects.
+UDA allows raw SQL through the `Sql` value object.
 
 ```php
 use UDA\Query\Sql;
 
 $q = Sql::of(
     "SELECT * FROM employees WHERE hire_date > :d",
-    ['d' => '2024-01-01'],
-    ['employees'] // enables cache invalidation without SQL parsing
+    ['d'=>'2024-01-01'],
+    ['employees']
 );
 
 $rows = $db->rows($q);
 ```
 
+The table list allows cache invalidation without SQL parsing.
+
 ---
 
-## Key Design Principles
+# Key Design Principles
 
 * Named parameters only.
-* SQL lives in repositories.
-* Cache is transparent (configuration enables it; users don’t “ask”).
-* Driver is the only execution surface.
-* Grammar is predictable and readable.
+* SQL belongs in repository classes.
+* Query builders construct SQL but never execute it.
+* Database is the public execution surface.
+* Cache behavior is transparent.
+* Grammar remains readable and predictable.
+
+---
+
+# When to Use Raw SQL
+
+Raw SQL is acceptable when:
+
+* vendor-specific features are required
+* complex CTEs are needed
+
+However, most queries should remain in the builder for consistency.
+
+---
+
+# Philosophy
+
+UDA is designed to give developers:
+
+* the **power of SQL**
+* the **safety of structured builders**
+* the **performance of transparent caching**
+* the **discipline of centralized queries**
+
+Without introducing ORM complexity or abstraction overhead.
+# Aggregate Expressions
+
+```php
+use UDA\Query\Expr;
+
+$db->select(
+        'department_id',
+        Expr::count('id')->as('employee_count')
+    )
+    ->from('employees')
+    ->groupBy('department_id')
+    ->rows();
+```
+
+You can combine expressions with HAVING:
+
+```php
+$db->select(
+        'department_id',
+        Expr::avg('salary')->as('avg_salary')
+    )
+    ->from('employees')
+    ->groupBy('department_id')
+    ->having(Expr::avg('salary'))->gt(120000)
+    ->rows();
+```
+
+And use `coalesce` helpers for computed columns:
+
+```php
+$db->select(
+        'id',
+        Expr::coalesce('title', 'Unknown')->as('title_display')
+    )
+    ->from('employees')
+    ->rows();
+```
+
+Need a trusted raw expression? `Expr::raw()` accepts named parameters:
+
+```php
+$db->select(
+        Expr::raw('COALESCE(title, :fallback)', [':fallback' => 'Unknown'])->as('title_display')
+    )
+    ->from('employees')
+    ->rows();
+```
+
+Expressions also participate in ORDER BY clauses while keeping parameters deterministic:
+
+```php
+$lastSeen = Expr::raw('COALESCE(last_login, :fallback)', ['fallback' => '1970-01-01']);
+
+$db->select(
+        'id',
+        $lastSeen->as('last_seen')
+    )
+    ->from('users')
+    ->orderBy($lastSeen, 'DESC')
+    ->rows();
+```
+
+Strings remain the default; expressions are optional helpers when structure matters.
+
+---
+
+# Common Table Expressions
+
+> Note: CTE helpers currently apply to SELECT builders. Write builders will adopt the same surface in a later work order.
+
+## Basic CTE
+
+```php
+$totals = $db->select(
+        'department_id',
+        Expr::count('id')->as('employee_count')
+    )
+    ->from('employees')
+    ->groupBy('department_id');
+
+$rows = $db->select('department_id', 'employee_count')
+    ->with('totals', $totals)
+    ->from('totals')
+    ->where('employee_count')->gt(5)
+    ->rows();
+```
+
+## Multiple CTEs
+
+```php
+$active = $db->select('id', 'department_id')
+    ->from('employees')
+    ->where('active', 1)
+    ->end();
+
+$regions = $db->select('id', 'region')
+    ->from('departments');
+
+$rows = $db->select('a.id', 'd.region')
+    ->with('active_employees', $active)
+    ->with('department_regions', $regions)
+    ->from('active_employees', 'a')
+    ->join('department_regions', 'd.id', 'a.department_id', 'INNER', 'd')
+    ->rows();
+```
+
+## Recursive CTE
+
+```php
+$seed = $db->select('id', 'parent_id')
+    ->from('nodes')
+    ->where('id', $rootId)
+    ->end();
+
+$step = $db->select('n.id', 'n.parent_id')
+    ->from('nodes', 'n')
+    ->join('tree', 't.id', 'n.parent_id', 'INNER', 't');
+
+$tree = $seed->unionAll($step);
+
+$rows = $db->select()
+    ->withRecursive('tree', $tree)
+    ->from('tree')
+    ->rows();
+```
+
+PostgreSQL, SQLite, MariaDB, and DB2 emit `WITH RECURSIVE`. SQL Server, Oracle, and Sybase use `WITH` for both recursive and non-recursive forms; the builder handles those dialect differences automatically while preserving deterministic parameter ordering.
+
+## CTE Materialization Hints
+
+Some engines let you hint whether a CTE should be materialized (computed once) or inlined (expanded for optimizer freedom). Call `materialized()` or `notMaterialized()` immediately after `with()`/`withRecursive()` to set the hint for the previously declared CTE.
+
+```php
+$expensive = $db->select('department_id')->from('employees');
+
+$rows = $db->select('department_id')
+    ->with('expensive_data', $expensive)
+    ->materialized()
+    ->from('expensive_data')
+    ->rows();
+```
+
+Produces (PostgreSQL/SQLite):
+
+```sql
+WITH "expensive_data" AS MATERIALIZED (
+    SELECT "department_id" FROM "employees"
+)
+SELECT "department_id" FROM "expensive_data"
+```
+
+Switch to `notMaterialized()` to inline the CTE:
+
+```php
+$rows = $db->select('id')
+    ->with('recent_transactions', $transactionsQuery)
+    ->notMaterialized()
+    ->from('recent_transactions')
+    ->rows();
+```
+
+Multiple CTEs can mix hints independently:
+
+```php
+$query = $db->select('a.id', 'r.region')
+    ->with('active_employees', $activeQuery)->materialized()
+    ->with('regions', $regionQuery)->notMaterialized()
+    ->from('active_employees', 'a')
+    ->join('regions', 'r.id', 'a.region_id', 'INNER', 'r');
+```
+
+PostgreSQL and SQLite emit `AS MATERIALIZED` / `AS NOT MATERIALIZED`. Other dialects ignore the hint automatically so the same builder remains portable.
+
+## Debugging Queries with Replay
+
+Replay capture (see `docs/replay.md`) lets you capture production traffic and replay it locally. Typical workflow:
+
+1. Enable replay in config:
+
+    ```json
+    {
+      "defaults": {
+        "connection": "app",
+        "replay": {"enabled": true, "directory": "storage/replay"}
+      }
+    }
+    ```
+
+2. Run the application; UDA writes snapshots to `storage/replay/queries-YYYY-MM-DD.ndjson`.
+3. Copy the NDJSON file to a dev machine.
+4. Reproduce the query against any Database:
+
+    ```php
+    $db = Database::connect('dev');
+    $replayer = new QueryReplayer($db);
+    $replayer->runFile('storage/replay/queries-2026-03-10.ndjson');
+    ```
+
+5. Use `$replayer->explain($snapshot)` or `$replayer->benchmark($snapshot, 50)` to inspect plans and timings.
+
+Replay respects the same parameter redaction rules as tracing and can be combined with guardrails for safe debugging.
+
+## Observing Query Performance
+
+Attach the metrics aggregator to summarize live workload patterns without adding hot-path cost:
+
+```php
+use UDA\Metrics\MetricsAggregator;
+use UDA\Metrics\MetricsConfig;
+
+$metrics = new MetricsAggregator(new MetricsConfig(enabled: true, slowQueryThresholdMs: 50));
+Database::addTraceListener($metrics);
+
+// later
+$snapshot = $metrics->snapshot();
+
+foreach ($snapshot->metrics as $metric) {
+    echo sprintf(
+        "%s %s count=%d avg=%.1fms max=%.1fms errors=%d\n",
+        $metric->connection,
+        $metric->sql,
+        $metric->count,
+        $metric->averageLatency(),
+        $metric->maxLatencyMs,
+        $metric->errorCount
+    );
+}
+```
+
+This produces an in-memory dashboard of your busiest queries, including slow-query hits and table hotness statistics. See `docs/metrics.md` for exporter patterns and configuration knobs.
+
+---
+
+# Window Functions
+
+Window helpers live entirely inside `Expr` and compose with selects, subqueries, and CTEs.
+
+## Ranking
+
+```php
+$rows = $db->select(
+        'id',
+        'department_id',
+        Expr::rowNumber()
+            ->over()
+            ->partitionBy('department_id')
+            ->orderBy('salary', 'DESC')
+            ->as('rank')
+    )
+    ->from('employees')
+    ->rows();
+```
+
+## Running Totals
+
+```php
+$rows = $db->select(
+        'account_id',
+        'amount',
+        Expr::sum('amount')
+            ->over()
+            ->partitionBy('account_id')
+            ->orderBy('txn_date')
+            ->rowsUnboundedPreceding()
+            ->as('running_total')
+    )
+    ->from('transactions')
+    ->rows();
+```
+
+## Lag Example
+
+```php
+$rows = $db->select(
+        'employee_id',
+        'salary',
+        Expr::lag('salary')
+            ->over()
+            ->partitionBy('department_id')
+            ->orderBy('salary')
+            ->as('previous_salary')
+    )
+    ->from('employees')
+    ->rows();
+```
+
+Dialects render the `OVER (...)` clause while `Expr` keeps window definitions immutable and deterministic.
+
+---
+
+# Writable CTEs
+
+`with()` and `withRecursive()` now work on write builders, with deterministic parameter merging and dialect enforcement. Currently PostgreSQL and SQLite render writable CTEs; other dialects raise `QueryException` if you attempt to attach a CTE to INSERT/UPDATE/DELETE.
+
+## INSERT ... SELECT from CTE
+
+```php
+$recent = $db->select('id', 'first_name', 'last_name')
+    ->from('staging_employees')
+    ->where('import_batch_id', $batchId)
+    ->end();
+
+$imported = $db->insert()
+    ->with('recent', $recent)
+    ->into('employees')
+    ->columns('id', 'first_name', 'last_name')
+    ->select(
+        $db->select('id', 'first_name', 'last_name')->from('recent')
+    )
+    ->exec();
+```
+
+## UPDATE using a CTE source
+
+```php
+$raises = $db->select('employee_id', 'new_salary')
+    ->from('salary_adjustments')
+    ->where('batch_id', $batchId)
+    ->end();
+
+$db->update()
+    ->with('raises', $raises)
+    ->table('employees')
+    ->set('salary', 123_456)
+    ->whereRaw('id IN (SELECT employee_id FROM raises)')
+    ->end()
+    ->exec();
+```
+
+## DELETE using a CTE-fed subquery
+
+```php
+$expired = $db->select('id')
+    ->from('sessions')
+    ->where('expires_at', $now, '<')
+    ->end();
+
+$db->delete()
+    ->with('expired', $expired)
+    ->table('sessions')
+    ->whereRaw('id IN (SELECT id FROM expired)')
+    ->end()
+    ->exec();
+```
+
+Unsupported dialects will now throw messages such as `MariaDB dialect does not support CTE clauses for INSERT statements.` so failures remain explicit.
+
+---
+
+# Pagination (Oracle example)
+
+```php
+$page = $db->select('id', 'name')
+    ->from('employees')
+    ->orderBy('id')
+    ->limit(10)
+    ->offset(20)
+    ->rows();
+```
+
+Generated SQL (Oracle):
+
+```
+SELECT "id", "name"
+FROM "employees"
+ORDER BY "id" ASC
+OFFSET :q1 ROWS FETCH NEXT :q2 ROWS ONLY
+```
+
+`Select::limit()` and `Select::offset()` always emit parameterized pagination tokens, so prepared statements remain deterministic while still using Oracle’s modern `OFFSET … FETCH NEXT …` syntax.
+
+---
+
+# Query Plan Inspection
+
+Use the builder terminators to inspect how the database intends to execute your query without leaving the fluent API:
+
+```php
+$plan = $db->select('d.name', Expr::count('e.id')->as('headcount'))
+    ->from('departments d')
+    ->leftJoin('employees e', 'e.department_id = d.id')
+    ->groupBy('d.name')
+    ->plan();            // structural fingerprint + SQL preview
+
+$explain = $db->select('d.name')
+    ->from('departments d')
+    ->where('d.active', 1)
+    ->explain();         // EXPLAIN without executing the query
+
+$analyze = $db->select('d.name')
+    ->from('departments d')
+    ->where('d.active', 1)
+    ->explainAnalyze();  // runs the query and returns EXPLAIN ANALYZE output
+```
+
+- `plan()` returns the compiled SQL, parameter list, and the bound dialect name so you can copy/paste or log the deterministic statement.
+- `explain()` delegates to the connection’s `Database::explain()` surface and asks the engine for the logical plan only.
+- `explainAnalyze()` executes the query and streams back the full runtime plan, including actual timings and row counts.
+
+> **Dialect coverage:** PostgreSQL, SQLite, SQL Server, and MariaDB emit native EXPLAIN / EXPLAIN ANALYZE statements. Oracle and DB2 only support plan previews (`explain()`), while Sybase currently raises `QueryException` for the explain terminators. Unsupported engines fail fast when you call the terminator so repositories do not accidentally hit PDO with an illegal statement.
+
+Sample output (PostgreSQL `explainAnalyze()`):
+
+```
+Gather  (cost=1000.00..1205.01 rows=12 width=20) (actual time=0.520..0.718 rows=12 loops=1)
+  Workers Planned: 2
+  Workers Launched: 2
+  ->  Parallel Seq Scan on departments d  (cost=0.00..204.73 rows=5 width=20) (actual time=0.027..0.073 rows=4 loops=3)
+        Filter: (active = 1)
+        Rows Removed by Filter: 12
+Planning Time: 0.216 ms
+Execution Time: 0.882 ms
+```
+
+`plan()` and `explain*()` results emit `QueryTrace` events via `Database::traceOperation()`, so observers (e.g., `QueryTraceLogger`) can correlate each plan inspection with the originating builder, cache hits, and execution timings. Attach a listener to capture both the human-readable plan and the structured trace payload for diagnostics.
+
+---
+
+# Retry Policy Recipes
+
+Retries sit between `Database` and the driver. They are disabled by default so the hot path remains fast; you must install a `RetryPolicy` explicitly.
+
+## Enabling Retries for Reads
+
+```php
+use UDA\Retry\RetryConfig;
+use UDA\Retry\RetryPolicy;
+use UDA\Retry\TransientErrorClassifier;
+
+$policy = new RetryPolicy(
+    new RetryConfig(
+        enabled: true,
+        maxAttempts: 3,
+        baseDelayMs: 25,
+        maxDelayMs: 200,
+        jitter: true,
+    ),
+    new TransientErrorClassifier(),
+    sleeper: static function (): void {}
+);
+
+$db->setRetryPolicy($policy);
+
+$rows = $db->select()->from('orders')->rows();
+```
+
+* Reads (`rows`, `row`, `value`, `values`, `list`, `each`, `explain`, `explainAnalyze`) retry automatically when a policy is installed.
+* Provide a no-op sleeper/randomizer in tests to avoid real delays.
+
+## Per-Statement Overrides
+
+```php
+// Allow a write to retry (requires retryWrites=true in RetryConfig)
+$db->insert()
+    ->into('invoices')
+    ->allowRetry()
+    ->values([
+        'invoice_id' => Uuid::v4(),
+        'amount' => 1999,
+    ])
+    ->exec();
+
+// Force a read to skip retries
+$db->select()
+    ->from('reports')
+    ->noRetry()
+    ->rows();
+
+// Raw SQL respects the same metadata
+Sql::of('CALL refresh_materialized_view()')
+    ->allowRetry();
+```
+
+## Writes and Transactions
+
+```php
+$policy = new RetryPolicy(
+    new RetryConfig(
+        enabled: true,
+        retryWrites: true,
+        retryInTransactions: false,
+    ),
+    new TransientErrorClassifier()
+);
+
+$db->setRetryPolicy($policy);
+
+// Transactions are not retried when retryInTransactions=false
+$db->transaction(function () use ($db): void {
+    $db->row('SELECT 1');
+});
+```
+
+* Write retries require both `retryWrites=true` **and** a per-statement opt-in (`allowRetry()`).
+* Transactions remain single-attempt unless you explicitly allow retries, which is discouraged unless the backend guarantees idempotent blocks.
+
+## Observability
+
+Inspect retry metadata through the trace collector:
+
+```php
+$trace = $collector->getTraces()[array_key_last($collector->getTraces())];
+
+$trace->retryCount;   // total attempts
+$trace->retried;      // bool
+$trace->retryReasons; // e.g., ['transient_error']
+$trace->finalFailure; // true when the operation still failed
+```
+
+Replay NDJSON entries contain the same `metadata` block, so recorded workloads retain retry context for later analysis. See `docs/retry.md` for deeper configuration details.
+
+---

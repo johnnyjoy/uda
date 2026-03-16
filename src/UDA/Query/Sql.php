@@ -3,10 +3,21 @@
 declare(strict_types=1);
 
 /**
- * SQL value object compatible with Query domain
+ * @package UDA
+ * @subpackage Query
+ * @author James Dornan <james.dornan@uda.example.com>
+ * @license GPL-2.0-only
+ * @link https://docs.uda.example.com/query/sql
+ * @since 1.0.0
+ */
+
+/*
+ * Purpose: Encapsulates parameterized SQL queries in an immutable value object for type-safe execution and cache management.
  */
 
 namespace UDA\Query;
+
+use UDA\SQL\GuardrailMetadata;
 
 /**
  * Immutable value object representing a parameterized SQL query.
@@ -26,9 +37,9 @@ namespace UDA\Query;
  * Usage Example:
  * ```php
  * $query = Sql::of(
- *     "SELECT * FROM users WHERE active = :active AND created_at > :date",
- *     ['active' => true, 'date' => '2024-01-01'],
- *     ['users'] // Cache hint: query reads from 'users' table
+ * "SELECT * FROM users WHERE active = :active AND created_at > :date",
+ * ['active' => true, 'date' => '2024-01-01'],
+ * ['users'] // Cache hint: query reads from 'users' table
  * );
  * ```
  *
@@ -40,14 +51,19 @@ namespace UDA\Query;
  */
 class Sql
 {
+    private string $statementType;
+    private bool $hasWhereClause;
+    private bool $hasLimitClause;
+    private bool $unsafe;
+    private ?bool $retryAllowed;
     /**
      * Creates a new Sql instance representing a parameterized SQL query.
      *
-     * @param string $sql The SQL query string with named parameter placeholders
-     *                    (e.g., ":name", ":email"). Never concatenate values directly
-     *                    into SQL strings to prevent injection vulnerabilities.
-     * @param array $params Associative array mapping parameter names to values.
-     *                      Example: ['name' => 'Alice', 'email' => 'alice@example.com']
+     * @param string   $sql         The SQL query string with named parameter placeholders
+     *                              (e.g., ":name", ":email"). Never concatenate values directly
+     *                              into SQL strings to prevent injection vulnerabilities.
+     * @param array    $params      Associative array mapping parameter names to values.
+     *                              Example: ['name' => 'Alice', 'email' => 'alice@example.com']
      * @param string[] $cacheTables Tables this query reads from or writes to.
      *                              Used by the cache system to invalidate stale entries
      *                              when these tables are modified. For SELECT queries,
@@ -58,8 +74,21 @@ class Sql
     public function __construct(
         public readonly string $sql,
         public readonly array $params,
-        public readonly array $cacheTables = []
-    ) {}
+        public readonly array $cacheTables = [],
+        public readonly array $returningColumns = [],
+        public readonly ?string $insertTable = null,
+        public readonly array $insertColumns = [],
+        public readonly array $valuePlaceholders = [],
+        array $metadata = [],
+        ?bool $retryAllowed = null
+    ) {
+        [$statementType, $hasWhere, $hasLimit, $unsafe] = GuardrailMetadata::normalize($metadata);
+        $this->statementType = $statementType;
+        $this->hasWhereClause = $hasWhere;
+        $this->hasLimitClause = $hasLimit;
+        $this->unsafe = $unsafe;
+        $this->retryAllowed = $retryAllowed;
+    }
 
     /**
      * Returns the SQL query string as provided during construction.
@@ -100,9 +129,9 @@ class Sql
      * ```php
      * // Query reads from 'users' table - cache will be invalidated when users changes
      * $query = Sql::of(
-     *     "SELECT * FROM users WHERE id = :id",
-     *     ['id' => 123],
-     *     ['users']
+     * "SELECT * FROM users WHERE id = :id",
+     * ['id' => 123],
+     * ['users']
      * );
      * ```
      *
@@ -112,14 +141,14 @@ class Sql
      * $query = Sql::of("SET time_zone = :tz", ['tz' => 'UTC']);
      * ```
      *
-     * @param string $sql The SQL query string with named parameter placeholders
-     * @param array $params Associative array of parameter values
-     * @param string[] $cacheTables Tables this query operates on for cache invalidation
-     * @return self New immutable Sql instance
+     * @param  string   $sql         The SQL query string with named parameter placeholders
+     * @param  array    $params      Associative array of parameter values
+     * @param  string[] $cacheTables Tables this query operates on for cache invalidation
+     * @return self     New immutable Sql instance
      */
-    public static function of(string $sql, array $params = [], array $cacheTables = []): self
+    public static function of(string $sql, array $params = [], array $cacheTables = [], array $returningColumns = [], ?string $insertTable = null, array $insertColumns = [], array $valuePlaceholders = [], array $metadata = []): self
     {
-        return new self($sql, $params, $cacheTables);
+        return new self($sql, $params, $cacheTables, $returningColumns, $insertTable, $insertColumns, $valuePlaceholders, $metadata);
     }
 
     /**
@@ -141,5 +170,96 @@ class Sql
     public function getCacheTables(): array
     {
         return $this->cacheTables;
+    }
+
+    public function getReturningColumns(): array
+    {
+        return $this->returningColumns;
+    }
+
+    public function getInsertTable(): ?string
+    {
+        return $this->insertTable;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getInsertColumns(): array
+    {
+        return $this->insertColumns;
+    }
+
+    /**
+     * @return array<int,array<int,string>>
+     */
+    public function getValuePlaceholders(): array
+    {
+        return $this->valuePlaceholders;
+    }
+
+    public function getStatementType(): string
+    {
+        return $this->statementType;
+    }
+
+    public function hasWhereClause(): bool
+    {
+        return $this->hasWhereClause;
+    }
+
+    public function hasLimitClause(): bool
+    {
+        return $this->hasLimitClause;
+    }
+
+    public function isUnsafe(): bool
+    {
+        return $this->unsafe;
+    }
+
+    public function getRetryAllowed(): ?bool
+    {
+        return $this->retryAllowed;
+    }
+
+    public function withGuardrailMetadata(string $statementType, bool $hasWhereClause, bool $hasLimitClause, bool $unsafe): self
+    {
+        return new self(
+            $this->sql,
+            $this->params,
+            $this->cacheTables,
+            $this->returningColumns,
+            $this->insertTable,
+            $this->insertColumns,
+            $this->valuePlaceholders,
+            GuardrailMetadata::package($statementType, $hasWhereClause, $hasLimitClause, $unsafe),
+            $this->retryAllowed
+        );
+    }
+
+    public function withRetryAllowed(?bool $allowed): self
+    {
+        return new self(
+            $this->sql,
+            $this->params,
+            $this->cacheTables,
+            $this->returningColumns,
+            $this->insertTable,
+            $this->insertColumns,
+            $this->valuePlaceholders,
+            GuardrailMetadata::package($this->statementType, $this->hasWhereClause, $this->hasLimitClause, $this->unsafe),
+            $allowed
+        );
+    }
+
+    public function allowRetry(): self
+    {
+        return $this->withRetryAllowed(true);
+    }
+
+    public function noRetry(): self
+    {
+        return $this->withRetryAllowed(false);
     }
 }
