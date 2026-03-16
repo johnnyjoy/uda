@@ -50,8 +50,8 @@ abstract class PostgresTestCase extends TestCase
         if ($isolateSchema) {
             $shortClass = (new \ReflectionClass($this))->getShortName();
             $schemaName = "test_schema_{$shortClass}_" . substr(md5(uniqid('', true)), 0, 8);
-            $db->exec("CREATE SCHEMA IF NOT EXISTS \"{$schemaName}\"");
-            $db->exec("SET search_path TO \"{$schemaName}\"");
+            $db->exec(sprintf('CREATE SCHEMA IF NOT EXISTS \"%s\"', $schemaName));
+            $db->exec(sprintf('SET search_path TO \"%s\"', $schemaName));
             Config::clearForTests();
         }
 
@@ -62,7 +62,7 @@ abstract class PostgresTestCase extends TestCase
         if ($isolateSchema) {
             $schemaName = $db->value('SELECT current_schema()');
             if ($schemaName && $schemaName !== 'public') {
-                $db->exec("DROP SCHEMA \"{$schemaName}\" CASCADE");
+                $db->exec(sprintf('DROP SCHEMA IF EXISTS \"%s\" CASCADE', $schemaName));
             }
             Config::clearForTests();
         }
