@@ -49,7 +49,7 @@ final class PostgresPerformanceTest extends PostgresTestCase
             $duration = (hrtime(true) - $start) / 1_000_000_000;
             
             return ['duration' => $duration, 'iterations' => $iterations];
-        });
+        }, [], isolateSchema: true);
 
         $opsPerSecond = $result['iterations'] / max($result['duration'], 0.0001);
         self::$benchmarks['builder_compilation'] = [
@@ -73,7 +73,7 @@ final class PostgresPerformanceTest extends PostgresTestCase
             $duration = (hrtime(true) - $start) / 1_000_000_000;
             
             return ['duration' => $duration, 'iterations' => $iterations];
-        });
+        }, [], isolateSchema: true);
 
         $opsPerSecond = $result['iterations'] / max($result['duration'], 0.0001);
         self::$benchmarks['select_execution'] = [
@@ -102,7 +102,7 @@ final class PostgresPerformanceTest extends PostgresTestCase
             $duration = (hrtime(true) - $start) / 1_000_000_000;
             
             return ['duration' => $duration, 'iterations' => $iterations];
-        });
+        }, [], isolateSchema: true);
 
         $opsPerSecond = $result['iterations'] / max($result['duration'], 0.0001);
         self::$benchmarks['plan_generation'] = [
