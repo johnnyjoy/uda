@@ -34,6 +34,7 @@ use UDA\Exception\ConfigException;
 use UDA\Exception\ConnectionException;
 use UDA\Exception\NotSupportedException;
 use UDA\Exception\QueryException;
+use UDA\Driver\Prepared;
 use UDA\Driver\Transport;
 use UDA\Driver\Oracle\Returning as OracleReturning;
 use UDA\Query\Observer as QueryObserver;
@@ -52,20 +53,9 @@ final class Driver
     private static $queryObserver = null;
 
     /**
-     * Maximum cached prepared statements per Driver (bounded memory).
-     *
-     * @var int
+     * Prepared-statement reuse for this connection (cleared on reconnect).
      */
-    private const PREPARED_STATEMENT_LRU_MAX = 64;
-
-    /**
-     * LRU map: normalised SQL string → PDOStatement for this PDO only.
-     *
-     * Cleared on reconnect. Insertion order is used for eviction (array_key_first).
-     *
-     * @var array<string,PDOStatement>
-     */
-    private array $preparedStatementLru = [];
+    private Prepared $prepared;
 
     /**
      * The PDO instance (sole owner).
@@ -149,6 +139,7 @@ final class Driver
      */
     protected function __construct(?string $connection = 'default')
     {
+        $this->prepared = new Prepared();
         $this->connection = $connection ?? Config::default();
         $this->config = Config::connection($this->connection);
         $this->engine = (string) ($this->config['engine'] ?? Config::engine($this->connection));
@@ -535,14 +526,8 @@ final class Driver
 
     /**
      * Whether a PDOException indicates a dropped server connection worth one reconnect retry.
-     *
-     * Uses SQLSTATE class 08 (connection exception) plus common MySQL driver codes.
-     *
-     * @param PDOException $exception  PDO failure from prepare() or execute().
-     *
-     * @return bool True when executeInternal() may reconnect and retry once.
      */
-    private function isReconnectableConnectionLost(PDOException $exception): bool
+    private function isConnectionLost(PDOException $exception): bool
     {
         $info = $exception->errorInfo ?? null;
         $state = is_array($info) ? strtoupper((string) ($info[0] ?? '')) : '';
@@ -575,64 +560,21 @@ final class Driver
      */
     private function reconnect(): void
     {
-        $this->clearPreparedStatementLru();
+        $this->prepared->clear();
 
-        $user    = Config::username($this->connection);
-        $pass    = Config::password($this->connection);
+        $user = Config::username($this->connection);
+        $pass = Config::password($this->connection);
         $options = $this->resolvePdoOptions();
-        $dsn     = self::dsn($this->engine, $this->transport, $this->connectionParams($this->config));
+        $dsn = self::dsn($this->engine, $this->transport, $this->connectionParams($this->config));
 
         try {
-            $this->pdo = new PDO($dsn, $user, $pass, $options);
+            $pdo = new PDO($dsn, $user, $pass, $options);
         } catch (PDOException $e) {
             throw new ConnectionException('Reconnection failed: ' . $e->getMessage(), 0, $e);
         }
 
-        $this->runInitSql($this->pdo, $this->config);
-    }
-
-    /**
-     * Drop all cached PDOStatement objects (required before replacing PDO).
-     *
-     * @return void
-     */
-    private function clearPreparedStatementLru(): void
-    {
-        $this->preparedStatementLru = [];
-    }
-
-    /**
-     * Return a prepared statement for this query, reusing a cached one when possible.
-     *
-     * @param string $query  SQL after normalisation (named parameters only).
-     *
-     * @return PDOStatement
-     *
-     * @throws PDOException When prepare() fails (caller maps to QueryException).
-     */
-    private function getOrPrepareStatement(string $query): PDOStatement
-    {
-        if (isset($this->preparedStatementLru[$query])) {
-            $stmt = $this->preparedStatementLru[$query];
-            unset($this->preparedStatementLru[$query]);
-            $this->preparedStatementLru[$query] = $stmt;
-
-            return $stmt;
-        }
-
-        $stmt = $this->pdo->prepare($query);
-
-        if (count($this->preparedStatementLru) >= self::PREPARED_STATEMENT_LRU_MAX) {
-            $oldest = array_key_first($this->preparedStatementLru);
-
-            if ($oldest !== null) {
-                unset($this->preparedStatementLru[$oldest]);
-            }
-        }
-
-        $this->preparedStatementLru[$query] = $stmt;
-
-        return $stmt;
+        $this->runInitSql($pdo, $this->config);
+        $this->pdo = $pdo;
     }
 
     /**
@@ -1028,7 +970,10 @@ final class Driver
             $stmt = null;
 
             try {
-                $stmt = $this->getOrPrepareStatement($query);
+                $stmt = $this->prepared->get(
+                    $query,
+                    fn (string $q): PDOStatement => $this->pdo->prepare($q),
+                );
                 $executeParams = $mergedParams;
 
                 if ($binder !== null) {
@@ -1046,7 +991,7 @@ final class Driver
                     $stmt->closeCursor();
                 }
 
-                if ($attempts < 1 && $this->isReconnectableConnectionLost($ex)) {
+                if ($attempts < 1 && $this->isConnectionLost($ex)) {
                     $attempts++;
                     $retried = true;
                     $this->reconnect();
@@ -1101,14 +1046,14 @@ final class Driver
     /**
      * Normalize SQL inputs to a raw query string and merged parameters.
      *
-     * @param string|SqlMessage   $sql     SQL input.
-     * @param array<string,mixed> $params  Additional parameters.
+     * @param string|SqlMessage   $sql
+     * @param array<string,mixed> $params
      *
      * @return array{0:string,1:array<string,mixed>}
      *
      * @throws QueryException If positional parameters are detected.
      */
-    protected function normalizeSql(string|SqlMessage $sql, array $params): array
+    private function normalizeSql(string|SqlMessage $sql, array $params): array
     {
         $query = $sql;
 

@@ -138,9 +138,10 @@ final class ArchitectureInvariantTest extends TestCase
 
         self::assertStringContainsString('private array $config', $source, 'Driver must store $config to support reconnect().');
         self::assertStringContainsString('function reconnect', $source, 'Driver must implement reconnect().');
-        self::assertStringContainsString('function isReconnectableConnectionLost', $source, 'Driver must classify reconnectable PDO failures.');
+        self::assertStringContainsString('function isConnectionLost', $source, 'Driver must classify reconnectable PDO failures.');
         self::assertStringNotContainsString('ensureAlive()', $source, 'Driver must not ping before every query; use reconnect-on-failure instead.');
         self::assertStringContainsString('$this->reconnect()', $source, 'executeInternal must call reconnect() on connection loss.');
+        self::assertStringContainsString('$this->isConnectionLost', $source, 'executeInternal must classify connection-loss before retry.');
     }
 
     public function test_errmode_exception_is_non_negotiable(): void

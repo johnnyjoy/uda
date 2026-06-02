@@ -437,4 +437,4 @@ UDA's process-level pool.
 ## Driver runtime decomposition
 
 `UDA\Driver` remains the only PDO owner. Internal slices live under `UDA\Driver\`
-(e.g. `Transport`, `Oracle\Returning`) per [architecture-driver-runtime.md](architecture-driver-runtime.md).
+(e.g. `Transport`, `Oracle\Returning`, `Prepared`) per [architecture-driver-runtime.md](architecture-driver-runtime.md).

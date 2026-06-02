@@ -21,12 +21,12 @@ Shrink `src/UDA/Driver.php` by moving **internal** units into `src/UDA/Driver/` 
 | ------ | -------------- | ---- | ----- |
 | **Transport** | `engineKey`, `transportKey`, `defaultTransport`, `resolve` | No | **1 — done** |
 | **Oracle\Returning** | `RETURNING INTO` output binds via callback into `executeInternal` | Via callback only | **1 — done** |
-| **Reconnect** | `isReconnectableConnectionLost`, `reconnect`, LRU clear | Yes — stays in `Driver.php` until guardrail extended | 2 |
-| **Execute** | `executeInternal`, prepared-statement LRU, `normalizeSql` | Yes — stays in `Driver.php` for now | 3 |
-| **ReadCache** | `executeRead` bridge to `UDA\Cache` | No PDO in cache itself | 3 |
+| **Reconnect** | `isConnectionLost`, `reconnect` (clear prepared, new PDO, init SQL) | Yes — in `Driver.php` | **2 — done** |
+| **Prepared** | reuse prepared statements per connection (`prepare` via callback; cleared on reconnect) | Via callback only | **3 — done** |
+| **Execute** | `executeInternal`, `normalizeSql`, `executeRead`, reconnect retry | Yes — stays in `Driver.php` | 3 |
 | **Transaction** | `transaction()`, savepoint SQL resolution | Uses `$pdo->beginTransaction` / `exec` — stays in `Driver.php` for now | 4 |
 
-Phases 2–4 are planned; phase 1 landed the two slices with **zero** PDO call-site changes.
+Phase 4 is planned; phases 1–3 landed with prepare/execute only in `Driver.php`.
 
 ## Delegation pattern
 

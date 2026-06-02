@@ -7,6 +7,7 @@ namespace Tests\Runtime;
 use PHPUnit\Framework\TestCase;
 use UDA\Database;
 use UDA\Driver;
+use UDA\Driver\Prepared;
 
 /**
  * Prepared statement LRU lives on Driver; tests reach it via Closure::bind (no Driver API leak).
@@ -22,13 +23,12 @@ final class PreparedStatementLruTest extends TestCase
         $driver = $dprop->getValue($db);
         self::assertInstanceOf(Driver::class, $driver);
 
-        return \Closure::bind(
-            function (): array {
-                return $this->preparedStatementLru;
-            },
-            $driver,
-            Driver::class
-        )();
+        $preparedProp = new \ReflectionProperty(Driver::class, 'prepared');
+        $prepared = $preparedProp->getValue($driver);
+        $mapProp = new \ReflectionProperty(Prepared::class, 'map');
+
+        /** @var array<string,\PDOStatement> */
+        return $mapProp->getValue($prepared);
     }
 
     public function test_same_sql_reuses_single_prepared_statement(): void
