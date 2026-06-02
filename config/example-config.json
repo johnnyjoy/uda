@@ -38,11 +38,11 @@
                 "env": "SQL_PASS"
             }
         },
-        "legacy_ase_dblib": {
+        "ase_dblib_shorthand": {
             "driver": "dblib",
             "params": {
                 "host": "ase.internal",
-                "dbname": "legacy"
+                "dbname": "app"
             },
             "user": {
                 "env": "ASE_USER"

@@ -44,7 +44,7 @@ final class Snapshot
      */
     public function __construct(
         array $connections,
-        array $defaults = []
+        array $defaults = [],
     ) {
         $this->defaults = $this->validateDefaults($defaults);
         $this->connections = $this->validateConnections($connections);
@@ -100,10 +100,14 @@ final class Snapshot
                 throw new ConfigException("Connection '$name' 'transport' must be a string");
             }
 
-            [$engine, $transport] = Driver::resolveEngineTransport(
-                $config['driver'],
-                isset($config['transport']) ? $config['transport'] : null
-            );
+            $rawDriver = $config['driver'];
+            $rawTransport = isset($config['transport']) ? $config['transport'] : null;
+
+            if (!empty($config['trace'])) {
+                Driver::warnDriverAlias($name, $rawDriver, $rawTransport);
+            }
+
+            [$engine, $transport] = Driver::resolveEngineTransport($rawDriver, $rawTransport);
 
             $config['engine'] = $engine;
             $config['transport'] = $transport;

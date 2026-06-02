@@ -70,7 +70,7 @@ Each entry in `connections` describes how a database connection is created.
 
 | Key            | Required | Description                                                                                             |
 | -------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Legacy transport aliases (`sqlsrv`, `dblib`) are accepted and normalized. Case-insensitive. **CI-certified today:** `sqlite`, `pgsql` only — see `docs/certification/README.md`. |
+| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Shorthand aliases (`sqlsrv`, `dblib`, …) normalize to canonical engine + transport. Case-insensitive. **CI-certified today:** `sqlite`, `pgsql` only — see `docs/certification/README.md`. |
 | **transport**  | no       | PDO DSN prefix when the engine supports more than one (`sqlsrv`, `dblib`, …). Defaults from engine when omitted. |
 | **params**     | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
 | **user**       | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
@@ -78,6 +78,31 @@ Each entry in `connections` describes how a database connection is created.
 | **options**    | no       | Object of PDO options. Keys must be integers (`PDO::*`).                                                |
 | **init_sql**   | no       | Array of SQL statements executed after connection.                                                      |
 | **cache**      | no       | Connection-specific cache policy configuration.                                                         |
+| **trace**      | no       | When `true`, emit **`E_USER_NOTICE`** during ingestion if this connection uses a driver **alias** that normalizes to canonical engine + transport (e.g. `"driver": "dblib"` → sybase). Omit or `false` in production. |
+
+When **`trace`** is enabled on a connection, prefer explicit shapes after you see a notice:
+
+```json
+"driver": "sybase",
+"transport": "dblib"
+```
+
+SQL Server over DBLib:
+
+```json
+"driver": "sqlserver",
+"transport": "dblib"
+```
+
+Example while authoring a connection:
+
+```json
+"ase": {
+  "driver": "dblib",
+  "trace": true,
+  "params": { "host": "ase.internal", "dbname": "app" }
+}
+```
 
 After ingestion, each connection stores normalized **`engine`** and **`transport`** fields. `Config::engine()` returns the engine; `Config::driver()` is a deprecated alias. `Config::transport()` returns the PDO prefix used for DSN construction.
 
@@ -88,7 +113,7 @@ After ingestion, each connection stores normalized **`engine`** and **`transport
 | **Engine**  | `driver`      | SQL semantics — dialect selection, identifier quoting, pagination fragments. Routes to `UDA\Driver\{Engine}::dsn()` for most engines. |
 | **Transport** | `transport` | PDO DSN prefix only when the engine has more than one (today: SQL Server `sqlsrv` vs `dblib`). `UDA\Driver` still performs `new PDO()`; per-engine classes only build the DSN string. |
 
-Microsoft SQL Server over DBLib must set `"driver": "sqlserver", "transport": "dblib"`. Legacy `"driver": "dblib"` defaults to engine **sybase** + transport **dblib**.
+Microsoft SQL Server over DBLib must set `"driver": "sqlserver", "transport": "dblib"`. `"driver": "dblib"` alone resolves to engine **sybase** + transport **dblib** (not SQL Server).
 
 ### Important Rule
 

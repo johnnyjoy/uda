@@ -261,10 +261,10 @@ final class Driver
     /**
      * Resolve normalized engine and transport from config driver + optional transport.
      *
-     * Legacy configs may use transport names as driver (e.g. dblib, sqlsrv); engineKey
-     * and defaultTransport preserve backward-compatible semantics.
+     * Driver values may be engine names or transport shorthand (e.g. dblib, sqlsrv);
+     * engineKey and defaultTransport normalize them.
      *
-     * @param string      $driver     Configured driver (engine or legacy transport alias).
+     * @param string      $driver     Configured driver (engine or alias).
      * @param string|null $transport  Optional explicit transport override.
      *
      * @return array{0:string,1:string} [engine, transport] canonical keys.
@@ -277,6 +277,55 @@ final class Driver
             : self::defaultTransport($engine);
 
         return [$engine, $resolvedTransport];
+    }
+
+    /**
+     * Emit E_USER_NOTICE when a driver alias is normalized (connection `trace: true`).
+     *
+     * @param string      $name      Connection key from config.
+     * @param string      $driver    Raw configured driver value.
+     * @param string|null $transport Raw configured transport value, if any.
+     *
+     * @return void No return value.
+     */
+    public static function warnDriverAlias(
+        string $name,
+        string $driver,
+        ?string $transport,
+    ): void {
+        $key = strtolower(trim($driver));
+
+        $message = match (true) {
+            $key === 'dblib' => sprintf(
+                'UDA config connection "%s": "driver":"dblib" normalizes to engine sybase + transport dblib. '
+                . 'For Sybase ASE use "driver":"sybase","transport":"dblib". '
+                . 'For SQL Server over DBLib use "driver":"sqlserver","transport":"dblib".',
+                $name
+            ),
+            $key === 'sqlsrv' => sprintf(
+                'UDA config connection "%s": "driver":"sqlsrv" normalizes to engine sqlserver + transport sqlsrv. '
+                . 'Prefer "driver":"sqlserver","transport":"sqlsrv".',
+                $name
+            ),
+            $key === 'mysql' => sprintf(
+                'UDA config connection "%s": "driver":"mysql" normalizes to engine mariadb. Prefer "driver":"mariadb".',
+                $name
+            ),
+            in_array($key, ['postgres', 'postgresql'], true) => sprintf(
+                'UDA config connection "%s": "driver":"%s" normalizes to engine pgsql. Prefer "driver":"pgsql".',
+                $name,
+                $key
+            ),
+            $key === 'oci' => sprintf(
+                'UDA config connection "%s": "driver":"oci" normalizes to engine oracle. Prefer "driver":"oracle".',
+                $name
+            ),
+            default => null,
+        };
+
+        if ($message !== null) {
+            trigger_error($message, E_USER_NOTICE);
+        }
     }
 
     /**

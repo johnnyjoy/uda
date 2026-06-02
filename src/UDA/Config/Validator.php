@@ -70,7 +70,7 @@ final class Validator
     }
 
     /**
-     * Extract defaults and support the legacy top-level default key.
+     * Extract defaults and support the deprecated top-level `default` key.
      *
      * @param array<string,mixed> $config  The decoded configuration.
      *
@@ -126,6 +126,11 @@ final class Validator
 
             if (isset($connection['transport']) && !is_string($connection['transport'])) {
                 $this->errors[] = "Connection '$name' 'transport' must be a string";
+                continue;
+            }
+
+            if (isset($connection['trace']) && !is_bool($connection['trace'])) {
+                $this->errors[] = "Connection '$name' 'trace' must be boolean";
                 continue;
             }
 

@@ -18,8 +18,8 @@ final class EngineTransportTest extends TestCase
     public static function resolveProvider(): array
     {
         return [
-            'legacy dblib' => ['dblib', null, 'sybase', 'dblib'],
-            'legacy sqlsrv' => ['sqlsrv', null, 'sqlserver', 'sqlsrv'],
+            'dblib alias' => ['dblib', null, 'sybase', 'dblib'],
+            'sqlsrv alias' => ['sqlsrv', null, 'sqlserver', 'sqlsrv'],
             'sqlserver explicit dblib' => ['sqlserver', 'dblib', 'sqlserver', 'dblib'],
             'sybase explicit dblib' => ['sybase', 'dblib', 'sybase', 'dblib'],
             'pgsql default transport' => ['pgsql', null, 'pgsql', 'pgsql'],

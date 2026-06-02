@@ -30,7 +30,7 @@ Database calls: $driver->prepare(), ->begin(), …
 | ---- | -------- | ---- |
 | **`UDA\Driver`** | `src/UDA/Driver.php` | **The driver.** Runtime instance; only place that calls `new PDO()`. |
 | **Per-engine class** | `src/UDA/Driver/*.php` | **Engine manual.** Static rules for one SQL family; no PDO ownership. |
-| **Config `driver`** | JSON | **Engine identity** (legacy key name). Read via `Config::engine()`. |
+| **Config `driver`** | JSON | **Engine identity** (JSON key name; value is the engine). Read via `Config::engine()`. |
 | **`Config::engine()`** | PHP API | Canonical engine key from snapshot. |
 | **`Config::driver()`** | PHP API | Deprecated alias for `engine()`. |
 | **`Abs::$engine`** | Query builders | Engine key bound for identifier quoting. |
