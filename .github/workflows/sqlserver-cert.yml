@@ -1,0 +1,51 @@
+name: SQL Server Certification
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  sqlserver-cert:
+    runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Your_Str0ng!Passw0rd123
+        ports:
+          - 1433:1433
+        options: >-
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+          --health-cmd "timeout 1 bash -c '</dev/tcp/127.0.0.1/1433' || exit 1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlsrv, sqlsrv
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run SQL Server certification suites
+        env:
+          MSSQL_HOST: 127.0.0.1
+          MSSQL_PORT: 1433
+          MSSQL_DATABASE: master
+          MSSQL_USER: sa
+          MSSQL_PASSWORD: Your_Str0ng!Passw0rd123
+        run: vendor/bin/phpunit --bootstrap tests/sqlserver-bootstrap.php tests/SqlServer
+
+      - name: Reference SQL Server certification docs
+        run: echo "See docs/certification/sqlserver.md for details"

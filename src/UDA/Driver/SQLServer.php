@@ -46,6 +46,13 @@ final class SQLServer
             $dsn .= ";Database={$dbname}";
         }
 
+        if (!empty($params['trust_server_certificate'])) {
+            $flag = $params['trust_server_certificate'] === true
+                ? 'yes'
+                : (string) $params['trust_server_certificate'];
+            $dsn .= ';TrustServerCertificate=' . $flag;
+        }
+
         return $dsn;
     }
 

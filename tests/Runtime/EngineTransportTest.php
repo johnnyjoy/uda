@@ -114,4 +114,15 @@ final class EngineTransportTest extends TestCase
         self::assertStringStartsWith('sqlsrv:', $dsn);
         self::assertSame(['sqlserver', 'sqlsrv'], Driver::resolveEngineTransport('sqlsrv', null));
     }
+
+    public function test_sqlserver_dsn_appends_trust_server_certificate_when_requested(): void
+    {
+        $dsn = \UDA\Driver\SQLServer::dsn([
+            'host' => '127.0.0.1',
+            'dbname' => 'master',
+            'trust_server_certificate' => true,
+        ]);
+
+        self::assertStringContainsString('TrustServerCertificate=yes', $dsn);
+    }
 }

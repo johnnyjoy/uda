@@ -23,7 +23,7 @@ Legend:
 | **SQLite** | Cert | Cert | Cert | Cert | Yes | [`sqlite-cert.yml`](../.github/workflows/sqlite-cert.yml) · [sqlite.md](sqlite.md) |
 | **PostgreSQL** | Cert | Cert | Cert | Cert | Yes | [`postgres-cert.yml`](../.github/workflows/postgres-cert.yml) · [postgresql.md](postgresql.md) |
 | **MariaDB / MySQL** | Code | Code | Code | Code | No | [driver.md](../driver.md) |
-| **SQL Server** | Code | Code | Code | Code | No | [driver.md](../driver.md) |
+| **SQL Server** | Cert | Cert | Cert | Code | Yes | [`sqlserver-cert.yml`](../.github/workflows/sqlserver-cert.yml) · [sqlserver.md](sqlserver.md) |
 | **Sybase (ASE)** | Code | Code | Off¹ | Code | No | [driver.md](../driver.md) |
 | **Oracle** | Code | Code | Code | Code | No | [oracle-testing.md](../oracle-testing.md) (manual smoke only) |
 | **DB2** | N/A² | Code | Code | — | No | Dialect file only |
@@ -47,6 +47,7 @@ Today’s certified engines:
 | ------ | ------------- | ------ |
 | SQLite | `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime` | `sqlite-cert` |
 | PostgreSQL | See [postgresql.md](postgresql.md) | `postgres-cert` |
+| SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-cert` |
 
 Also run `composer check` before merge (architecture guardrails).
 
@@ -62,7 +63,7 @@ that every listed engine is CI-certified. See the matrix above before production
 
 ## Using an uncertified engine
 
-You may configure MariaDB, SQL Server, Oracle, or Sybase if your environment has the
+You may configure MariaDB, Oracle, or Sybase if your environment has the
 right PDO extensions and servers. Treat that as **integrator-owned validation**:
 
 1. Confirm connect + CRUD + transactions on your target.

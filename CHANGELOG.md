@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Connection option `trace: true` emits `E_USER_NOTICE` on driver alias normalization during ingestion (`docs/configuration.md`).
 - `Database::setQueryObserver()` / `UDA\Query\Observer` for ops instrumentation after each execute or read-cache hit (`docs/metrics.md`).
 - `Database::connectDefault()`, `connectNamed()`, `connectWithConfig()` — explicit connect entry points (`docs/public-api.md` §1); varargs `connect()` unchanged.
+- SQL Server CI certification (`sqlserver-cert.yml`, `tests/SqlServer`, `docs/certification/sqlserver.md`); `sqlsrv` transport only.
+- SQL Server DSN: optional `params.trust_server_certificate` for `sqlsrv` (CI/local containers).
 - `tools/check-license.php` guardrail (MIT-only `@license` in `src/`).
 - `skills/` agent skill pack for application DAL on UDA (`uda-dal-layer`, `uda-sql-and-cache`, `uda-config-deploy`, `uda-change-gates`); see `skills/README.md`.
 - `UDA\Cache::flush($connectionName)` and `Database::flushCache()` for ops-only cache purge (per-connection namespace scope).

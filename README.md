@@ -32,8 +32,9 @@ a guide.
 
 **Normative matrix:** [`docs/certification/README.md`](docs/certification/README.md).
 
-CI certifies **SQLite** and **PostgreSQL** only (workflows `sqlite-cert.yml`,
-`postgres-cert.yml`). Other engines in `config/example-config.json` illustrate config
+CI certifies **SQLite**, **PostgreSQL**, and **SQL Server** (`sqlsrv` transport;
+workflows `sqlite-cert.yml`, `postgres-cert.yml`, `sqlserver-cert.yml`). Other engines
+in `config/example-config.json` illustrate config
 shape — they are **not** CI-certified. Worker/concurrency rules: `docs/architecture.md`.
 
 ## Contributing, security, releases
@@ -46,7 +47,7 @@ shape — they are **not** CI-certified. Worker/concurrency rules: `docs/archite
 
 ## Where CI runs
 
-GitHub Actions: `.github/workflows/` (default job + SQLite/PostgreSQL certification). Run the same Composer targets locally when developing from a GitLab mirror (`CONTRIBUTING.md`).
+GitHub Actions: `.github/workflows/` (default job + engine certification jobs). Run the same Composer targets locally when developing from a GitLab mirror (`CONTRIBUTING.md`).
 
 ## Local validation
 

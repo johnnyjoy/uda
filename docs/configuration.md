@@ -70,7 +70,7 @@ Each entry in `connections` describes how a database connection is created.
 
 | Key            | Required | Description                                                                                             |
 | -------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Shorthand aliases (`sqlsrv`, `dblib`, …) normalize to canonical engine + transport. Case-insensitive. **CI-certified today:** `sqlite`, `pgsql` only — see `docs/certification/README.md`. |
+| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Shorthand aliases (`sqlsrv`, `dblib`, …) normalize to canonical engine + transport. Case-insensitive. **CI-certified today:** `sqlite`, `pgsql`, `sqlserver` (`sqlsrv`) — see `docs/certification/README.md`. |
 | **transport**  | no       | PDO DSN prefix when the engine supports more than one (`sqlsrv`, `dblib`, …). Defaults from engine when omitted. |
 | **params**     | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
 | **user**       | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
