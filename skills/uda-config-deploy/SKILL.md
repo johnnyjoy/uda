@@ -10,7 +10,7 @@ description: >-
 
 ## Config file
 
-- Single JSON file; path via **`UDA_CONFIG`** or `Database::connect($name, '/path/to.json')`.
+- Single JSON file; path via **`UDA_CONFIG`** or `Database::connectWithConfig('/path/to.json', $name)`.
 - Root must be an object; `connections` non-empty.
 - **No DSN strings in JSON** — `driver` + `params` only; UDA builds DSN.
 

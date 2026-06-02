@@ -121,6 +121,50 @@ final class Database
     }
 
     /**
+     * Default connection from `UDA_CONFIG` (or env-loaded config).
+     *
+     * @return self
+     *
+     * @throws ConfigException
+     * @throws ConnectionException
+     */
+    public static function connectDefault(): self
+    {
+        return self::connect();
+    }
+
+    /**
+     * Named connection from `UDA_CONFIG` (or env-loaded config).
+     *
+     * @param string $name  Connection name in config.
+     *
+     * @return self
+     *
+     * @throws ConfigException
+     * @throws ConnectionException
+     */
+    public static function connectNamed(string $name): self
+    {
+        return self::connect($name);
+    }
+
+    /**
+     * Connection from an explicit JSON config file.
+     *
+     * @param string      $file  Path to UDA config JSON.
+     * @param null|string $name  Connection name; null uses the file default.
+     *
+     * @return self
+     *
+     * @throws ConfigException
+     * @throws ConnectionException
+     */
+    public static function connectWithConfig(string $file, ?string $name = null): self
+    {
+        return $name === null ? self::connect($file) : self::connect($name, $file);
+    }
+
+    /**
      * Executes a query and returns all matching rows.
      *
      * @param string|SqlMessage|BuilderSql $sql         SQL string, SQL message, or builder SQL object.

@@ -22,10 +22,10 @@ UDA is **not** an ORM. Your layer is **SQL + thin classes** that call UDA.
 
 | Shape | Use when |
 |-------|----------|
-| `Database::connect(...)` in a factory/bootstrap | Few entrypoints; procedural or service container hands out `$db` |
+| `Database::connectDefault()` / `connectNamed()` in bootstrap | Few entrypoints; procedural or service container hands out `$db` |
 | `final class X { use Link; }` | Many SQL methods; SQL stays on the class; one connection per class |
 
-`Link` memoizes one `Database` per class. `Database::connect($name)` pools per process.
+`Link` memoizes one `Database` per class. `Database::connectNamed($name)` pools per process.
 
 ## Repository class template (`Link`)
 

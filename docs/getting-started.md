@@ -58,9 +58,9 @@ config but are not production-certified in GitHub Actions. See
 ## Connect
 
 ```php
-$db = Database::connect();
-$reporting = Database::connect('reporting');
-$generated = Database::connect('tenant_001', '/tmp/generated-uda.json');
+$db = Database::connectDefault();
+$reporting = Database::connectNamed('reporting');
+$generated = Database::connectWithConfig('/tmp/generated-uda.json', 'tenant_001');
 ```
 
 `Connection` means a config name, not a public connection object.

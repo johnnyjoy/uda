@@ -353,10 +353,10 @@ No further configuration processing occurs after this stage.
 # Using Configuration
 
 ```php
-$db = Database::connect();                       // default connection (UDA_CONFIG)
-$db = Database::connect('pgsql_test');           // named connection
-$db = Database::connect('/config/app.json');     // explicit config file
-$db = Database::connect('pgsql_test', '/config/app.json');
+$db = Database::connectDefault();
+$db = Database::connectNamed('pgsql_test');
+$db = Database::connectWithConfig('/config/app.json');
+$db = Database::connectWithConfig('/config/app.json', 'pgsql_test');
 ```
 
-Argument order is **position-independent**.
+`Database::connect(string ...$args)` supports the same four shapes; argument order is **position-independent** when using varargs.

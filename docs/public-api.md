@@ -26,38 +26,44 @@ One clear way to do common database operations. Cross-DB, migration-friendly, no
 
 ## 1. Entry point
 
-### `Database::connect(...)`
+UDA enters through `Database`. Prefer the **named** connect methods for new code; `connect(string ...$args)` remains for terse call sites.
 
-`Database::connect()` is the only supported entry into UDA.
-
-* Default path: `UDA_CONFIG` environment variable points to the JSON config file.
-* Optional: pass a config file path to connect using a specific config file.
-* Optional: pass a connection name to select a non-default connection from that config.
+| Method | Use |
+| ------ | --- |
+| `connectDefault()` | `UDA_CONFIG` + default connection |
+| `connectNamed(string $name)` | `UDA_CONFIG` + named connection |
+| `connectWithConfig(string $file, ?string $name = null)` | explicit JSON file; optional connection name |
+| `connect(string ...$args)` | same behavior as above; see argument rules |
 
 > Config is validated and normalized at ingestion. UDA does not “sanitize on use.”
 
-**Signature (public contract):**
+**Named methods (preferred):**
+
+```php
+$db = Database::connectDefault();
+$reporting = Database::connectNamed('reporting');
+$generated = Database::connectWithConfig('/tmp/uda.generated.json');
+$tenant = Database::connectWithConfig('/tmp/uda.generated.json', 'tenant_001');
+```
+
+**Varargs `connect(string ...$args)` (same pooling and config rules):**
 
 ```php
 Database::connect(string ...$args): Database
 ```
-
-**Argument rules (ergonomic + deterministic):**
 
 * If an argument is a JSON file path (ends in `.json` or `is_file($arg)`), it is treated as the config file.
 * Otherwise it is treated as the connection name.
 * Passing neither uses the default connection from the config.
 * Passing only a config file uses that file and its default connection.
 * Passing only a connection name uses env config + that connection.
-* Passing both uses that config file + that connection.
-
-Examples:
+* Passing both uses that config file + that connection (order-independent).
 
 ```php
-$db = Database::connect();                          // env config + default connection
-$db = Database::connect('reporting');               // env config + named connection
-$db = Database::connect('/tmp/uda.generated.json'); // file config + default connection
-$db = Database::connect('gen_001', '/tmp/uda.generated.json'); // file + named connection
+$db = Database::connect();                          // same as connectDefault()
+$db = Database::connect('reporting');               // same as connectNamed('reporting')
+$db = Database::connect('/tmp/uda.generated.json'); // same as connectWithConfig(file)
+$db = Database::connect('gen_001', '/tmp/uda.generated.json'); // same as connectWithConfig(file, name)
 ```
 
 **Connection pooling and self-healing reconnect:**
