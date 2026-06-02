@@ -6,7 +6,7 @@ declare(strict_types=1);
  * @package UDA
  * @subpackage Driver
  * @author James Dornan <james.dornan@uda.example.com>
- * @license GPL-2.0-only
+ * @license MIT
  * @link https://docs.uda.example.com/driver/sqlite
  * @since 1.0.0
  */

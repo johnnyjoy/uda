@@ -9,6 +9,7 @@ use RuntimeException;
 /**
  * @package UDA
  * @subpackage Exception
+ * @license MIT
  */
 
 /*

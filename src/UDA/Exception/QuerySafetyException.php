@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+/**
+ * @license MIT
+ */
+
 namespace UDA\Exception;
 
 use Throwable;

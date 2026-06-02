@@ -5,6 +5,7 @@ declare(strict_types=1);
 /**
  * @package UDA
  * @subpackage Query\Dialect
+ * @license MIT
  */
 
 /*

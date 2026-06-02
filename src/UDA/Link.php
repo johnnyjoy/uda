@@ -11,7 +11,7 @@ use UDA\SQL\SqlMessage;
 /**
  * @package UDA
  * @author James Dornan <james@catch22.com>
- * @license GPL-2.0-only
+ * @license MIT
  * @link https://docs.uda.example.com/core/link
  * @since 1.0.0
  */

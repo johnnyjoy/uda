@@ -8,7 +8,7 @@ namespace UDA;
  * @package UDA
  * @subpackage Core
  * @author James Dornan <james.dornan@uda.example.com>
- * @license GPL-2.0-only
+ * @license MIT
  * @link https://docs.uda.example.com/core/driver
  * @since 1.0.0
  */
