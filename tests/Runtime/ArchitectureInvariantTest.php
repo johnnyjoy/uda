@@ -91,7 +91,11 @@ final class ArchitectureInvariantTest extends TestCase
     {
         $source = file_get_contents(__DIR__ . '/../../src/UDA/Driver.php') ?: '';
 
-        self::assertStringNotContainsString('use UDA\Query\\', $source);
+        self::assertDoesNotMatchRegularExpression(
+            '/use UDA\\\\Query\\\\(?!Observer\\b)/',
+            $source,
+            'Driver may import Query\\Observer (telemetry DTO) only — not builders or executors.',
+        );
         self::assertStringNotContainsString('BuilderSql', $source);
         self::assertDoesNotMatchRegularExpression('/public function (select|insert|update|delete|upsert)\s*\(/', $source);
         self::assertDoesNotMatchRegularExpression('/bindQueryBuilder|getDialectInstance|toSqlMessage\s*\(/', $source);

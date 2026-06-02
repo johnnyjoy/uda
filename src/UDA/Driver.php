@@ -35,6 +35,7 @@ use UDA\Exception\ConfigException;
 use UDA\Exception\ConnectionException;
 use UDA\Exception\NotSupportedException;
 use UDA\Exception\QueryException;
+use UDA\Query\Observer as QueryObserver;
 use UDA\SQL\SqlMessage;
 
 /**
@@ -46,6 +47,9 @@ use UDA\SQL\SqlMessage;
  */
 final class Driver
 {
+    /** @var null|callable(QueryObserver):void */
+    private static $queryObserver = null;
+
     /**
      * Maximum cached prepared statements per Driver (bounded memory).
      *
@@ -544,6 +548,18 @@ final class Driver
     }
 
     /**
+     * Register a process-wide observer for completed query attempts (null disables).
+     *
+     * @param null|callable(QueryObserver):void $observer  Callback or null.
+     *
+     * @return void No return value.
+     */
+    public static function setQueryObserver(?callable $observer): void
+    {
+        self::$queryObserver = $observer;
+    }
+
+    /**
      * Whether a PDOException indicates a dropped server connection worth one reconnect retry.
      *
      * Uses SQLSTATE class 08 (connection exception) plus common MySQL driver codes.
@@ -1030,7 +1046,9 @@ final class Driver
         $this->lastSql = $query;
         $this->lastParams = $mergedParams;
 
+        $started = hrtime(true);
         $attempts = 0;
+        $retried = false;
 
         while (true) {
             $stmt = null;
@@ -1046,6 +1064,8 @@ final class Driver
 
                 $stmt->execute($executeParams);
 
+                $this->emitObservation($query, $mergedParams, $started, false, $retried, null);
+
                 return $stmt;
             } catch (PDOException $ex) {
                 if ($stmt !== null) {
@@ -1054,16 +1074,54 @@ final class Driver
 
                 if ($attempts < 1 && $this->isReconnectableConnectionLost($ex)) {
                     $attempts++;
+                    $retried = true;
                     $this->reconnect();
 
                     continue;
                 }
 
                 $prefix = $stmt === null ? 'Failed to prepare statement' : 'Query execution failed';
+                $failure = QueryException::fromPdo($prefix, $ex);
+                $this->emitObservation($query, $mergedParams, $started, false, $retried, $failure);
 
-                throw QueryException::fromPdo($prefix, $ex);
+                throw $failure;
             }
         }
+    }
+
+    /**
+     * @param string               $sql        SQL text.
+     * @param array<string,mixed>  $params     Bound parameters.
+     * @param int                  $started    hrtime(true) at attempt start.
+     * @param bool                 $cacheHit   True for read-cache hits.
+     * @param bool                 $retried    True after a reconnect retry.
+     * @param ?Throwable           $error      Failure, if any.
+     *
+     * @return void No return value.
+     */
+    private function emitObservation(
+        string $sql,
+        array $params,
+        int $started,
+        bool $cacheHit,
+        bool $retried,
+        ?Throwable $error,
+    ): void {
+        $observer = self::$queryObserver;
+
+        if ($observer === null) {
+            return;
+        }
+
+        $observer(new QueryObserver(
+            $this->connection,
+            $sql,
+            $params,
+            (hrtime(true) - $started) / 1_000_000,
+            $cacheHit,
+            $retried,
+            $error,
+        ));
     }
 
     /**
@@ -1318,6 +1376,15 @@ final class Driver
             $cached = Cache::read($this->connection, $message, $shape);
 
             if ($cached !== null) {
+                $this->emitObservation(
+                    $message->getQuery(),
+                    $message->getParams(),
+                    hrtime(true),
+                    true,
+                    false,
+                    null,
+                );
+
                 return $cached;
             }
         }

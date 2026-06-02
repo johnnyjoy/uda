@@ -139,6 +139,7 @@ Raw SQL is first-class. It must use **named parameters only**.
 | `transaction(callable $fn): mixed` | Run callback in a transaction; supports nesting. |
 | `lastSql(): ?string` | Last executed SQL string for debugging. |
 | `lastParams(): array` | Last bound parameters for debugging. |
+| `setQueryObserver(?callable $observer): void` | **Static.** Optional ops callback after each execute or read-cache hit (`UDA\Query\Observer`). Null = disabled. See `docs/metrics.md`. |
 
 ### Example
 

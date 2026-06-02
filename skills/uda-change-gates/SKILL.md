@@ -45,6 +45,8 @@ Reject if the diff:
 - Adds read-path cache branching (`if (cached)`)
 - Omits table hints on raw SQL where production cache is enabled
 - Introduces `clearForTests` naming or fake “test-only” public APIs
+- Registers `setQueryObserver()` inside hot loops or repository methods (bootstrap only)
+- Leaves observer enabled in PHPUnit without `setQueryObserver(null)` in test bootstrap
 
 ## Library PR review (UDA repo)
 

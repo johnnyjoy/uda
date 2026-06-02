@@ -65,6 +65,8 @@ Reference fixture: `tests/Fixtures/TraitUserRepository.php`.
 | Generic `query($sql)` on a base repository | Bypasses table hints and safety conventions |
 | Passing `Driver` or `PDO` into constructors | Breaks single pipeline |
 | Caching in application (`if ($cached)`) | UDA cache is config-driven and transparent on reads |
+| `Database::setQueryObserver()` inside repository methods | Ops hook belongs in bootstrap once — not per query |
+| Timing/logging every `row()`/`rows()` call in app code | Use `setQueryObserver()` instead (see `uda-config-deploy`) |
 
 ## Layering (allowed)
 
@@ -85,6 +87,7 @@ Your layer may **not** insert another SQL execution tier below `Database`.
 - [ ] Every read/write that participates in cache lists **table hints** when caching is on (see `uda-sql-and-cache`)
 - [ ] Named parameters only (`:id`), never `?`
 - [ ] Transactions use `$db->transaction(fn (Database $db) => ...)` or `$this->transaction(...)` — callback gets `Database`, not `Driver`
+- [ ] No per-class query logging — observer is process-wide in bootstrap if needed
 
 ## Authority
 

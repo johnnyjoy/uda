@@ -415,6 +415,18 @@ final class Database
     }
 
     /**
+     * Register a process-wide query observer (ops/instrumentation). Null disables.
+     *
+     * @param null|callable(\UDA\Query\Observer):void $observer  Callback or null.
+     *
+     * @return void No return value.
+     */
+    public static function setQueryObserver(?callable $observer): void
+    {
+        Driver::setQueryObserver($observer);
+    }
+
+    /**
      * @return ?string The last executed SQL or null
      */
     public function lastSql(): ?string

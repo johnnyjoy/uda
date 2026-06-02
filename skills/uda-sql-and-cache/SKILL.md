@@ -42,6 +42,12 @@ Builders attach table metadata from `from()` / `into()` — hints optional on bu
 
 Do not use `rows()` when you need at most one row — use `row()` or `value()`.
 
+`each($fn)` streams rows to **your** callback (app logic). It is **not** ops telemetry.
+
+## Ops: query observer
+
+`Database::setQueryObserver()` fires after **every** terminator path (including `rows()` cache hits and failed `exec()`). Wire once at bootstrap — see `uda-config-deploy` and `docs/metrics.md`.
+
 ## Builders
 
 - Entry: `$db->select(...)` / `insert()` / `update()` / `delete()` / `upsert()`.

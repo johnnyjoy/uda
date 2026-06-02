@@ -1,24 +1,41 @@
 # Metrics Aggregation
 
-Metrics aggregation is an opt-in trace listener that summarizes query activity (counts, latency, slow hits, errors, table usage) without touching the execution hot path.
+**v1 ships a minimal observer only.** Register at bootstrap with `Database::setQueryObserver()`.
+Each callback receives `UDA\Query\Observer`. The aggregator examples below are
+**not implemented** — build your own rollup on top of the observer, or restore `Metrics\*` later.
 
-## Attaching the Aggregator
+## Query observer (implemented)
 
 ```php
-use UDA\Metrics\MetricsAggregator;
-use UDA\Metrics\MetricsConfig;
+Database::setQueryObserver(function (\UDA\Query\Observer $o): void {
+    if ($o->durationMs > 500 && !$o->cacheHit) {
+        error_log(json_encode([
+            'conn' => $o->connection,
+            'ms' => $o->durationMs,
+            'sql' => $o->sql,
+            'err' => $o->error?->getMessage(),
+        ]));
+    }
+});
 
-$metrics = new MetricsAggregator(new MetricsConfig(
-    enabled: true,
-    slowQueryThresholdMs: 50,
-    maxTrackedQueries: 10000,
-    reportTables: true,
-));
+Database::setQueryObserver(null); // disable
+```
 
+---
+
+## Metrics aggregator (design reference — not in codebase)
+
+Metrics aggregation would summarize query activity (counts, latency, slow hits, errors, table usage) without touching the execution hot path.
+
+### Attaching the Aggregator (future)
+
+```php
+// Not shipped — illustrative
+$metrics = new MetricsAggregator(new MetricsConfig(enabled: true, slowQueryThresholdMs: 50));
 Database::addTraceListener($metrics);
 ```
 
-Because it plugs into `Database::addTraceListener`, metrics stay non-core—you decide when to add it (per connection, per environment, per test).
+When built, it would plug into the same observer hook or a dedicated listener API.
 
 ## Snapshotting Metrics
 

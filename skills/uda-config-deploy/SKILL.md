@@ -2,8 +2,8 @@
 name: uda-config-deploy
 description: >-
   Configure UDA for production: JSON config, UDA_CONFIG, secrets, cache backends,
-  PHP extensions, FPM vs long-running workers. Use when writing uda.json, Docker
-  images, or runbooks for cache/DB failures.
+  query observer for ops logging, PHP extensions, FPM vs long-running workers.
+  Use when writing uda.json, Docker images, or runbooks for cache/DB failures.
 ---
 
 # UDA: config and deployment
@@ -54,6 +54,39 @@ Secrets resolve at **ingestion** — runtime code does not re-parse `{env:...}`.
 
 Config is a **static snapshot** after load — config change = **restart workers**.
 
+## Query observer (ops only)
+
+Register **once** at bootstrap (FPM `index.php`, worker boot). Not in repositories.
+
+```php
+use UDA\Database;
+use UDA\Query\Observer;
+
+Database::setQueryObserver(function (Observer $o): void {
+    if ($o->error !== null) {
+        error_log(sprintf('[db-error] %s %s', $o->connection, $o->sql));
+        return;
+    }
+    if ($o->cacheHit) {
+        return; // or log: proves read came from cache, not PDO
+    }
+    if ($o->durationMs >= 500) {
+        error_log(sprintf('[slow-sql] %s %.1fms %s', $o->connection, $o->durationMs, $o->sql));
+    }
+});
+
+// PHPUnit bootstrap:
+Database::setQueryObserver(null);
+```
+
+| Field | Use |
+|-------|-----|
+| `cacheHit` | Stale-data investigations |
+| `retried` | Connection blip after UDA reconnect |
+| `error` | Failed `exec` / reads without try/catch in every caller |
+
+**Not** row processing — use `each()` for app logic. See `docs/metrics.md`, `docs/public-api.md` (`setQueryObserver`).
+
 ## Failure runbook (cache enabled)
 
 1. Redis/Memcached down → connection errors at cache client creation; no silent “cache off” unless you set `store.type: off` in config.
@@ -78,7 +111,8 @@ Cert workflows: `.github/workflows/sqlite-cert.yml`, `postgres-cert.yml` — see
 - [ ] Cache extensions match `store.type` when not `off`/`array`
 - [ ] Table-level `cache.tables.*.disable` for audit/high-churn tables if needed
 - [ ] Runbook documents `flushCache()` vs disabling cache in config
+- [ ] Prod observer wired at bootstrap; disabled in test bootstrap (`setQueryObserver(null)`)
 
 ## Authority
 
-`docs/configuration.md`, `docs/caching.md`, `docs/certification/sqlite.md`, `docs/certification/postgresql.md`.
+`docs/configuration.md`, `docs/caching.md`, `docs/metrics.md`, `docs/certification/sqlite.md`, `docs/certification/postgresql.md`.

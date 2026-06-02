@@ -38,6 +38,7 @@ mix those into application DAL work unless you are changing UDA itself.
 3. `docs/architecture.md`
 4. `docs/configuration.md`
 5. `docs/caching.md`
-6. `docs/contract.md`
+6. `docs/metrics.md` (query observer — ops)
+7. `docs/contract.md`
 
 Do not edit `docs/query-cookbook.md` without explicit approval.
