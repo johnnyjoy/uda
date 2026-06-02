@@ -4,6 +4,8 @@
 
 **Enforced in CI** on every push and pull request (`.github/workflows/sqlite-cert.yml`).
 
+Full engine matrix: [README.md](README.md).
+
 Local runs require PHP 8.2+. Array-cache proof runs without extra services; Redis and
 Memcached store coverage in broader suites requires `ext-redis` / `ext-memcached` and
 reachable backends when those tests are included.

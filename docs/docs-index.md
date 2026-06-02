@@ -54,6 +54,12 @@ treat as current behaviour unless cross-checked against code.
 - docs/configuration.md
 - docs/security.md
 
+## Engine certification
+
+- docs/certification/README.md — matrix (CI vs code-only engines)
+- docs/certification/sqlite.md
+- docs/certification/postgresql.md
+
 ## Required invariants to verify in code
 1) Database is primary ingress for app code.
 2) Driver is internal execution engine; app code should not depend on it.

@@ -36,6 +36,17 @@ Any failure during loading or validation throws **`ConfigException`**.
 
 ---
 
+# Engine certification
+
+Accepting a `"driver"` value in JSON does **not** mean that engine is CI-certified.
+Only **SQLite** and **PostgreSQL** are enforced in GitHub Actions today.
+
+See **`docs/certification/README.md`** for the full matrix (connect, builders, upsert,
+cache, CI workflow names). `config/example-config.json` lists several engines for
+config-shape illustration — treat uncertified engines as integrator-validated.
+
+---
+
 # Top-Level Structure
 
 | Key             | Required | Description                                                                                                                             |
@@ -59,7 +70,7 @@ Each entry in `connections` describes how a database connection is created.
 
 | Key            | Required | Description                                                                                             |
 | -------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Legacy transport aliases (`sqlsrv`, `dblib`) are accepted and normalized. Case-insensitive. |
+| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Legacy transport aliases (`sqlsrv`, `dblib`) are accepted and normalized. Case-insensitive. **CI-certified today:** `sqlite`, `pgsql` only — see `docs/certification/README.md`. |
 | **transport**  | no       | PDO DSN prefix when the engine supports more than one (`sqlsrv`, `dblib`, …). Defaults from engine when omitted. |
 | **params**     | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
 | **user**       | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |

@@ -262,3 +262,13 @@ is invalid and must be removed.
 * **Config `driver`** selects the engine; **config `transport`** selects the PDO prefix only when needed.
 
 If a behavior change requires an engine conditional, it belongs in the per-engine class (or a driver-owned dialect helper), not in Query or userland code.
+
+---
+
+## Engine certification
+
+Config may list any supported engine; **CI certification** applies to SQLite and
+PostgreSQL only. Do not document or imply production certification for other engines
+without naming a GitHub Actions workflow.
+
+**Matrix:** `docs/certification/README.md`

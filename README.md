@@ -30,9 +30,11 @@ a guide.
 
 ## Engine certification
 
-CI certifies **SQLite and PostgreSQL** only (`docs/certification/`). Other engines
-are implemented in code but are not production-certified in GitHub Actions. For
-worker/concurrency rules (Octane, RoadRunner, Swoole), see `docs/architecture.md`.
+**Normative matrix:** [`docs/certification/README.md`](docs/certification/README.md).
+
+CI certifies **SQLite** and **PostgreSQL** only (workflows `sqlite-cert.yml`,
+`postgres-cert.yml`). Other engines in `config/example-config.json` illustrate config
+shape — they are **not** CI-certified. Worker/concurrency rules: `docs/architecture.md`.
 
 ## Contributing, security, releases
 

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Docs: engine certification matrix (`docs/certification/README.md`); config and README state CI certifies SQLite/PostgreSQL only.
 - Docs: Octane/RoadRunner/Swoole concurrency — shared pooled handles, transaction rules, `lastSql()`/`lastParams()` hazards (`docs/architecture.md`, `docs/getting-started.md`, `docs/public-api.md`).
 - All `src/` PHPDoc `@license` headers aligned to MIT (matches `composer.json` / `LICENSE.md`).
 - PDO failures map through `QueryException::fromPdo()` with SQLSTATE extraction.

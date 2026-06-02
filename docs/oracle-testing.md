@@ -1,5 +1,8 @@
 # Oracle Testing Guide
 
+> **Not CI-certified.** Oracle is implemented in code; this guide covers manual smoke
+> testing only. See `docs/certification/README.md` for the engine matrix.
+
 The Oracle smoke tests exercise UDA end-to-end through PDO OCI. Use this guide to spin up the database, configure connections, and run the test suite.
 
 ## Requirements

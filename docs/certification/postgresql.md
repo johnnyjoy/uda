@@ -4,6 +4,8 @@
 
 **Enforced in CI** on every push and pull request (`.github/workflows/postgres-cert.yml`).
 
+Full engine matrix: [README.md](README.md).
+
 The job starts PostgreSQL 16 plus Redis and Memcached service containers. Local runs
 require PHP 8.2+, `ext-pdo_pgsql`, and matching env vars (see Command). Tests skip when
 `pdo_pgsql` or the service is unavailable.
