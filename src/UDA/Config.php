@@ -11,9 +11,8 @@ use UDA\Exception\ConfigException;
 /**
  * @package UDA
  * @subpackage Core
- * @author James Dornan <james.dornan@uda.example.com>
  * @license MIT
- * @link https://docs.uda.example.com/core/config
+ * @link https://github.com/johnnyjoy/uda/blob/master/docs/configuration.md
  * @since 1.0.0
  */
 

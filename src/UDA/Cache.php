@@ -5,9 +5,8 @@ declare(strict_types=1);
 /**
  * @package UDA
  * @subpackage Cache
- * @author James Dornan <james.dornan@uda.example.com>
  * @license MIT
- * @link https://docs.uda.example.com/cache
+ * @link https://github.com/johnnyjoy/uda/blob/master/docs/caching.md
  * @since 1.0.0
  */
 

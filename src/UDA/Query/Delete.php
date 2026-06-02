@@ -5,9 +5,8 @@ declare(strict_types=1);
 /**
  * @package UDA
  * @subpackage Query
- * @author James Dornan <james.dornan@uda.example.com>
  * @license MIT
- * @link https://docs.uda.example.com/query/delete
+ * @link https://github.com/johnnyjoy/uda/blob/master/docs/public-api.md
  * @since 1.0.0
  */
 

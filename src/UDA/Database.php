@@ -28,7 +28,7 @@ use UDA\SQL\SqlMessage;
  * @package UDA
  * @author James Dornan <james@catch22.com>
  * @license MIT
- * @link https://docs.uda.example.com/core/database
+ * @link https://github.com/johnnyjoy/uda/blob/master/docs/public-api.md
  * @since 1.0.0
  */
 

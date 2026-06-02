@@ -39,7 +39,8 @@
             "@php tools/check-pdo-usage.php",
             "@php tools/check-execution-path.php",
             "@php tools/check-imports.php",
-            "@php tools/check-forbidden-names.php"
+            "@php tools/check-forbidden-names.php",
+            "@php tools/check-placeholder-urls.php"
         ]
     },
     "minimum-stability": "stable",
