@@ -433,3 +433,8 @@ for reliable error handling and reconnect classification.
 For high-concurrency long-running deployments an external connection pooler
 (PgBouncer for PostgreSQL, ProxySQL for MySQL) is still recommended alongside
 UDA's process-level pool.
+
+## Driver runtime decomposition
+
+`UDA\Driver` remains the only PDO owner. Internal slices live under `UDA\Driver\`
+(e.g. `Transport`, `Oracle\Returning`) per [architecture-driver-runtime.md](architecture-driver-runtime.md).

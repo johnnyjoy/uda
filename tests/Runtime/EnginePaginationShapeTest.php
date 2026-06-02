@@ -7,7 +7,7 @@ namespace Tests\Runtime;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use UDA\Driver;
-use UDA\Driver\Oracle as OracleRules;
+use UDA\Driver\Oracle;
 use UDA\Driver\SQLServer as SQLServerRules;
 use UDA\Driver\Sybase as SybaseRules;
 use UDA\Query\Dialect\Dialect;
@@ -48,7 +48,7 @@ final class EnginePaginationShapeTest extends TestCase
             'oracle' => [
                 'oracle',
                 new OracleDialect(),
-                [OracleRules::class, 'limitOffset'],
+                [Oracle::class, 'limitOffset'],
             ],
         ];
     }

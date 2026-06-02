@@ -10,7 +10,7 @@ use UDA\Driver;
 use UDA\Query\Dialect\SqlServer as SqlServerDialect;
 use UDA\Query\Dialect\Sybase as SybaseDialect;
 
-final class EngineTransportTest extends TestCase
+final class TransportTest extends TestCase
 {
     /**
      * @return array<string,array{0:string,1:?string,2:string,3:string}>
