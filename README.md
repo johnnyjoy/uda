@@ -39,6 +39,7 @@ shape — they are **not** CI-certified. Worker/concurrency rules: `docs/archite
 ## Contributing, security, releases
 
 - **Contributing:** `CONTRIBUTING.md` (GitHub Actions CI, local validation).
+- **License:** `LICENSE.md` (MIT)
 - **Security:** `SECURITY.md`
 - **Changelog:** `CHANGELOG.md`
 - **Versioning / tags:** `docs/releases.md`
