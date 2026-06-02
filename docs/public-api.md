@@ -2,8 +2,10 @@
 
 One clear way to do common database operations. Cross-DB, migration-friendly, no ceremony.
 
-**Purpose:** Define the only public API surface: connect, raw SQL (named params), fluent builders, safe fragments, optional typed parameters.
-**Anti-goals:** No `Driver` in userland. No `Identifier` objects. No cache API. No “Connection” objects.
+**Purpose:** Define the public API surface: connect, raw SQL (named params), fluent builders, safe fragments, optional typed parameters, and the optional class link.
+**Anti-goals:** No `Driver` in userland. No `Identifier` objects. No cache API on the read path. No “Connection” objects.
+
+**Read next:** After `docs/getting-started.md`, read §1–§10 here, then `docs/architecture.md` for pipeline and runtime guarantees.
 
 ---
 
@@ -12,7 +14,10 @@ One clear way to do common database operations. Cross-DB, migration-friendly, no
 **`UDA\Database` is the database** from the perspective of application code.
 
 * Application code **MUST** treat `Database` as the only ingress and only handle.
-* Application code **MUST NOT** reference or depend on `UDA\Driver` or `UDA\Driver\*`.
+* Application code MAY use `UDA\Link` as an optional trait that resolves the
+  same `Database` handle.
+* Application code **MUST NOT** use a static `Query` entry (removed) or reference
+  `UDA\Driver` / `UDA\Driver\*`.
 * There are **no Connection objects** in the public model.
 
 “Connection” means **a config name**, nothing more.
@@ -55,6 +60,59 @@ $db = Database::connect('/tmp/uda.generated.json'); // file config + default con
 $db = Database::connect('gen_001', '/tmp/uda.generated.json'); // file + named connection
 ```
 
+**Connection pooling and self-healing reconnect:**
+
+`Database::connect()` returns the same instance for the same connection name.
+The second call for a known name is a single array lookup — no filesystem syscall,
+no config re-read.
+
+The `Driver` instance held by `Database` is permanent. If `prepare()` or `execute()`
+fails with a reconnectable connection-lost error, `Driver` calls `reconnect()` and
+retries that operation once, then re-runs any init SQL. There is no extra round-trip
+on the happy path.
+
+In PHP-FPM the pool resets per request, so there is nothing to configure. In
+long-running processes (Swoole, RoadRunner, Octane) the pool persists across
+requests and transparent reconnect covers dropped server connections.
+
+---
+
+## 1.1 Optional Class Link
+
+`UDA\Link` lets an external class keep SQL and database access behind its own
+domain methods without creating a second runtime path. A linked class should be
+built around one configured connection name.
+
+```php
+use UDA\Link;
+
+final class Users
+{
+    use Link;
+
+    protected static string $connection = 'app';
+
+    public function rename(int $id, string $name): void
+    {
+        $this->exec(
+            'UPDATE users SET name = :name WHERE id = :id',
+            ['id' => $id, 'name' => $name],
+            ['users']
+        );
+    }
+}
+```
+
+`$connection` is `static` because it is a fact about the class, not about any
+individual instance. Every instance of `Users` talks to `'app'` — that never
+varies. The `Database` handle is memoized once per class, not once per object.
+
+The trait exposes protected methods (`row()`, `rows()`, `value()`, `exec()`,
+`transaction()`, and all builder entrypoints) so application classes can behave
+just short of extending `Database` while still using the same
+`Database -> Driver -> PDO` execution path. It does not expose `Driver`, PDO,
+cache, dialect, backend rules, or a public Connection object.
+
 ---
 
 ## 2. Raw SQL API (named parameters only)
@@ -66,18 +124,19 @@ Raw SQL is first-class. It must use **named parameters only**.
 
 ### Methods
 
-| Method                             | Description                                                             |                                                                               |                                             |
-| ---------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
-| `row(string                        | Sql $sql, array $params = []): ?array`                                  | Run query; return at most one row or null; throw if >1 row.                   |                                             |
-| `rows(string                       | Sql $sql, array $params = []): array`                                   | Run query; return all rows (buffered).                                        |                                             |
-| `value(string                      | Sql $sql, array $params = []): mixed`                                   | Single column; at most one row; null if 0 rows; throw if >1 row or >1 column. |                                             |
-| `values(string                     | Sql $sql, array $params = []): array`                                   | First column across all rows; `[]` if 0 rows.                                 |                                             |
-| `list(string                       | Sql $sql, array $params = []): array`                                   | Alias of `values()`.                                                          |                                             |
-| `each(string                       | Sql $sql, array                                                         | callable $params, callable $fn = null): int`                                  | Stream rows to callable; returns row count. |
-| `exec(string                       | Sql $sql, array $params = []): int`                                     | Run INSERT/UPDATE/DELETE; return affected rows.                               |                                             |
-| `transaction(callable $fn): mixed` | Run callback in a transaction; receives a `Database`; supports nesting. |                                                                               |                                             |
-| `lastSql(): ?string`               | Last executed SQL string (debug).                                       |                                                                               |                                             |
-| `lastParams(): array`              | Last bound parameters (debug).                                          |                                                                               |                                             |
+| Method | Description |
+| --- | --- |
+| `row(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): ?array` | Run query; return the **first** row or `null`; constrain SQL (for example `LIMIT 1`) when exactly one row matters. |
+| `rows(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): array` | Run query; return all rows. |
+| `value(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): mixed` | Return one column from at most one row. |
+| `values(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): array` | Return the first column across all rows; no rows returns `[]`. |
+| `list(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): ?array` | Return the first row as a numeric array; no row returns `null`. |
+| `each(string|SqlMessage|Sql $sql, array|callable $params, callable $fn = null, ?array $tableHints = null): int` | Stream each row to a callable; returns row count. |
+| `exec(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): int` | Run INSERT/UPDATE/DELETE; return affected rows. |
+| `returning(string|SqlMessage|Sql $sql, array $params = [], ?array $tableHints = null): array` | Run DML with RETURNING/OUTPUT metadata and return emitted rows. |
+| `transaction(callable $fn): mixed` | Run callback in a transaction; supports nesting. |
+| `lastSql(): ?string` | Last executed SQL string for debugging. |
+| `lastParams(): array` | Last bound parameters for debugging. |
 
 ### Example
 
@@ -106,7 +165,9 @@ $db->transaction(function (Database $tx): void {
 });
 ```
 
-Results are associative arrays. Business code never touches PDO.
+`row()`, `value()`, and `list()` are singular reads and return `null` when no
+row exists. `rows()` and `values()` are set reads and return `[]` when no rows
+exist. Business code never touches PDO.
 
 ---
 
@@ -126,13 +187,13 @@ They compile to SQL + params and **terminate back into the same execution path**
 
 ### Builder entrypoints
 
-| Entry           | Returns     | Terminators                                                                                     |
-| --------------- | ----------- | ----------------------------------------------------------------------------------------------- |
-| `$db->select()` | SelectQuery | `row()`, `rows()`, `value()`, `values()`, `list()`, `count(?expr)`, `each(callable)`, `toSql()` |
-| `$db->insert()` | InsertQuery | `exec()`, optional `returning(...)` + `row()`/`value()` where supported                         |
-| `$db->update()` | UpdateQuery | `exec()`                                                                                        |
-| `$db->delete()` | DeleteQuery | `exec()`                                                                                        |
-| `$db->upsert()` | UpsertQuery | `exec()`                                                                                        |
+| Entry           | Returns  | Terminators                                                                                     |
+| --------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `$db->select()` | Select   | `row()`, `rows()`, `value()`, `values()`, `list()`, `count(?expr)`, `each(callable)`, `toSql()` |
+| `$db->insert()` | Insert   | `exec()`, optional `returning(...)` + `row()`/`value()`/`list()` where supported                |
+| `$db->update()` | Update   | `exec()`, optional `returning(...)` + `row()`/`value()`/`list()` where supported                |
+| `$db->delete()` | Delete   | `exec()`, optional `returning(...)` + `row()`/`value()`/`list()` where supported                |
+| `$db->upsert()` | Upsert   | `exec()`                                                                                        |
 
 ### Example
 
@@ -170,6 +231,88 @@ $db->delete()
 
 `toSql()` exists for debugging/logging; it does not execute.
 
+### 3.1 What is `UDA\Query\Abs`?
+
+**`Abs` is the shared chassis for fluent query builders** — not a type you use or extend in application code.
+
+| | |
+| --- | --- |
+| **Full name** | `UDA\Query\Abs` |
+| **Short name means** | **Abs**tract base class (historical shorthand, not “abstractor”) |
+| **Extends** | Nothing public — five `final` builders extend it internally: `Select`, `Insert`, `Update`, `Delete`, `Upsert` |
+| **You obtain builders via** | `$db->select()`, `$db->insert()`, … — never `new Select()` |
+
+**What `Abs` owns (shared infrastructure):**
+
+| Concern | Role |
+| ------- | ---- |
+| **`$engine`** | Engine key for identifier quoting (`pgsql`, `sqlserver`, …). Set by `Database::bindBuilder()` from the live connection. |
+| **`ParamBag`** | Named placeholders (`:q1`, `:q2`, …) so nested/subquery params never collide. |
+| **`quote()`** | Delegates to `SQL\Identifier` using `$engine` — the only quoting path from builders. |
+| **`bindDatabase()` / `bindDialect()`** | Wires the builder to the connection’s `Database` handle and `Query\Dialect\*` renderer. |
+| **Guardrail flags** | Tracks statement type, whether WHERE/LIMIT were used, and `unsafe()` bypass — attached when SQL becomes a `SqlMessage`. |
+| **`toSql()`** | Abstract: each concrete builder compiles itself to immutable `Query\Sql`. |
+| **Terminators** | `row()`, `exec()`, etc. live on concrete builders; they call `delegateThroughDatabase()` → same `Database → Driver → PDO` path as raw SQL. |
+
+**What `Abs` is not:**
+
+| Confusable | Difference |
+| ---------- | ---------- |
+| **`UDA\Driver`** | Executes SQL. `Abs` only *builds* SQL and hands off to `Database`. |
+| **`Query\Dialect\SQLite`** (etc.) | Renders engine-specific SQL *text* for the builder. `Abs` holds the dialect reference; concrete builders call into it. |
+| **`Query\Sql` vs `SQL\SqlMessage`** | `Query\Sql` = builder output (immutable value). `SQL\SqlMessage` = execution envelope with params + guardrail metadata — built inside `Abs::buildSql()`. |
+| **Public API** | Application code never type-hints `Abs`. Use `Select`, `Insert`, … returned from `Database`, or don’t name the type at all. |
+
+**Lifecycle (one connection, one builder):**
+
+```
+$db->select()
+  → Database::bindBuilder(new Select())
+       → bindDatabase($this)
+       → $builder->engine = $driver->engineName()
+       → bindDialect(queryDialect())
+  → ->from('users')->where('id', 1)->row()
+       → Select::toSql()  // uses dialect + quote()
+       → Abs::delegateThroughDatabase('row', ...)
+       → Database::executeBuilder(...) → Driver → PDO
+```
+
+**Why keep the name `Abs`?** Renaming to `AbstractBuilder` would churn every builder file and downstream type-hints for marginal clarity. The class docblock and this section are the contract: **short internal name, not a public extension point.** A semver-major alias remains an option later.
+
+### 3.2 Is `Abs` the most accurate name?
+
+**No.** `Abs` is accurate only as an abbreviation of “abstract base” — not as a description of the type’s role.
+
+| Candidate | Fit | Notes |
+| --------- | --- | ----- |
+| **`QueryBuilder`** | Best | Matches what `Database` already calls it in PHPDoc (`use UDA\Query\Abs as QueryBuilder`). `Select extends QueryBuilder` reads naturally. |
+| **`AbstractQueryBuilder`** | Best (explicit) | Standard PHP idiom; grep-friendly; zero ambiguity. |
+| **`BuilderBase`** | OK | Shorter; still clearer than `Abs`. |
+| **`Abs`** | Poor | Cryptic in isolation; newcomers grep “AbstractBuilder” and find nothing; easily mistaken for unrelated “abstractor” product naming. |
+
+**What the class actually is:** the abstract base for fluent SQL builders — param bag, engine-bound quoting, dialect binding, guardrail metadata, and delegation back to `Database`. Any name containing **Query** + **Builder** (+ optionally **Abstract**) describes that role; `Abs` does not.
+
+**Disposition (unchanged for v1):** keep the class symbol `Abs` to avoid churn. Treat **`QueryBuilder`** as the conceptual name in prose and PHPDoc (already done in `Database.php`). On a semver-major release, rename the class to `QueryBuilder` or add `AbstractQueryBuilder` with a long deprecation alias — not a silent find-replace mid-stream.
+
+### 3.3 Compiled `Query\Sql` and connection deferral
+
+Builders bind **engine and dialect at creation** (`$db->select()`). Compilation is not cross-engine portable: `toSql()` emits dialect-specific text.
+
+You **may** defer which **named connection** executes that text when both connections use the **same engine** (e.g. primary vs read replica):
+
+```php
+$db = Database::connect('app');
+$sql = $db->select('id', 'name')
+    ->from('users')
+    ->where('active', 1)
+    ->end()
+    ->toSql();
+
+$rows = Database::connect('replica')->rows($sql);
+```
+
+Do not execute compiled SQL on a connection whose engine differs from the one that built it. There is no unbound builder or neutral query IR in v1 — only immutable `Query\Sql` after compile.
+
 ---
 
 ## 4. Massive queries (raw SQL + safe fragments)
@@ -180,12 +323,12 @@ These helpers exist to prevent developers from “escaping the system” into st
 
 ### Helpers
 
-| Helper                                                                            | Purpose                                            |
-| --------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `$db->q(string $identifier): string`                                              | Validate + quote identifier (table/column).        |
-| `$db->orderByAllowed(string $col, array $allowlist, string $dir = 'ASC'): string` | Safe ORDER BY clause from allowlist.               |
-| `$db->limitOffset(int $limit, int $offset): SqlFragment`                          | LIMIT/OFFSET fragment (engine correct).            |
-| `$db->inList(array $values, string $hint = 'p'): SqlFragment`                     | IN-list placeholders + params; empty list → `1=0`. |
+| Helper | Purpose |
+| --- | --- |
+| `$db->q(string $identifier): string` | Validate and quote identifier (table/column). |
+| `$db->orderByAllowed(string $col, array $allowlist, string $dir = 'ASC'): string` | Safe ORDER BY clause from allowlist. |
+| `$db->limitOffset(int $limit, int $offset): string` | LIMIT/OFFSET fragment rendered for the configured backend. |
+| `$db->inList(array $values, string $hint = 'p'): array{0:string,1:array<string,mixed>}` | Complete `IN (...)` SQL fragment and params; empty list returns `1=0` with no params. |
 
 > All values still bind through named parameters. These helpers only produce safe SQL structure.
 
@@ -214,9 +357,9 @@ SELECT *
 FROM ranked
 SQL;
 
-$sql .= ' ' . $orderClause . ' ' . $page->sql;
+$sql .= ' ' . $orderClause . ' ' . $page;
 
-$params = ['status' => 'active'] + $page->params;
+$params = ['status' => 'active'];
 
 $rows = $db->rows($sql, $params);
 ```
@@ -227,11 +370,11 @@ $rows = $db->rows($sql, $params);
 $db = Database::connect();
 
 $ids = [10, 20, 30];
-$in  = $db->inList($ids, 'id');
+[$inSql, $inParams] = $db->inList($ids, 'id');
 
-$sql = 'SELECT * FROM users WHERE id ' . $in->sql;
+$sql = 'SELECT * FROM users WHERE id ' . $inSql;
 
-$rows = $db->rows($sql, $in->params);
+$rows = $db->rows($sql, $inParams);
 ```
 
 Empty list becomes a deterministic `WHERE 1=0` behavior, not invalid SQL.
@@ -252,11 +395,13 @@ Caching is **configuration-driven** and **implicit**.
 
 * If caching is enabled for the connection, reads automatically consult cache.
 * If disabled, cache code must not run.
-* There is no public “cache API” and no explicit cache invocation in userland.
+* There is no public “cache API” on the read path and no explicit cache invocation in ordinary repository code.
 
 > Cache is not called. Cache happens.
 
 Repository code remains identical whether cache is enabled or not.
+
+**Ops-only flush:** `Database::flushCache()` deletes cached payload, metadata, and table-mtime keys for the current connection's configured store. Use for deploy hooks or incident response — not for normal queries. See `docs/caching.md`.
 
 ---
 
@@ -270,18 +415,10 @@ Repository code remains identical whether cache is enabled or not.
 
 ---
 
-## 8. Optional typed parameters (transport-level)
+## 8. Typed parameters
 
-UDA does not implement schema typing. For edge cases where bind type matters, a lightweight `Param` wrapper may be used.
-
-Examples (conceptual):
-
-* `Param::binary(...)` — BLOB
-* `Param::json(...)` — JSON encoding
-* `Param::uuid(...)` — UUID validation
-* `Param::dateTimeImmutable(...)` — consistent formatting
-
-Most code should use scalars normally; `Param` exists for correctness at boundaries.
+Typed parameter wrapper helpers are not part of the v1 public surface. Most code
+should pass scalar values normally through named parameters.
 
 ---
 
@@ -293,3 +430,57 @@ Most code should use scalars normally; `Param` exists for correctness at boundar
 * One execution path, always.
 * Cache remains transparent.
 * Helpers exist to keep dynamic SQL safe without framework sprawl.
+
+---
+
+## 10. Safety: bypassing guardrails
+
+UDA's write builders guard against accidental unbounded writes. A bare
+`UPDATE … SET` with no WHERE clause or a `DELETE` with no WHERE clause will
+throw `QueryException` by default.
+
+When a statement is **intentionally** unbounded — for example, setting a flag
+on every row in a table, or emptying a staging table — call `->unsafe()` on the
+builder before the terminating `exec()`:
+
+```php
+$db->update()
+    ->table('import_staging')
+    ->set('processed', 1)
+    ->unsafe()
+    ->exec();
+```
+
+`unsafe()` is a deliberate acknowledgement, not a convenience. Use it only
+after confirming the intent is correct. It has no effect on SELECT builders.
+
+---
+
+## 11. Glossary (symbols that confuse newcomers)
+
+| Symbol / name | What it is |
+| ------------- | ----------- |
+| `UDA\Query\Abs` | **Builder chassis** — abstract base shared by `Select`/`Insert`/…; param bag, `$engine`, quoting, guardrails, execution delegation. **Do not extend.** See §3.1. |
+| `UDA\Query\Sql` | Immutable SQL **value** produced by builders before `Database` turns it into a `SqlMessage` for execution. Not the same as `UDA\SQL\SqlMessage`. Same-engine deferral: §3.3. |
+| `UDA\SQL\SqlMessage` | Executable SQL + metadata envelope used on the `Database` → `Driver` boundary. |
+| `UDA\Driver` | **The driver** — runtime for one connection; owns PDO and executes SQL. (Car: person at the wheel.) |
+| **Engine** | SQL family (`pgsql`, `sqlserver`, …): dialect + quoting + fragments. Config JSON key is still `"driver"`; read via `Config::engine()`. (Car: the motor.) |
+| **Transport** | PDO DSN prefix (`sqlsrv`, `dblib`, …). Optional when one engine has multiple adapters. (Car: which fuel-line hose.) |
+| `UDA\Driver\SQLite` | **Engine manual** for SQLite — static DSN/quoting rules; does not own PDO. |
+| `UDA\Query\Dialect\SQLite` | **Query-builder renderer** for SQLite SQL text. Same word “SQLite”, different package role. |
+
+> **Removed:** `UDA\Query` (root static facade) — was redundant with `Database::connect()`; deleted to preserve the one-handle rule. The `UDA\Query\` namespace (builders, `Sql`, dialects) remains.
+
+---
+
+## 12. Naming review disposition (hostile pass — document-first)
+
+| Issue | Disposition |
+| ----- | ----------- |
+| `Abs` class name | **Keep symbol for v1**; not the most accurate name — conceptual name is **`QueryBuilder`** (see §3.2). Semver-major: rename to `QueryBuilder` or `AbstractQueryBuilder`. |
+| `Sql` vs `SqlMessage` | **Keep**; glossary + table above. |
+| Two `SQLite` classes | **Keep**; glossary + driver-vs-dialect note. |
+| Future public rename appetite | Prefer **`QueryBuilder`** (matches existing `Database` alias) or **`AbstractQueryBuilder`** (explicit PHP idiom) over `AbstractBuilder` alone. |
+
+---
+

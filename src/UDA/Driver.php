@@ -14,82 +14,92 @@ namespace UDA;
  */
 
 /*
- * Purpose: Base execution engine and sole owner of PDO connections in UDA.
+ * Purpose: Concrete one-connection execution runtime and sole owner of PDO connections in UDA.
+ *
+ * Driver owns the hot path from SQL normalization through PDO prepare/execute.
+ * Connection loss is handled optimistically: prepare/execute runs once; on a
+ * reconnectable PDOException the connection is replaced and the operation is
+ * retried once (no per-query ping).
+ * It delegates engine-specific string rules to the per-engine classes under
+ * UDA\Driver\ (PostgreSQL, SQLite, …). Those classes build the PDO DSN and
+ * supply quoting/pagination fragments; they never own PDO or execute SQL.
+ * Driver.php calls their static ::dsn(), then new PDO() itself.
  */
 
 use PDO;
 use PDOException;
 use PDOStatement;
 use Throwable;
-use UDA\Cache\InMemoryTableWriteTracker;
-use UDA\Cache\Serializer\Serializer as CacheSerializer;
-use UDA\Cache\Setup as CacheSetup;
-use UDA\Cache\Store\ArrayStore;
-use UDA\Cache\Store\CacheStoreInterface;
-use UDA\Cache\Store\MemcachedStore;
-use UDA\Cache\Store\RedisStore;
-use UDA\Driver\PreparedStatementCache;
+
 use UDA\Exception\ConfigException;
 use UDA\Exception\ConnectionException;
 use UDA\Exception\NotSupportedException;
 use UDA\Exception\QueryException;
-use UDA\Query\Abs as QueryBuilderBase;
-use UDA\Query\Delete;
-use UDA\Query\Dialect\Db2;
-use UDA\Query\Dialect\Dialect;
-use UDA\Query\Dialect\MariaDb;
-use UDA\Query\Dialect\Oracle as OracleDialect;
-use UDA\Query\Dialect\PostgreSql;
-use UDA\Query\Dialect\SQLite as SqliteDialect;
-use UDA\Query\Dialect\SqlServer as SqlServerDialect;
-use UDA\Query\Dialect\Sybase;
-use UDA\Query\Insert;
-use UDA\Query\Select;
-use UDA\Query\Sql as BuilderSql;
-use UDA\Query\Update;
-use UDA\Query\Upsert;
 use UDA\SQL\SqlMessage;
 
-abstract class Driver
+/**
+ * Runtime engine for one configured connection name.
+ *
+ * A Driver instance owns exactly one PDO handle and its transaction state.
+ * Process-wide configuration and cache behavior remain keyed by the same
+ * connection name so multiple connections of the same RDBMS stay isolated.
+ */
+final class Driver
 {
+    /**
+     * Maximum cached prepared statements per Driver (bounded memory).
+     *
+     * @var int
+     */
+    private const PREPARED_STATEMENT_LRU_MAX = 64;
+
+    /**
+     * LRU map: normalised SQL string → PDOStatement for this PDO only.
+     *
+     * Cleared on reconnect. Insertion order is used for eviction (array_key_first).
+     *
+     * @var array<string,PDOStatement>
+     */
+    private array $preparedStatementLru = [];
+
     /**
      * The PDO instance (sole owner).
      *
      * @var PDO
      */
-    protected PDO $pdo;
+    private PDO $pdo;
 
     /**
-     * Backend driver name (normalized; e.g. 'sqlserver', 'pgsql', 'mariadb').
+     * Configured engine name (normalized; e.g. 'sqlserver', 'pgsql', 'mariadb').
      *
-     * NOTE: This is not necessarily the PDO driver name. Example: SQLServer backend
-     * might use PDO 'sqlsrv' or PDO 'dblib' depending on platform/config.
+     * NOTE: This is the SQL engine family from config, not necessarily the PDO
+     * transport prefix. Example: SQL Server may use PDO sqlsrv or dblib depending
+     * on platform/config (transport split lands in Phase 3).
      *
      * @var ?string
      */
-    protected ?string $dbtype = null;
+    private ?string $engine = null;
+
+    /**
+     * PDO transport prefix for this connection (e.g. sqlsrv, dblib, pgsql).
+     *
+     * @var ?string
+     */
+    private ?string $transport = null;
 
     /**
      * Connection name (config key).
      *
      * @var string
      */
-    protected string $connection = 'default';
+    private string $connection = 'default';
 
     /**
      * Raw configuration for this connection.
      *
      * @var array<string,mixed>
      */
-    protected array $config = [];
-
-    /**
-     * Connection-scoped cache controller.
-     */
-    protected Cache $cache;
-
-    /** @var ?Dialect Lazily-instantiated SQL dialect */
-    private ?Dialect $dialectInstance = null;
+    private array $config = [];
 
     /**
      * Last executed SQL (debug).
@@ -117,25 +127,29 @@ abstract class Driver
      *
      * @var int
      */
-    protected int $savepointCounter = 0;
-
-    private PreparedStatementCache $statementCache;
-
-    private string $connectionHash;
-    private bool $lastStatementCacheHit = false;
+    private int $savepointCounter = 0;
 
     /**
-     * Protected constructor for concrete drivers.
+     * Open the configured connection and run any initialization SQL.
+     * Callers enter through Driver::connect() so the connection name can be
+     * resolved consistently with Config defaults.
+     *
+     * @param ?string $connection  Configured connection name.
+     *
+     * @throws ConfigException     If the connection config is missing or unsupported.
+     * @throws ConnectionException If PDO cannot open the configured connection.
      */
-    protected function __construct(array $config, ?string $connection = null)
+    protected function __construct(?string $connection = 'default')
     {
-        $this->connection = $connection ?? '';
-        $this->config = $config;
-        $this->dbtype = $config['driver'] ?? $this->dbtype;
+        $this->connection = $connection ?? Config::default();
+        $this->config = Config::connection($this->connection);
+        $this->engine = (string) ($this->config['engine'] ?? Config::engine($this->connection));
+        $this->transport = (string) ($this->config['transport'] ?? Config::transport($this->connection));
 
-        $dsn = $this->buildDsn($config['params'] ?? []);
-        [$user, $pass] = self::resolveCredentials($config);
+        $user = Config::username($this->connection);
+        $pass = Config::password($this->connection);
         $options = $this->resolvePdoOptions();
+        $dsn = self::dsn($this->engine, $this->transport, $this->connectionParams($this->config));
 
         try {
             $this->pdo = new PDO($dsn, $user, $pass, $options);
@@ -143,181 +157,135 @@ abstract class Driver
             throw new ConnectionException('Failed to connect to database: ' . $e->getMessage(), 0, $e);
         }
 
-        $this->runInitSql($this->pdo, $config);
-        $this->onConnect();
-
-        $this->cache = Cache::fromSetup($this->connection, $this->buildCacheSetup($config));
-        $limit = (int)($this->config['statement_cache_limit'] ?? 500);
-        $this->statementCache = new PreparedStatementCache($limit);
-        $this->connectionHash = (string) spl_object_id($this);
+        $this->runInitSql($this->pdo, $this->config);
     }
 
     /**
-     * Called immediately after driver construction.
+     * Quote an identifier using the configured engine rules.
      *
-     * Override in concrete drivers to set session-specific options
-     * (e.g., timezone, date format, connection encoding).
+     * @param ?string $engine     Configured engine name or alias.
+     * @param string  $identifier  Identifier value.
+     *
+     * @return string Quoted identifier.
      */
-    abstract protected function onConnect(): void;
-
-    // ----- Query Builder Factories -----
-
-    public function select(): Select
+    public static function quoteIdentifier(?string $engine, string $identifier): string
     {
-        $builder = new Select();
-        $this->bindQueryBuilder($builder);
+        $rules = self::engineRulesClass(self::engineKey($engine));
 
-        return $builder;
-    }
-
-    public function insert(): Insert
-    {
-        $builder = new Insert();
-        $this->bindQueryBuilder($builder);
-
-        return $builder;
-    }
-
-    public function update(): Update
-    {
-        $builder = new Update();
-        $this->bindQueryBuilder($builder);
-
-        return $builder;
-    }
-
-    public function delete(): Delete
-    {
-        $builder = new Delete();
-        $this->bindQueryBuilder($builder);
-
-        return $builder;
-    }
-
-    public function upsert(): Upsert
-    {
-        $builder = new Upsert();
-        $this->bindQueryBuilder($builder);
-
-        return $builder;
-    }
-
-    protected function bindQueryBuilder(QueryBuilderBase $builder): void
-    {
-        $builder->driverInstance = $this;
-
-        if (property_exists($builder, 'driverName')) {
-            $builder->driverName = $this->dbtype ?? '';
-        }
-
-        if (method_exists($builder, 'bindDialect')) {
-            $builder->bindDialect($this->getDialectInstance());
-        }
-    }
-
-    private function getDialectInstance(): Dialect
-    {
-        if ($this->dialectInstance !== null) {
-            return $this->dialectInstance;
-        }
-
-        $backend = strtolower($this->dbtype ?? '');
-
-        $this->dialectInstance = match ($backend) {
-            'pgsql', 'postgres', 'postgresql' => new PostgreSql(),
-            'sqlite' => new SqliteDialect(),
-            'mysql', 'mariadb' => new MariaDb(),
-            'sqlsrv', 'sqlserver' => new SqlServerDialect(),
-            'dblib', 'sybase' => new Sybase(),
-            'oci', 'oracle' => new OracleDialect(),
-            'db2' => new Db2(),
-            default => throw new QueryException('No SQL dialect available for backend: ' . ($backend !== '' ? $backend : 'unknown')),
-        };
-
-        return $this->dialectInstance;
-    }
-
-    // ----- Query Builder Execution (default SQL dialect) -----
-
-    public function selectRows(Select $query): array
-    {
-        $sql = $query->toSql();
-
-        return $this->rows($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function selectRow(Select $query): ?array
-    {
-        $sql = $query->toSql();
-
-        return $this->row($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function selectValue(Select $query): mixed
-    {
-        $sql = $query->toSql();
-
-        return $this->value($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function selectValues(Select $query): array
-    {
-        $sql = $query->toSql();
-
-        return $this->values($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function selectList(Select $query): array
-    {
-        $sql = $query->toSql();
-
-        return $this->list($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function selectValueSql(SqlMessage $sql): mixed
-    {
-        return $this->value($sql);
-    }
-
-    public function insertExec(Insert $query): int
-    {
-        $sql = $query->toSql();
-
-        return $this->exec($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function updateExec(Update $query): int
-    {
-        $sql = $query->toSql();
-
-        return $this->exec($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function deleteExec(Delete $query): int
-    {
-        $sql = $query->toSql();
-
-        return $this->exec($this->toSqlMessage($sql), [], $sql->getCacheTables());
-    }
-
-    public function upsertExec(Upsert $query): int
-    {
-        throw new NotSupportedException(static::class . ' does not support UPSERT operations.');
+        return $rules !== null
+            ? $rules::quoteIdentifier($identifier)
+            : self::quoteAnsiIdentifier($identifier);
     }
 
     /**
-     * Backend-specific identifier quoting. Defaults to ANSI double quotes.
+     * Per-engine static rule class for SQL fragments (not DSN — see dsn()).
+     *
+     * @param string $engineKey  Canonical engine key from engineKey().
+     *
+     * @return ?class-string Engine rules class, or null when no dedicated rules exist.
      */
-    protected function quoteIdentifier(string $identifier): string
+    private static function engineRulesClass(string $engineKey): ?string
     {
-        $clean = trim($identifier);
-        $escaped = str_replace('"', '""', $clean);
+        return match ($engineKey) {
+            'mariadb' => \UDA\Driver\MariaDB::class,
+            'sqlserver' => \UDA\Driver\SQLServer::class,
+            'sybase' => \UDA\Driver\Sybase::class,
+            'sqlite' => \UDA\Driver\SQLite::class,
+            'oracle' => \UDA\Driver\Oracle::class,
+            'pgsql' => \UDA\Driver\PostgreSQL::class,
+            default => null,
+        };
+    }
 
-        return '"' . $escaped . '"';
+    /**
+     * Normalize a configured engine name or alias to a canonical engine key.
+     *
+     * @param ?string $engine  Config driver value or alias.
+     *
+     * @return string Canonical engine key (e.g. pgsql, mariadb, sqlserver, sybase).
+     */
+    public static function engineKey(?string $engine): string
+    {
+        return match (strtolower(trim((string) $engine))) {
+            'mysql', 'mariadb' => 'mariadb',
+            'pgsql', 'postgres', 'postgresql' => 'pgsql',
+            'sqlsrv', 'sqlserver' => 'sqlserver',
+            'dblib', 'sybase' => 'sybase',
+            'sqlite' => 'sqlite',
+            'oci', 'oracle' => 'oracle',
+            'db2' => 'db2',
+            default => strtolower(trim((string) $engine)),
+        };
+    }
+
+    /**
+     * Normalize a configured transport name or alias to a canonical transport key.
+     *
+     * @param ?string $transport  Config transport value or alias.
+     *
+     * @return string Canonical transport key (e.g. sqlsrv, dblib, pgsql).
+     */
+    public static function transportKey(?string $transport): string
+    {
+        return match (strtolower(trim((string) $transport))) {
+            'sqlsrv', 'sqlserver' => 'sqlsrv',
+            'dblib', 'sybase' => 'dblib',
+            'pgsql', 'postgres', 'postgresql' => 'pgsql',
+            'mysql', 'mariadb' => 'mysql',
+            'oci', 'oracle' => 'oci',
+            'sqlite' => 'sqlite',
+            default => strtolower(trim((string) $transport)),
+        };
+    }
+
+    /**
+     * Default PDO transport for a canonical engine when config omits transport.
+     *
+     * @param string $engine  Canonical engine key.
+     *
+     * @return string Canonical transport key.
+     */
+    public static function defaultTransport(string $engine): string
+    {
+        return match (self::engineKey($engine)) {
+            'sqlite' => 'sqlite',
+            'pgsql' => 'pgsql',
+            'mariadb' => 'mysql',
+            'sqlserver' => 'sqlsrv',
+            'sybase' => 'dblib',
+            'oracle' => 'oci',
+            default => self::engineKey($engine),
+        };
+    }
+
+    /**
+     * Resolve normalized engine and transport from config driver + optional transport.
+     *
+     * Legacy configs may use transport names as driver (e.g. dblib, sqlsrv); engineKey
+     * and defaultTransport preserve backward-compatible semantics.
+     *
+     * @param string      $driver     Configured driver (engine or legacy transport alias).
+     * @param string|null $transport  Optional explicit transport override.
+     *
+     * @return array{0:string,1:string} [engine, transport] canonical keys.
+     */
+    public static function resolveEngineTransport(string $driver, ?string $transport = null): array
+    {
+        $engine = self::engineKey($driver);
+        $resolvedTransport = ($transport !== null && trim($transport) !== '')
+            ? self::transportKey($transport)
+            : self::defaultTransport($engine);
+
+        return [$engine, $resolvedTransport];
     }
 
     /**
      * Normalize allowlist column names.
+     *
+     * @param string $column     Column name or expression.
+     * @param array  $allowlist  Allowed column names.
+     *
+     * @return ?string String result, or null when absent.
      */
     protected function resolveAllowedColumn(string $column, array $allowlist): ?string
     {
@@ -342,22 +310,28 @@ abstract class Driver
         return null;
     }
 
+    /**
+     * Strip identifier quotes.
+     *
+     * @param string $identifier  Identifier value.
+     *
+     * @return string String result.
+     */
     protected function stripIdentifierQuotes(string $identifier): string
     {
         return trim($identifier, "`\"[]");
     }
 
-
-    /**
-     * Quote an identifier according to backend rules.
-     */
-    public function q(string $identifier): string
-    {
-        return $this->quoteIdentifier($identifier);
-    }
-
     /**
      * ORDER BY helper respecting allowlist rules.
+     *
+     * @param string $column     Column name or expression.
+     * @param array  $allowlist  Allowed column names.
+     * @param string $direction  Sort direction.
+     *
+     * @return string String result.
+     *
+     * @throws QueryException If the operation fails.
      */
     public function orderByAllowed(string $column, array $allowlist, string $direction = 'ASC'): string
     {
@@ -378,6 +352,13 @@ abstract class Driver
 
     /**
      * LIMIT/OFFSET fragment.
+     *
+     * @param int $limit   Maximum number of rows.
+     * @param int $offset  Number of rows to skip.
+     *
+     * @return string Pagination SQL fragment.
+     *
+     * @throws QueryException If the operation fails.
      */
     public function limitOffset(int $limit, int $offset): string
     {
@@ -385,11 +366,14 @@ abstract class Driver
             throw new QueryException('LIMIT/OFFSET must be non-negative');
         }
 
-        return sprintf('LIMIT %d OFFSET %d', $limit, $offset);
+        return self::limitOffsetFor($this->engine, $limit, $offset);
     }
 
     /**
      * Named-parameter IN clause helper.
+     *
+     * @param array  $values  Values to process.
+     * @param string $hint    Parameter name hint.
      *
      * @return array{0:string,1:array<string,mixed>}
      */
@@ -413,61 +397,245 @@ abstract class Driver
     }
 
     /**
-     * Domain entrypoint: connect using Config by connection name.
+     * Q.
      *
-     * This is the only correct way to enter the Driver domain.
+     * @param string $identifier  Identifier value.
      *
-     * @param string $connectionName Connection key in config.
+     * @return string Quoted identifier.
+     */
+    public function q(string $identifier): string
+    {
+        return self::quoteIdentifier($this->engine, $identifier);
+    }
+
+    /**
+     * Build a PDO DSN for the configured engine (and transport when the engine has more than one).
      *
-     * @return static Concrete driver instance.
+     * Per-engine classes under UDA\Driver\ own DSN construction for their engine.
+     * Driver.php calls this, then performs new PDO() — the subdirectory classes never
+     * create or hold PDO handles.
      *
-     * @throws ConfigException     If config missing or invalid.
+     * @param ?string             $engine     Canonical engine key.
+     * @param ?string             $transport  PDO prefix when engine supports multiple (sqlserver only today).
+     * @param array<string,mixed> $params
+     *
+     * @return string PDO DSN string.
+     *
+     * @throws ConfigException If the operation fails.
+     */
+    private static function dsn(?string $engine, ?string $transport, array $params): string
+    {
+        return match (self::engineKey($engine)) {
+            'pgsql' => \UDA\Driver\PostgreSQL::dsn($params),
+            'mariadb' => \UDA\Driver\MariaDB::dsn($params),
+            'sqlite' => \UDA\Driver\SQLite::dsn($params),
+            'oracle' => \UDA\Driver\Oracle::dsn($params),
+            'sqlserver' => self::transportKey($transport) === 'dblib'
+                ? \UDA\Driver\Dblib::dsn($params)
+                : \UDA\Driver\SQLServer::dsn($params),
+            'sybase' => \UDA\Driver\Sybase::dsn($params),
+            default => throw new ConfigException('Unsupported database engine: ' . (string) $engine),
+        };
+    }
+
+    /**
+     * Quote an identifier with ANSI double quotes.
+     *
+     * @param string $identifier  Identifier value.
+     *
+     * @return string Quoted identifier.
+     */
+    private static function quoteAnsiIdentifier(string $identifier): string
+    {
+        $clean = trim($identifier);
+        $escaped = str_replace('"', '""', $clean);
+
+        return '"' . $escaped . '"';
+    }
+
+    /**
+     * Limit/offset fragment for an engine.
+     *
+     * @param ?string $engine  Configured engine name.
+     * @param int     $limit    Maximum number of rows.
+     * @param int     $offset   Number of rows to skip.
+     *
+     * @return string Pagination SQL fragment.
+     */
+    private static function limitOffsetFor(?string $engine, int $limit, int $offset): string
+    {
+        $rules = self::engineRulesClass(self::engineKey($engine));
+
+        if ($rules !== null && method_exists($rules, 'limitOffset')) {
+            return $rules::limitOffset($limit, $offset);
+        }
+
+        return sprintf('LIMIT %d OFFSET %d', $limit, $offset);
+    }
+
+    /**
+     * Create a Driver for the named connection.
+     *
+     * Each call returns a new instance. Connection pooling is the responsibility
+     * of Database::connect(), which caches Database (and therefore Driver) instances
+     * by name. Driver instances are long-lived and self-heal: if prepare/execute
+     * fails with a reconnectable connection error, the Driver reconnects and retries
+     * once transparently.
+     *
+     * @param ?string $connection  Connection name, or null for the default.
+     *
+     * @return self
+     *
+     * @throws ConfigException     If the connection config is missing or unsupported.
      * @throws ConnectionException If PDO connection fails.
      */
-    public static function connect(?string $connection = null): static
+    public static function connect(?string $connection = null): self
     {
-        $config = Config::connection($connection);
+        return new self($connection ?? Config::default());
+    }
 
-        $dbtype = $config['driver'] ?? '';
+    /**
+     * Whether a PDOException indicates a dropped server connection worth one reconnect retry.
+     *
+     * Uses SQLSTATE class 08 (connection exception) plus common MySQL driver codes.
+     *
+     * @param PDOException $exception  PDO failure from prepare() or execute().
+     *
+     * @return bool True when executeInternal() may reconnect and retry once.
+     */
+    private function isReconnectableConnectionLost(PDOException $exception): bool
+    {
+        $info = $exception->errorInfo ?? null;
+        $state = is_array($info) ? strtoupper((string) ($info[0] ?? '')) : '';
+        $driverCode = is_array($info) && isset($info[1]) ? (int) $info[1] : 0;
 
-        $class = match($dbtype) {
-            'pgsql', 'postgresql' => \UDA\Driver\PostgreSQL::class,
-            'mysql', 'mariadb' => \UDA\Driver\MariaDB::class,
-            'sqlsrv', 'sqlserver' => \UDA\Driver\SQLServer::class,
-            'dblib', 'sybase' => \UDA\Driver\Dblib::class,
-            'sqlite' => \UDA\Driver\SQLite::class,
-            'oci', 'oracle' => \UDA\Driver\Oracle::class,
-            default => throw new ConfigException("Unsupported database driver type: {$dbtype}"),
-        };
+        if ($state !== '' && str_starts_with($state, '08')) {
+            return true;
+        }
 
-        return new $class($config, $connection);
+        if (in_array($driverCode, [2006, 2013], true)) {
+            return true;
+        }
+
+        if ($state === 'HY000') {
+            $msg = strtolower($exception->getMessage());
+
+            return str_contains($msg, 'gone away') || str_contains($msg, 'lost connection');
+        }
+
+        return false;
+    }
+
+    /**
+     * Replace the PDO instance with a fresh connection using the stored config.
+     *
+     * Called from executeInternal() after a reconnectable connection failure.
+     * Runs init SQL after reconnection to restore session state.
+     *
+     * @throws ConnectionException If the reconnection attempt fails.
+     */
+    private function reconnect(): void
+    {
+        $this->clearPreparedStatementLru();
+
+        $user    = Config::username($this->connection);
+        $pass    = Config::password($this->connection);
+        $options = $this->resolvePdoOptions();
+        $dsn     = self::dsn($this->engine, $this->transport, $this->connectionParams($this->config));
+
+        try {
+            $this->pdo = new PDO($dsn, $user, $pass, $options);
+        } catch (PDOException $e) {
+            throw new ConnectionException('Reconnection failed: ' . $e->getMessage(), 0, $e);
+        }
+
+        $this->runInitSql($this->pdo, $this->config);
+    }
+
+    /**
+     * Drop all cached PDOStatement objects (required before replacing PDO).
+     *
+     * @return void
+     */
+    private function clearPreparedStatementLru(): void
+    {
+        $this->preparedStatementLru = [];
+    }
+
+    /**
+     * Return a prepared statement for this query, reusing a cached one when possible.
+     *
+     * @param string $query  SQL after normalisation (named parameters only).
+     *
+     * @return PDOStatement
+     *
+     * @throws PDOException When prepare() fails (caller maps to QueryException).
+     */
+    private function getOrPrepareStatement(string $query): PDOStatement
+    {
+        if (isset($this->preparedStatementLru[$query])) {
+            $stmt = $this->preparedStatementLru[$query];
+            unset($this->preparedStatementLru[$query]);
+            $this->preparedStatementLru[$query] = $stmt;
+
+            return $stmt;
+        }
+
+        $stmt = $this->pdo->prepare($query);
+
+        if (count($this->preparedStatementLru) >= self::PREPARED_STATEMENT_LRU_MAX) {
+            $oldest = array_key_first($this->preparedStatementLru);
+
+            if ($oldest !== null) {
+                unset($this->preparedStatementLru[$oldest]);
+            }
+        }
+
+        $this->preparedStatementLru[$query] = $stmt;
+
+        return $stmt;
     }
 
     /**
      * Resolve credentials from config.
-     *
      * NOTE: {env:VAR} resolution belongs to Config.
      *
-     * @param array<string,mixed> $conn Connection config.
+     * @param array<string,mixed> $conn  Connection config.
      *
      * @return array{0:string|null,1:string|null}
      */
-    private static function resolveCredentials(array $conn): array
+    private function connectionParams(array $conn): array
     {
-        $user = isset($conn['user']) ? (string)$conn['user'] : null;
-        $pass = isset($conn['pass']) ? (string)$conn['pass'] : null;
+        $params = $conn['params'] ?? null;
 
-        return [$user, $pass];
+        if (is_array($params)) {
+            return $params;
+        }
+
+        $params = $conn;
+
+        if (isset($params['database']) && !isset($params['dbname'])) {
+            $params['dbname'] = $params['database'];
+        }
+
+        if (isset($params['database']) && !isset($params['path'])) {
+            $params['path'] = $params['database'];
+        }
+
+        if (isset($params['server']) && !isset($params['host'])) {
+            $params['host'] = $params['server'];
+        }
+
+        return $params;
     }
 
     /**
      * Resolve PDO options.
-     *
      * Baseline defaults are enforced here; config can override/extend.
      * PDO-driver-specific options may be applied here if needed.
      *
-     * @param string              $pdoDriver PDO driver name ('pgsql', 'mysql', 'sqlsrv', 'dblib', 'sqlite').
-     * @param array<string,mixed> $conn      Connection config.
+     * @param string              $pdoDriver  PDO driver name ('pgsql', 'mysql', 'sqlsrv', 'dblib', 'sqlite').
+     * @param array<string,mixed> $conn       Connection config.
      *
      * @return array<int,mixed>
      */
@@ -486,14 +654,20 @@ abstract class Driver
             $opt = [];
         }
 
-        return array_replace($defaults, $opt);
+        $opts = array_replace($defaults, $opt);
+
+        // UDA requires exceptions for all error handling including reconnect classification.
+        // This cannot be overridden by consumer config.
+        $opts[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
+
+        return $opts;
     }
 
     /**
      * Execute init_sql statements.
      *
-     * @param PDO                 $pdo  PDO instance.
-     * @param array<string,mixed> $conn Connection config.
+     * @param PDO                 $pdo   PDO instance.
+     * @param array<string,mixed> $conn  Connection config.
      *
      * @return void
      */
@@ -521,23 +695,23 @@ abstract class Driver
     /**
      * Execute a DML statement and return affected row count.
      *
-     * @param string|SqlMessage|BuilderSql $sql    SQL statement, SqlMessage, or builder Sql.
-     * @param array<string,mixed>          $params Named parameters.
-     * @param array<string>|null           $tables Optional table names for cache invalidation.
+     * @param string|SqlMessage  $sql     SQL statement or SQL message.
+     * @param array<string,mixed> $params  Named parameters.
+     * @param array<string>|null  $tables  Optional table names for cache invalidation.
      *
      * @return int
      *
      * @throws QueryException
      */
-    public function exec(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): int
+    public function exec(string|SqlMessage $sql, array $params = [], ?array $tables = null): int
     {
-        $tableHints = $tables ?? ($sql instanceof BuilderSql ? $sql->getCacheTables() : []);
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
         $stmt = $this->executeInternal($message, $normalized);
         $affected = $stmt->rowCount();
 
         if ($affected > 0 && $tableHints !== []) {
-            $this->cache->touchTables($tableHints);
+            Cache::touch($this->connection, $tableHints);
         }
 
         $stmt->closeCursor();
@@ -547,17 +721,34 @@ abstract class Driver
 
     /**
      * Execute a DML statement that emits RETURNING/OUTPUT rows.
+     *
+     * @param string|SqlMessage $sql     SQL string or SQL message.
+     * @param array             $params  Named parameter values.
+     * @param ?array            $tables  Table names used for cache metadata.
+     *
+     * @return array Result array.
      */
-    public function returning(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): array
+    public function returning(string|SqlMessage $sql, array $params = [], ?array $tables = null): array
     {
-        $tableHints = $tables ?? ($sql instanceof BuilderSql ? $sql->getCacheTables() : []);
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
+
+        if (self::engineKey($this->engine) === 'oracle' && $message->getReturningColumns() !== []) {
+            $rows = $this->oracleReturning($message, $normalized);
+
+            if ($rows !== [] && $tableHints !== []) {
+                Cache::touch($this->connection, $tableHints);
+            }
+
+            return $rows;
+        }
+
         $stmt = $this->executeInternal($message, $normalized);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $affected = $stmt->rowCount();
 
         if ($affected > 0 && $tableHints !== []) {
-            $this->cache->touchTables($tableHints);
+            Cache::touch($this->connection, $tableHints);
         }
 
         $stmt->closeCursor();
@@ -566,42 +757,26 @@ abstract class Driver
     }
 
     /**
-     * @param string|SqlMessage|BuilderSql $sql
-     * @return array<int,array<string,mixed>>
-     */
-    public function explain(string|SqlMessage|BuilderSql $sql): array
-    {
-        return $this->runExplain($sql, false);
-    }
-
-    /**
-     * @param string|SqlMessage|BuilderSql $sql
-     * @return array<int,array<string,mixed>>
-     */
-    public function explainAnalyze(string|SqlMessage|BuilderSql $sql): array
-    {
-        return $this->runExplain($sql, true);
-    }
-
-    /**
      * Execute a SELECT statement and return all rows.
      *
-     * @param string|SqlMessage   $sql    SQL statement or SqlMessage.
-     * @param array<string,mixed> $params Named parameters.
-     * @param array<string>|null  $tables Optional cache hint tables.
+     * @param string|SqlMessage        $sql     SQL statement or SqlMessage.
+     * @param array<string,mixed>      $params  Named parameters.
+     * @param null|callable(PDOStatement,array<string,mixed>):void $binder
+     * @param array<string>|null  $tables  Optional cache hint tables.
      *
      * @return array<int,array<string,mixed>>
      *
      * @throws QueryException
      */
-    public function rows(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): array
+    public function rows(string|SqlMessage $sql, array $params = [], ?array $tables = null): array
     {
-        $tableHints = $tables ?? ($sql instanceof BuilderSql ? $sql->getCacheTables() : []);
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
         return $this->executeRead(
             $message,
             $tableHints,
+            'rows',
             function () use ($message, $normalized): array {
                 $stmt = $this->executeInternal($message, $normalized);
                 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -613,24 +788,25 @@ abstract class Driver
     }
 
     /**
-     * Execute a SELECT statement and return a single row.
+     * Execute a SELECT statement and return the first row (or null).
      *
-     * @param string|SqlMessage|BuilderSql $sql    SQL statement, SqlMessage, or builder Sql.
-     * @param array<string,mixed>          $params Named parameters.
-     * @param array<string>|null           $tables Optional cache hint tables.
+     * @param string|SqlMessage  $sql     SQL statement or SQL message.
+     * @param array<string,mixed> $params  Named parameters.
+     * @param array<string>|null  $tables  Optional cache hint tables.
      *
      * @return array<string,mixed>|null
      *
      * @throws QueryException
      */
-    public function row(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): ?array
+    public function row(string|SqlMessage $sql, array $params = [], ?array $tables = null): ?array
     {
-        $tableHints = $tables ?? ($sql instanceof BuilderSql ? $sql->getCacheTables() : []);
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
         return $this->executeRead(
             $message,
             $tableHints,
+            'row',
             fn () => $this->rowNoCache($message, $normalized)
         );
     }
@@ -638,62 +814,107 @@ abstract class Driver
     /**
      * Execute a SELECT statement and return a single value.
      *
-     * @param string|SqlMessage|BuilderSql $sql    SQL statement, SqlMessage, or builder Sql.
-     * @param array<string,mixed>          $params Named parameters.
-     * @param array<string>|null           $tables Optional cache hint tables.
+     * @param string|SqlMessage  $sql     SQL statement or SQL message.
+     * @param array<string,mixed> $params  Named parameters.
+     * @param array<string>|null  $tables  Optional cache hint tables.
      *
      * @return mixed
      *
      * @throws QueryException
      */
-    public function value(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): mixed
+    public function value(string|SqlMessage $sql, array $params = [], ?array $tables = null): mixed
     {
-        $row = $this->row($sql, $params, $tables);
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
+        [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        if ($row === null) {
-            return null;
-        }
+        return $this->executeRead(
+            $message,
+            $tableHints,
+            'value',
+            function () use ($message, $normalized): mixed {
+                $stmt = $this->executeInternal($message, $normalized);
 
-        if (count($row) !== 1) {
-            throw new QueryException('value() requires a single column result');
-        }
+                if ($stmt->columnCount() !== 1) {
+                    $stmt->closeCursor();
+                    throw new QueryException('value() requires a single column result');
+                }
 
-        return array_values($row)[0];
+                $scalar = $stmt->fetchColumn(0);
+                $stmt->closeCursor();
+
+                return $scalar === false ? null : $scalar;
+            }
+        );
     }
 
     /**
      * Return the first column from all rows.
+     *
+     * @param string|SqlMessage $sql     SQL string or SQL message.
+     * @param array             $params  Named parameter values.
+     * @param ?array            $tables  Table names used for cache metadata.
+     *
+     * @return array Result array.
      */
-    public function values(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): array
+    public function values(string|SqlMessage $sql, array $params = [], ?array $tables = null): array
     {
-        $rows = $this->rows($sql, $params, $tables);
-        $result = [];
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
+        [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        foreach ($rows as $row) {
-            $result[] = array_values($row)[0] ?? null;
-        }
+        return $this->executeRead(
+            $message,
+            $tableHints,
+            'values',
+            function () use ($message, $normalized): array {
+                $stmt = $this->executeInternal($message, $normalized);
+                $col = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
+                $stmt->closeCursor();
 
-        return $result;
+                return $col;
+            }
+        );
     }
 
     /**
-     * Alias for values().
+     * Return the first row as a numeric list.
+     *
+     * @param string|SqlMessage $sql     SQL string or SQL message.
+     * @param array             $params  Named parameter values.
+     * @param ?array            $tables  Table names used for cache metadata.
+     *
+     * @return ?array<int,mixed> Result row values or null.
      */
-    public function list(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): array
+    public function list(string|SqlMessage $sql, array $params = [], ?array $tables = null): ?array
     {
-        return $this->values($sql, $params, $tables);
+        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
+        [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
+
+        return $this->executeRead(
+            $message,
+            $tableHints,
+            'list',
+            function () use ($message, $normalized): ?array {
+                $row = $this->rowNoCache($message, $normalized);
+
+                return $row === null ? null : array_values($row);
+            }
+        );
     }
 
     /**
      * Iterate over rows with a callback.
+     *
+     * @param string|SqlMessage $sql     SQL string or SQL message.
+     * @param array|callable    $params  Named parameter values.
+     * @param callable          $fn      Callback to execute.
+     * @param ?array            $tables  Table names used for cache metadata.
+     *
+     * @return int Integer result.
+     *
+     * @throws QueryException If the operation fails.
      */
-    public function each(string|SqlMessage|BuilderSql $sql, array|callable $params, callable $fn = null, ?array $tables = null): int
+    public function each(string|SqlMessage $sql, array|callable $params, ?callable $fn = null, ?array $tables = null): int
     {
-        if ($sql instanceof BuilderSql) {
-            $tables = $tables ?? $sql->getCacheTables();
-            $sql = $this->toSqlMessage($sql);
-        }
-
         if ($fn === null) {
             if (!is_callable($params)) {
                 throw new QueryException('each() requires a callback');
@@ -704,50 +925,103 @@ abstract class Driver
             throw new QueryException('each() parameters must be provided as an array when callback is supplied');
         }
 
-        $rows = $this->rows($sql, is_array($params) ? $params : [], $tables);
+        $count = 0;
 
-        foreach ($rows as $row) {
+        foreach ($this->stream($sql, is_array($params) ? $params : []) as $row) {
             $fn($row);
+            $count++;
         }
 
-        return count($rows);
+        return $count;
+    }
+
+    /**
+     * Stream rows from the database cursor.
+     *
+     * @param string|SqlMessage $sql     SQL string or SQL message.
+     * @param array             $params  Named parameter values.
+     *
+     * @return \Generator<int,array<string,mixed>>
+     *
+     * @throws QueryException If the operation fails.
+     */
+    public function stream(string|SqlMessage $sql, array $params = []): \Generator
+    {
+        [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
+        $stmt = $this->executeInternal($message, $normalized);
+
+        try {
+            while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                yield $row;
+            }
+        } finally {
+            $stmt->closeCursor();
+        }
     }
 
     /**
      * Internal hot path: normalize, prepare, execute.
-     *
      * This is the only method allowed to call PDO::prepare() and PDOStatement::execute().
      *
-     * @param string|SqlMessage   $sql    SQL statement or SqlMessage.
-     * @param array<string,mixed> $params Named parameters.
+     * On a reconnectable connection-lost error from prepare() or execute(), reconnects
+     * once and retries the same operation. No proactive ping runs on the happy path.
+     *
+     * @param string|SqlMessage                              $sql     SQL statement or SqlMessage.
+     * @param array<string,mixed>                            $params  Named parameters.
+     * @param null|callable(PDOStatement,array<string,mixed>):void $binder  Optional output binder.
      *
      * @return PDOStatement
      *
      * @throws QueryException
      */
-    protected function executeInternal(string|SqlMessage $sql, array $params): PDOStatement
+    protected function executeInternal(string|SqlMessage $sql, array $params, ?callable $binder = null): PDOStatement
     {
         [$query, $mergedParams] = $this->normalizeSql($sql, $params);
 
         $this->lastSql = $query;
         $this->lastParams = $mergedParams;
 
-        $stmt = $this->acquirePreparedStatement($query);
+        $attempts = 0;
 
-        try {
-            $stmt->execute($mergedParams);
-        } catch (PDOException $ex) {
-            throw new QueryException('Query execution failed: ' . $ex->getMessage(), 0, $ex);
+        while (true) {
+            $stmt = null;
+
+            try {
+                $stmt = $this->getOrPrepareStatement($query);
+                $executeParams = $mergedParams;
+
+                if ($binder !== null) {
+                    $binder($stmt, $mergedParams);
+                    $executeParams = null;
+                }
+
+                $stmt->execute($executeParams);
+
+                return $stmt;
+            } catch (PDOException $ex) {
+                if ($stmt !== null) {
+                    $stmt->closeCursor();
+                }
+
+                if ($attempts < 1 && $this->isReconnectableConnectionLost($ex)) {
+                    $attempts++;
+                    $this->reconnect();
+
+                    continue;
+                }
+
+                $prefix = $stmt === null ? 'Failed to prepare statement' : 'Query execution failed';
+
+                throw new QueryException($prefix . ': ' . $ex->getMessage(), 0, $ex);
+            }
         }
-
-        return $stmt;
     }
 
     /**
      * Normalize SQL inputs to a raw query string and merged parameters.
      *
-     * @param string|SqlMessage   $sql    SQL input.
-     * @param array<string,mixed> $params Additional parameters.
+     * @param string|SqlMessage   $sql     SQL input.
+     * @param array<string,mixed> $params  Additional parameters.
      *
      * @return array{0:string,1:array<string,mixed>}
      *
@@ -776,16 +1050,13 @@ abstract class Driver
     /**
      * Convert input into a SqlMessage while preserving merged parameters.
      *
-     * @param string|SqlMessage|BuilderSql $sql SQL input from callers.
+     * @param string|SqlMessage $sql     SQL input from callers.
+     * @param array             $params  Named parameter values.
      *
      * @return array{0:SqlMessage,1:array<string,mixed>}
      */
-    protected function normalizeToSqlMessage(string|SqlMessage|BuilderSql $sql, array $params): array
+    protected function normalizeToSqlMessage(string|SqlMessage $sql, array $params): array
     {
-        if ($sql instanceof BuilderSql) {
-            $sql = $this->toSqlMessage($sql);
-        }
-
         $cacheTables = [];
         $returningColumns = [];
         $insertTable = null;
@@ -812,102 +1083,18 @@ abstract class Driver
         ];
     }
 
-    protected function runExplain(string|SqlMessage|BuilderSql $sql, bool $analyze): array
-    {
-        [$message] = $this->normalizeToSqlMessage($sql, []);
-        $dialect = $this->getDialectInstance();
-
-        if ($analyze && !$dialect->supportsExplainAnalyze()) {
-            throw new QueryException($dialect->name() . ' dialect does not support EXPLAIN ANALYZE statements.');
-        }
-
-        if (!$analyze && !$dialect->supportsExplain()) {
-            throw new QueryException($dialect->name() . ' dialect does not support EXPLAIN statements.');
-        }
-
-        $statements = $dialect->buildExplainSql($message, $analyze);
-
-        return $this->executeExplainPlan($statements);
-    }
-
     /**
-     * @param iterable<int,SqlMessage> $statements
-     * @return array<int,array<string,mixed>>
-     */
-    protected function executeExplainPlan(iterable $statements): array
-    {
-        $queue = is_array($statements) ? array_values($statements) : iterator_to_array($statements, false);
-        $result = [];
-        $index = -1;
-
-        try {
-            foreach ($queue as $idx => $statement) {
-                $index = $idx;
-
-                if (!$statement instanceof SqlMessage) {
-                    throw new QueryException('Dialect::buildExplainSql must yield SqlMessage instances.');
-                }
-
-                $stmt = $this->executeInternal($statement, $statement->getParams());
-                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-                $stmt->closeCursor();
-
-                if ($rows !== []) {
-                    $result = $rows;
-                }
-            }
-        } catch (Throwable $e) {
-            for ($i = $index + 1; $i < count($queue); $i++) {
-                $statement = $queue[$i];
-
-                if (!$statement instanceof SqlMessage) {
-                    continue;
-                }
-
-                try {
-                    $stmt = $this->executeInternal($statement, $statement->getParams());
-                    $stmt->closeCursor();
-                } catch (Throwable $ignored) {
-                    // Swallow cleanup errors to surface original failure
-                }
-            }
-
-            throw $e;
-        }
-
-        return $result;
-    }
-
-    protected function acquirePreparedStatement(string $query): PDOStatement
-    {
-        $key = $this->statementCacheKey($query);
-        $stmt = $this->statementCache->get($key);
-
-        if ($stmt === null) {
-            $this->lastStatementCacheHit = false;
-            try {
-                $stmt = $this->pdo->prepare($query);
-            } catch (PDOException $ex) {
-                throw new QueryException('Failed to prepare statement: ' . $ex->getMessage(), 0, $ex);
-            }
-            $this->statementCache->put($key, $stmt);
-        } else {
-            $this->lastStatementCacheHit = true;
-            $stmt->closeCursor();
-        }
-
-        return $stmt;
-    }
-
-    private function statementCacheKey(string $query): string
-    {
-        $dialect = strtolower($this->getDialectInstance()->name());
-
-        return $dialect . ':' . $this->connectionHash . ':' . $query;
-    }
-
-    /**
-     * Execute without cache semantics, enforcing single-row constraints.
+     * Execute without cache semantics; return the first row only.
+     *
+     * Callers must constrain SQL (for example LIMIT 1) when at most one row is intended.
+     * Additional result rows are not consumed here; closeCursor() releases the statement.
+     *
+     * @param string|SqlMessage $sql     SQL string, SQL message, or builder SQL object.
+     * @param array             $params  Named parameter values.
+     *
+     * @return ?array Result array.
+     *
+     * @throws QueryException If the operation fails.
      */
     protected function rowNoCache(string|SqlMessage $sql, array $params): ?array
     {
@@ -916,12 +1103,8 @@ abstract class Driver
 
         if ($row === false) {
             $stmt->closeCursor();
-            return null;
-        }
 
-        if ($stmt->fetch(PDO::FETCH_ASSOC) !== false) {
-            $stmt->closeCursor();
-            throw new QueryException('row() expects at most one row');
+            return null;
         }
 
         $stmt->closeCursor();
@@ -930,15 +1113,184 @@ abstract class Driver
     }
 
     /**
+     * Oracle RETURNING INTO requires bound output params, so Driver owns this
+     * specialized execution path while Oracle provides only engine SQL rules.
+     *
+     * @param SqlMessage          $message     SQL message to execute.
+     * @param array<string,mixed> $normalized
+     *
+     * @return array<int,array<string,mixed>>
+     *
+     * @throws QueryException If the operation fails.
+     */
+    private function oracleReturning(SqlMessage $message, array $normalized): array
+    {
+        $columns = $message->getReturningColumns();
+        $valueSets = $message->getValuePlaceholders();
+
+        if ($valueSets === [] || count($valueSets) <= 1) {
+            return $this->runOracleReturningStatement($message->getQuery(), $normalized, $columns);
+        }
+
+        $insertTable = $message->getInsertTable();
+        $insertColumns = $message->getInsertColumns();
+
+        if ($insertTable === null || $insertColumns === []) {
+            throw new QueryException('Oracle multi-row returning requires insert metadata.');
+        }
+
+        $quotedColumns = array_map(fn (string $col): string => $this->q(strtoupper($col)), $insertColumns);
+        $prefix = sprintf('INSERT INTO %s (%s)', $this->q($insertTable), implode(', ', $quotedColumns));
+
+        $rows = [];
+        foreach ($valueSets as $rowPlaceholders) {
+            $singleSql = $prefix . ' VALUES (' . implode(', ', $rowPlaceholders) . ')';
+            $rowParams = $this->extractParamsForPlaceholders($normalized, $rowPlaceholders);
+            $rows = array_merge($rows, $this->runOracleReturningStatement($singleSql, $rowParams, $columns));
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string,mixed> $normalized
+     * @param array<int,string>   $placeholders
+     *
+     * @return array<string,mixed>
+     */
+    private function extractParamsForPlaceholders(array $normalized, array $placeholders): array
+    {
+        $subset = [];
+        foreach ($placeholders as $placeholder) {
+            $name = ltrim($placeholder, ':');
+            if (array_key_exists($name, $normalized)) {
+                $subset[$name] = $normalized[$name];
+            }
+        }
+
+        return $subset;
+    }
+
+    /**
+     * Run oracle returning statement.
+     *
+     * @param string              $baseQuery  Base SQL statement.
+     * @param array<string,mixed> $params
+     * @param array<int,string>   $columns
+     *
+     * @return array<int,array<string,mixed>>
+     *
+     * @throws QueryException If the operation fails.
+     */
+    private function runOracleReturningStatement(string $baseQuery, array $params, array $columns): array
+    {
+        $placeholders = [];
+        $outValues = [];
+
+        foreach ($columns as $idx => $column) {
+            $placeholder = ':uda_return_' . $idx;
+            $placeholders[] = $placeholder;
+            $outValues[$idx] = '';
+        }
+
+        $query = \UDA\Driver\Oracle::returningIntoSql($baseQuery, $columns, $placeholders);
+
+        try {
+            $stmt = $this->executeInternal(
+                $query,
+                $params,
+                function (PDOStatement $stmt, array $params) use ($placeholders, &$outValues): void {
+                    foreach ($params as $name => $value) {
+                        $paramName = str_starts_with((string) $name, ':') ? (string) $name : ':' . $name;
+                        $stmt->bindValue($paramName, $value);
+                    }
+
+                    foreach ($placeholders as $idx => $placeholder) {
+                        $stmt->bindParam(
+                            $placeholder,
+                            $outValues[$idx],
+                            PDO::PARAM_STR | PDO::PARAM_INPUT_OUTPUT,
+                            \UDA\Driver\Oracle::returningBufferLength()
+                        );
+                    }
+                }
+            );
+
+            $affected = $stmt->rowCount();
+        } catch (PDOException $ex) {
+            throw new QueryException('Oracle returning() execution failed: ' . $ex->getMessage(), 0, $ex);
+        }
+
+        $stmt->closeCursor();
+
+        $normalizedValues = [];
+
+        foreach ($outValues as $value) {
+            if (is_string($value)) {
+                $value = rtrim($value);
+                if ($value === '') {
+                    $value = null;
+                } elseif (ctype_digit($value)) {
+                    $value = (int) $value;
+                } elseif (is_numeric($value)) {
+                    $value = (float) $value;
+                }
+            }
+            $normalizedValues[] = $value;
+        }
+
+        if ($affected === 0) {
+            return [];
+        }
+
+        if ($affected > 1) {
+            throw new QueryException('Oracle returning() expects at most one row per statement.');
+        }
+
+        $normalizedColumns = array_map('strtolower', $columns);
+
+        return [array_combine($normalizedColumns, $normalizedValues) ?: []];
+    }
+
+    /**
+     * Execute read.
+     *
+     * @param SqlMessage        $message   SQL message to execute.
+     * @param array<int,string> $tables
+     * @param callable():T      $executor
+     *
+     * @return T
+     *
+     * @template T of array|null
+     */
+    protected function executeRead(SqlMessage $message, array $tables, string $shape, callable $executor): mixed
+    {
+        if ($tables !== [] && Config::hasCache($this->connection, $tables)) {
+            $cached = Cache::read($this->connection, $message, $shape);
+
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
+        $result = $executor();
+
+        if (is_array($result) && $tables !== [] && Config::hasCache($this->connection, $tables)) {
+            Cache::put($this->connection, $message, $tables, $result, $shape);
+        }
+
+        return $result;
+    }
+
+    /**
      * Execute a callback within a database transaction.
-     *
      * Nested transactions are implemented using SAVEPOINT.
-     *
-     * @param callable(self): mixed $fn Callback to execute within the transaction.
      *
      * @return mixed
      *
      * @throws Throwable Re-throws anything from callback after rollback.
+     *
+     * @param callable(self): mixed $fn Callback to execute within the transaction.
      */
     public function transaction(callable $fn): mixed
     {
@@ -998,8 +1350,7 @@ abstract class Driver
 
     /**
      * Create a savepoint name for nested transactions.
-     *
-     * Concrete backends may override naming rules if required.
+     * Concrete engines may override naming rules if required.
      *
      * @return string
      */
@@ -1010,191 +1361,59 @@ abstract class Driver
         return 'uda_sp_' . $this->savepointCounter;
     }
 
+    /**
+     * Savepoint sql.
+     *
+     * @param string $name  Name value.
+     *
+     * @return ?string Savepoint SQL fragment, or null when unsupported.
+     */
     protected function savepointSql(string $name): ?string
     {
+        $rules = self::engineRulesClass(self::engineKey($this->engine));
+
+        if ($rules !== null && method_exists($rules, 'savepointSql')) {
+            return $rules::savepointSql($name);
+        }
+
         return "SAVEPOINT {$name}";
     }
 
+    /**
+     * Release savepoint sql.
+     *
+     * @param string $name  Name value.
+     *
+     * @return ?string Savepoint SQL fragment, or null when unsupported.
+     */
     protected function releaseSavepointSql(string $name): ?string
     {
+        $rules = self::engineRulesClass(self::engineKey($this->engine));
+
+        if ($rules !== null && method_exists($rules, 'releaseSavepointSql')) {
+            return $rules::releaseSavepointSql($name);
+        }
+
         return "RELEASE SAVEPOINT {$name}";
     }
 
+    /**
+     * Rollback savepoint sql.
+     *
+     * @param string $name  Name value.
+     *
+     * @return ?string Savepoint SQL fragment, or null when unsupported.
+     */
     protected function rollbackSavepointSql(string $name): ?string
     {
+        $rules = self::engineRulesClass(self::engineKey($this->engine));
+
+        if ($rules !== null && method_exists($rules, 'rollbackSavepointSql')) {
+            return $rules::rollbackSavepointSql($name);
+        }
+
         return "ROLLBACK TO SAVEPOINT {$name}";
     }
-
-    /**
-     * Helper to convert builder Sql objects into SqlMessage instances.
-     */
-    protected function toSqlMessage(BuilderSql $sql): SqlMessage
-    {
-        return new SqlMessage(
-            $sql->getQuery(),
-            $sql->getParams(),
-            $sql->getCacheTables(),
-            $sql->getReturningColumns(),
-            $sql->getInsertTable(),
-            $sql->getInsertColumns(),
-            $sql->getValuePlaceholders(),
-            $sql->getStatementType(),
-            $sql->hasWhereClause(),
-            $sql->hasLimitClause(),
-            $sql->isUnsafe()
-        );
-    }
-
-    /**
-     * Shared read path that routes through cache when enabled.
-     */
-    private function executeRead(SqlMessage $sql, array $tables, callable $executor): mixed
-    {
-        if (!isset($this->cache)) {
-            return $executor();
-        }
-
-        return $this->cache->read($sql, $tables, $executor, fn (Throwable $e) => $this->isTransient($e));
-    }
-
-    protected function isTransient(Throwable $e): bool
-    {
-        return false;
-    }
-
-    private function buildCacheSetup(array $config): ?CacheSetup
-    {
-        $cacheConfig = $config['cache'] ?? null;
-
-        if (!is_array($cacheConfig)) {
-            return null;
-        }
-
-        $store = $this->buildCacheStore($cacheConfig['store'] ?? []);
-
-        if ($store === null) {
-            return null;
-        }
-
-        $tracker = new InMemoryTableWriteTracker();
-        $serializer = new CacheSerializer($cacheConfig['serializer'] ?? null);
-        $namespace = is_string($cacheConfig['namespace'] ?? null) ? $cacheConfig['namespace'] : 'UDA';
-        $defaultPolicy = $this->normalizePolicy($cacheConfig['defaultPolicy'] ?? null);
-        $tablePolicies = [];
-
-        if (isset($cacheConfig['tables']) && is_array($cacheConfig['tables'])) {
-            foreach ($cacheConfig['tables'] as $table => $policy) {
-                if (!is_string($table)) {
-                    continue;
-                }
-                $tablePolicies[strtolower($table)] = $this->normalizePolicy($policy);
-            }
-        }
-
-        $formatVersion = (int)($cacheConfig['formatVersion'] ?? 1);
-
-        return new CacheSetup(
-            $store,
-            $tracker,
-            $serializer,
-            $namespace,
-            $defaultPolicy,
-            $tablePolicies,
-            $formatVersion
-        );
-    }
-
-    private function buildCacheStore(array $storeConfig): ?CacheStoreInterface
-    {
-        $type = strtolower($storeConfig['type'] ?? 'array');
-
-        return match ($type) {
-            'array' => new ArrayStore(),
-            'redis' => $this->buildRedisStore($storeConfig),
-            'memcached' => $this->buildMemcachedStore($storeConfig),
-            default => null,
-        };
-    }
-
-    private function buildRedisStore(array $config): ?CacheStoreInterface
-    {
-        if (!class_exists('\\Redis')) {
-            return null;
-        }
-
-        $redisClass = 'Redis';
-        $redis = new $redisClass();
-        $host = $config['host'] ?? '127.0.0.1';
-        $port = (int)($config['port'] ?? 6379);
-        $timeout = (float)($config['timeout'] ?? 1.5);
-
-        try {
-            $redis->connect($host, $port, $timeout);
-
-            if (!empty($config['auth'])) {
-                $redis->auth($config['auth']);
-            }
-        } catch (Throwable $e) {
-            return null;
-        }
-
-        $prefix = $config['prefix'] ?? 'UDA:';
-        $serializer = $config['serializer'] ?? 'php';
-
-        return new RedisStore($redis, $prefix, $serializer);
-    }
-
-    private function buildMemcachedStore(array $config): ?CacheStoreInterface
-    {
-        if (!class_exists('\\Memcached')) {
-            return null;
-        }
-
-        $memcachedClass = 'Memcached';
-        $memcached = new $memcachedClass();
-        $servers = $config['servers'] ?? null;
-
-        if (is_array($servers)) {
-            foreach ($servers as $server) {
-                if (!is_array($server)) {
-                    continue;
-                }
-                $host = $server['host'] ?? '127.0.0.1';
-                $port = (int)($server['port'] ?? 11211);
-                $memcached->addServer($host, $port);
-            }
-        } else {
-            $host = $config['host'] ?? '127.0.0.1';
-            $port = (int)($config['port'] ?? 11211);
-            $memcached->addServer($host, $port);
-        }
-
-        $prefix = $config['prefix'] ?? 'UDA:';
-        $serializer = $config['serializer'] ?? 'php';
-
-        return new MemcachedStore($memcached, $prefix, $serializer);
-    }
-
-    private function normalizePolicy(mixed $policy): array
-    {
-        if (!is_array($policy)) {
-            $policy = [];
-        }
-
-        return [
-            'ttlSeconds' => max(0, (int)($policy['ttlSeconds'] ?? 0)),
-            'minIntervalSeconds' => max(0, (int)($policy['minIntervalSeconds'] ?? 0)),
-            'allowStaleOnError' => (bool)($policy['allowStaleOnError'] ?? false),
-            'maxStaleSeconds' => max(0, (int)($policy['maxStaleSeconds'] ?? 0)),
-            'disabled' => (bool)($policy['disabled'] ?? false),
-        ];
-    }
-    /**
-     * Concrete drivers must translate parameters into a PDO DSN string.
-     *
-     * @param array<string,mixed> $params
-     */
-    abstract protected function buildDsn(array $params): string;
 
     /**
      * Get last executed SQL.
@@ -1217,27 +1436,6 @@ abstract class Driver
     }
 
     /**
-     * Drivers can override to provide vendor-specific transient error detection.
-     */
-    public function isTransientError(Throwable $exception): ?bool
-    {
-        return null;
-    }
-
-    public function consumeStatementCacheHit(): bool
-    {
-        $hit = $this->lastStatementCacheHit;
-        $this->lastStatementCacheHit = false;
-
-        return $hit;
-    }
-
-    public function consumeResultCacheHit(): bool
-    {
-        return $this->cache->consumeLastReadHit();
-    }
-
-    /**
      * Get connection name.
      *
      * @return string
@@ -1248,12 +1446,22 @@ abstract class Driver
     }
 
     /**
-     * Get backend name.
+     * Configured engine name for this connection (normalized lowercase).
      *
      * @return string
      */
-    public function getBackendName(): string
+    public function engineName(): string
     {
-        return strtolower((string) ($this->dbtype ?? ''));
+        return self::engineKey($this->engine);
+    }
+
+    /**
+     * Configured PDO transport for this connection (normalized lowercase).
+     *
+     * @return string
+     */
+    public function transportName(): string
+    {
+        return self::transportKey($this->transport);
     }
 }

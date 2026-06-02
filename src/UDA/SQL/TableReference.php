@@ -25,7 +25,8 @@ class TableReference extends Identifier
     /**
      * Create a new table reference
      *
-     * @param  string                     ...$segments The table segments (schema, table name)
+     * @param string ...$segments  The table segments (schema, table name)
+     *
      * @throws InvalidIdentifierException If the table reference is invalid
      */
     public function __construct(string ...$segments)

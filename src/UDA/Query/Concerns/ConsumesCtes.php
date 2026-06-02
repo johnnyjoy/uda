@@ -8,6 +8,13 @@ use UDA\Exception\QueryException;
 use UDA\Query\Select;
 use UDA\Query\Sql;
 
+/*
+ * Purpose: Shares CTE handling across query builders.
+ *
+ * Builders use this trait to collect, clone, validate, and render WITH clauses
+ * before dialect compilation. It does not execute SQL or own connection state.
+ */
+
 /**
  * Shared implementation for builders that support WITH / WITH RECURSIVE clauses.
  */
@@ -20,16 +27,37 @@ trait ConsumesCtes
 
     abstract protected function cteContext(): string;
 
+    /**
+     * With.
+     *
+     * @param string     $name   Name value.
+     * @param Select|Sql $query  Query builder instance.
+     *
+     * @return self Configured instance.
+     */
     public function with(string $name, Select|Sql $query): self
     {
         return $this->addCte($name, $query, false);
     }
 
+    /**
+     * With recursive.
+     *
+     * @param string     $name   Name value.
+     * @param Select|Sql $query  Query builder instance.
+     *
+     * @return self Configured instance.
+     */
     public function withRecursive(string $name, Select|Sql $query): self
     {
         return $this->addCte($name, $query, true);
     }
 
+    /**
+     * Clone ctes on clone.
+     *
+     * @return void No return value.
+     */
     protected function cloneCtesOnClone(): void
     {
         $this->ctes = array_map(static function (array $cte): array {
@@ -43,6 +71,11 @@ trait ConsumesCtes
         }, $this->ctes);
     }
 
+    /**
+     * Report whether any attached CTE is recursive.
+     *
+     * @return bool Boolean result.
+     */
     protected function hasRecursiveCte(): bool
     {
         foreach ($this->ctes as $cte) {
@@ -77,6 +110,17 @@ trait ConsumesCtes
         return $rendered;
     }
 
+    /**
+     * Add cte.
+     *
+     * @param string     $name       Name value.
+     * @param Select|Sql $query      Query builder instance.
+     * @param bool       $recursive  Whether the CTE should be recursive.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     private function addCte(string $name, Select|Sql $query, bool $recursive): self
     {
         $trimmed = trim($name);
@@ -99,16 +143,35 @@ trait ConsumesCtes
         return $clone;
     }
 
+    /**
+     * Materialized.
+     *
+     * @return self Configured instance.
+     */
     public function materialized(): self
     {
         return $this->applyMaterializationHint('materialized');
     }
 
+    /**
+     * Not materialized.
+     *
+     * @return self Configured instance.
+     */
     public function notMaterialized(): self
     {
         return $this->applyMaterializationHint('not_materialized');
     }
 
+    /**
+     * Apply materialization hint.
+     *
+     * @param string $hint  Parameter name hint.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     private function applyMaterializationHint(string $hint): self
     {
         if ($this->ctes === []) {
@@ -127,29 +190,13 @@ trait ConsumesCtes
         return $clone;
     }
 
-    protected function fingerprintCtes(): array
-    {
-        return array_map(function (array $cte): array {
-            $query = $cte['query'];
-
-            if ($query instanceof Select) {
-                $fingerprint = $query->fingerprint();
-            } else {
-                $fingerprint = [
-                    'sql' => $query->getQuery(),
-                    'params' => array_keys($query->getParams()),
-                ];
-            }
-
-            return [
-                'name' => $cte['name'],
-                'recursive' => $cte['recursive'],
-                'materialization' => $cte['materialization'] ?? null,
-                'query' => $fingerprint,
-            ];
-        }, $this->ctes);
-    }
-
+    /**
+     * Render cte query.
+     *
+     * @param Select|Sql $query  Query builder instance.
+     *
+     * @return string String result.
+     */
     private function renderCteQuery(Select|Sql $query): string
     {
         $sql = $query instanceof Select ? $query->toSql() : $query;
@@ -171,6 +218,15 @@ trait ConsumesCtes
 
     abstract protected function mergeSubqueryTables(Sql $sql): void;
 
+    /**
+     * Assert cte capability.
+     *
+     * @param bool $recursive  Whether the CTE should be recursive.
+     *
+     * @return void No return value.
+     *
+     * @throws QueryException If the operation fails.
+     */
     private function assertCteCapability(bool $recursive): void
     {
         if (!method_exists($this, 'boundDialect')) {

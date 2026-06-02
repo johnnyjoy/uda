@@ -7,57 +7,79 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Compiles query builders into SQLite-specific SQL.
+ *
+ * Handles modern SQLite capabilities such as UPSERT, RETURNING, and CTE
+ * materialization hints in the Query domain.
+ */
+
 namespace UDA\Query\Dialect;
 
-use UDA\Exception\QueryException;
-use UDA\SQL\SqlMessage;
 
 /**
  * SQLite dialect implementation leveraging modern UPSERT.
  */
 final class SQLite extends OnConflict
 {
+    /**
+     * Name.
+     *
+     * @return string Dialect name.
+     */
     public function name(): string
     {
         return 'SQLite';
     }
 
+    /**
+     * Report whether supports returning.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsReturning(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports writable cte.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsWritableCte(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports recursive writable cte.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsRecursiveWritableCte(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports upsert.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsUpsert(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports cte materialization hints.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsCteMaterializationHints(): bool
     {
         return true;
     }
 
-    public function supportsExplain(): bool
-    {
-        return true;
-    }
-
-    public function buildExplainSql(SqlMessage $sql, bool $analyze): iterable
-    {
-        if ($analyze) {
-            throw new QueryException('SQLite dialect does not support EXPLAIN ANALYZE statements.');
-        }
-
-        yield new SqlMessage('EXPLAIN QUERY PLAN ' . $sql->getQuery(), $sql->getParams(), $sql->getCacheTables());
-    }
 }

@@ -7,6 +7,13 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Provides shared ON CONFLICT upsert compilation for compatible dialects.
+ *
+ * PostgreSQL and SQLite use this base dialect to compile builder state into
+ * INSERT ... ON CONFLICT SQL without duplicating the conflict logic.
+ */
+
 namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;

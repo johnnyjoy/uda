@@ -13,11 +13,14 @@ declare(strict_types=1);
 
 /*
  * Purpose: Base query builder providing shared infrastructure for all concrete query builders.
+ *
+ * `Abs` = abstract base class (historical short name). Application code uses
+ * `Database::select()` / `insert()` / … — not this type directly. See
+ * `docs/public-api.md` §3.1.
  */
 
 namespace UDA\Query;
 
-use JsonException;
 use UDA\Exception\QueryException;
 use UDA\Query\Dialect\Dialect;
 use UDA\SQL\Identifier;
@@ -32,15 +35,20 @@ use UDA\SQL\Value;
 abstract class Abs
 {
     /**
+     * Materialize this builder as an immutable `Sql` value for execution or inspection.
      *
-     * @return Sql The SQL representation of this query
+     * @return Sql Immutable SQL representation of this builder.
      */
     abstract public function toSql(): Sql;
 
-    /** @var ?\UDA\Driver Driver instance for compatibility */
-    public ?\UDA\Driver $driverInstance = null;
-    /** @var string Driver name for quoting */
-    public string $driverName = '';
+    /**
+     * Configured engine key used for identifier quoting.
+     *
+     * @internal Set exclusively by Database::bindBuilder(). Do not write from application code.
+     *
+     * @var string
+     */
+    public string $engine = '';
 
     /** @var ?\UDA\Database Originating Database instance for execution delegation */
     private ?\UDA\Database $databaseInstance = null;
@@ -65,11 +73,10 @@ abstract class Abs
     private bool $hasWhereClause = false;
     private bool $hasLimitClause = false;
     private bool $unsafe = false;
-    private ?bool $retryAllowed = null;
+
 
     /**
      * Initializes a new query builder with empty parameter storage.
-     *
      * The parameter bag uses 'q' as the default prefix for parameter names
      * (e.g., `:q1`, `:q2`). This prevents collisions when multiple queries
      * are combined or when subqueries are nested.
@@ -81,25 +88,11 @@ abstract class Abs
     }
 
     /**
-     * Converts a value to a named parameter placeholder and stores the value.
+     * Store $value in the bag and return a fresh named placeholder (e.g. `:q1`).
      *
-     * This method is the core of UDA's SQL injection protection. Rather than
-     * concatenating values directly into SQL strings, it:
-     * 1. Generates a unique parameter name (e.g., `:q123`)
-     * 2. Stores the value in the parameter bag
-     * 3. Returns the placeholder for use in the SQL string
+     * @param mixed $value  Value to bind
      *
-     * Example:
-     * ```php
-     * // Instead of: "WHERE id = " . $userId (DANGEROUS!)
-     * // Use: "WHERE id = " . $this->param($userId) // Returns ":q1"
-     * ```
-     *
-     * The stored values are later bound to a PDO prepared statement, ensuring
-     * proper escaping and type handling by the database driver.
-     *
-     * @param  mixed  $value The value to parameterize (any PHP type)
-     * @return string Named parameter placeholder (e.g., `:q1`, `:q2`)
+     * @return string Placeholder token
      */
     protected function param(mixed $value): string
     {
@@ -107,17 +100,17 @@ abstract class Abs
     }
 
     /**
+     * @param string $identifier  The identifier to quote
      *
-     * @param  string         $identifier The identifier to quote
-     * @return string         The quoted identifier
+     * @return string The quoted identifier
+     *
      * @throws QueryException If the identifier is invalid
      */
     protected function quote(string $identifier): string
     {
         if (!isset($this->quotedIdentifiers[$identifier])) {
             try {
-                // Use stored driver name instead of accessing driver directly (spec compliance)
-                $this->quotedIdentifiers[$identifier] = (new Identifier($identifier))->quoted($this->driverName);
+                $this->quotedIdentifiers[$identifier] = (new Identifier($identifier))->quoted($this->engine);
             } catch (\Throwable $ex) {
                 throw new QueryException('Invalid identifier: ' . $identifier, 0, $ex);
             }
@@ -127,31 +120,28 @@ abstract class Abs
     }
 
     /**
+     * @param string $query  The SQL query string
      *
-     * @param  string     $query The SQL query string
      * @return SqlMessage The constructed SqlMessage
      */
     protected function buildSql(string $query): SqlMessage
     {
         $message = new SqlMessage($query, $this->params->getParams());
-        $message = $message->withGuardrailMetadata(
+
+        return $message->withGuardrailMetadata(
             $this->statementType,
             $this->hasWhereClause,
             $this->hasLimitClause,
             $this->unsafe
         );
-
-        if ($this->retryAllowed === null) {
-            return $message;
-        }
-
-        return $message->withRetryAllowed($this->retryAllowed);
     }
 
     /**
      * Set the WHERE clause built by WhereBuilder
      *
-     * @param string $whereClause The WHERE clause SQL fragment
+     * @param string $whereClause  The WHERE clause SQL fragment
+     *
+     * @return void No return value.
      */
     public function setWhereClause(string $whereClause): void
     {
@@ -164,13 +154,26 @@ abstract class Abs
     /**
      * Set the HAVING clause built by WhereBuilder
      *
-     * @param string $havingClause The HAVING clause SQL fragment
+     * @param string $havingClause  The HAVING clause SQL fragment
+     *
+     * @return void No return value.
      */
     public function setHavingClause(string $havingClause): void
     {
         $this->builtHaving = $havingClause;
     }
 
+    /**
+     * Bypass WHERE/LIMIT guardrails for this statement.
+     *
+     * Use only when a statement deliberately has no WHERE clause or LIMIT —
+     * for example, a bulk UPDATE that sets a flag on every row in a table,
+     * or a DELETE that intentionally empties a table. The guardrail exists
+     * to prevent accidental unbounded writes; call unsafe() only after
+     * confirming the intent is correct.
+     *
+     * @return static Configured instance.
+     */
     public function unsafe(): static
     {
         $this->unsafe = true;
@@ -178,59 +181,90 @@ abstract class Abs
         return $this;
     }
 
+    /**
+     * Bind a Database instance for execution delegation.
+     *
+     * @internal Called exclusively by Database::bindBuilder(). Do not call from application code.
+     *
+     * @param \UDA\Database $database  Database handle used for builder execution.
+     *
+     * @return void No return value.
+     */
     public function bindDatabase(\UDA\Database $database): void
     {
         $this->databaseInstance = $database;
     }
 
+    /**
+     * Bind the SQL dialect for this connection.
+     *
+     * @internal Called exclusively by Database::bindBuilder(). Do not call from application code.
+     *
+     * @param Dialect $dialect  Dialect instance.
+     *
+     * @return void No return value.
+     */
     public function bindDialect(Dialect $dialect): void
     {
         $this->dialect = $dialect;
     }
 
+    /**
+     * Delegate through database.
+     *
+     * @param string $method   Expression helper method name.
+     * @param mixed  ...$args  Connection name and optional config file path arguments.
+     *
+     * @return mixed Execution result.
+     */
     protected function delegateThroughDatabase(string $method, mixed ...$args): mixed
     {
         if ($this->databaseInstance !== null) {
             return $this->databaseInstance->executeBuilder($this, $method, ...$args);
         }
 
-        $sql = $this->toSql();
-
-        if ($this->driverInstance !== null) {
-            return $this->driverInstance->$method($sql, ...$args);
-        }
-
         throw $this->executionBindingException();
     }
 
+    /**
+     * Delegate returning.
+     *
+     * @return array Result array.
+     */
     protected function delegateReturning(): array
     {
         if ($this->databaseInstance !== null) {
             return $this->databaseInstance->executeBuilderReturning($this);
         }
 
-        $sql = $this->toSql();
-
-        if ($this->driverInstance !== null) {
-            return $this->driverInstance->returning($sql);
-        }
-
         throw $this->executionBindingException();
     }
 
+    /**
+     * Execute sql.
+     *
+     * @param string $method   Expression helper method name.
+     * @param Sql    $sql      SQL string, SQL message, or builder SQL object.
+     * @param mixed  ...$args  Connection name and optional config file path arguments.
+     *
+     * @return mixed Execution result.
+     */
     protected function executeSql(string $method, Sql $sql, mixed ...$args): mixed
     {
         if ($this->databaseInstance !== null) {
             return $this->databaseInstance->$method($sql, ...$args);
         }
 
-        if ($this->driverInstance !== null) {
-            return $this->driverInstance->$method($sql, ...$args);
-        }
-
         throw $this->executionBindingException();
     }
 
+    /**
+     * Require dialect.
+     *
+     * @return Dialect Bound SQL dialect.
+     *
+     * @throws QueryException If the operation fails.
+     */
     protected function requireDialect(): Dialect
     {
         if ($this->dialect === null) {
@@ -243,18 +277,35 @@ abstract class Abs
         return $this->dialect;
     }
 
+    /**
+     *   clone.
+     *
+     * @return mixed Execution result.
+     */
     public function __clone()
     {
         $this->params = clone $this->params;
     }
 
+    /**
+     * Bound dialect.
+     *
+     * @return ?Dialect Bound SQL dialect, or null before binding.
+     */
     protected function boundDialect(): ?Dialect
     {
         return $this->dialect;
     }
 
     /**
+     * Assert dialect capability.
+     *
      * @param callable(Dialect):bool $capabilityCheck
+     * @param string                 $errorMessage     Error message to raise when the capability is missing.
+     *
+     * @return void No return value.
+     *
+     * @throws QueryException If the operation fails.
      */
     protected function assertDialectCapability(callable $capabilityCheck, string $errorMessage): void
     {
@@ -269,25 +320,11 @@ abstract class Abs
         }
     }
 
-    public function fingerprint(): string
-    {
-        $payload = [
-            'class' => static::class,
-            'structure' => $this->fingerprintPayload(),
-        ];
-
-        try {
-            $encoded = json_encode($payload, JSON_THROW_ON_ERROR);
-        } catch (JsonException $e) {
-            /** @var string $encoded */
-            $encoded = serialize($payload);
-        }
-
-        return hash('sha256', $encoded);
-    }
-
-    abstract protected function fingerprintPayload(): array;
-
+    /**
+     * Execution binding exception.
+     *
+     * @return QueryException Exception describing the binding failure.
+     */
     private function executionBindingException(): QueryException
     {
         return new QueryException(sprintf(
@@ -296,21 +333,45 @@ abstract class Abs
         ));
     }
 
+    /**
+     * Set statement type.
+     *
+     * @param string $statementType  Statement type.
+     *
+     * @return void No return value.
+     */
     protected function setStatementType(string $statementType): void
     {
         $this->statementType = GuardrailMetadata::normalizeType($statementType);
     }
 
+    /**
+     * Mark where used.
+     *
+     * @return void No return value.
+     */
     protected function markWhereUsed(): void
     {
         $this->hasWhereClause = true;
     }
 
+    /**
+     * Mark limit used.
+     *
+     * @return void No return value.
+     */
     protected function markLimitUsed(): void
     {
         $this->hasLimitClause = true;
     }
 
+    /**
+     * Apply guardrail metadata.
+     *
+     * @param Sql $sql  SQL string, SQL message, or builder SQL object.
+     *
+     * @return Sql Compiled SQL message.
+     */
     protected function applyGuardrailMetadata(Sql $sql): Sql
     {
         $sql = $sql->withGuardrailMetadata(
@@ -320,26 +381,8 @@ abstract class Abs
             $this->unsafe
         );
 
-        if ($this->retryAllowed === null) {
-            return $sql;
-        }
-
-        return $sql->withRetryAllowed($this->retryAllowed);
+        return $sql;
     }
 
-    public function allowRetry(): static
-    {
-        $clone = clone $this;
-        $clone->retryAllowed = true;
-
-        return $clone;
-    }
-
-    public function noRetry(): static
-    {
-        $clone = clone $this;
-        $clone->retryAllowed = false;
-
-        return $clone;
-    }
 }
+

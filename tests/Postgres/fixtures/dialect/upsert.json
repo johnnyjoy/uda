@@ -1,4 +1,0 @@
-{
-    "upsert-on-conflict-update": "INSERT INTO \"salaries\" (\"id\", \"employee_id\", \"contractor_id\", \"amount\", \"paid_at\") VALUES (:q1, :q2, :q3, :q4, :q5) ON CONFLICT (\"id\") DO UPDATE SET \"amount\" = EXCLUDED.\"amount\", \"paid_at\" = EXCLUDED.\"paid_at\"",
-    "upsert-on-conflict-nothing": "INSERT INTO \"employees\" (\"id\", \"name\", \"title\", \"hired_at\") VALUES (:q1, :q2, :q3, :q4) ON CONFLICT (\"id\") DO NOTHING"
-}

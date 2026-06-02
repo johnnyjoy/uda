@@ -1,3 +1,0 @@
-{
-    "select-windowed": "SELECT DISTINCT \"employees\".\"id\", \"employees\".\"name\", \"salaries\".\"amount\", ROW_NUMBER() OVER (PARTITION BY \"employees\".\"department_id\" ORDER BY \"salaries\".\"amount\" DESC) AS dept_rank FROM \"employees\" INNER JOIN \"salaries\" ON \"employees\".\"id\" = \"salaries\".\"employee_id\" WHERE \"employees\".\"title\" = :q1 AND \"salaries\".\"amount\" >= :q2 GROUP BY \"employees\".\"id\", \"employees\".\"name\" HAVING COUNT(salaries.id) > :q3 ORDER BY \"employees\".\"hired_at\" DESC LIMIT :q4 OFFSET :q5"
-}

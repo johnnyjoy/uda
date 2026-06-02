@@ -45,12 +45,20 @@ final class Update extends Abs
     /** @var ?Sql Cached Sql instance for repeated toSql() calls */
     private ?Sql $cachedSql = null;
 
+    /**
+     * Create the runtime object.
+     */
     public function __construct()
     {
         parent::__construct();
         $this->setStatementType('update');
     }
 
+    /**
+     *   clone.
+     *
+     * @return mixed Execution result.
+     */
     public function __clone()
     {
         parent::__clone();
@@ -59,8 +67,8 @@ final class Update extends Abs
     }
 
     /**
+     * @param string $table  The table name
      *
-     * @param  string $table The table name
      * @return self
      */
     public function table(string $table): self
@@ -73,9 +81,9 @@ final class Update extends Abs
     }
 
     /**
+     * @param string $column  The column name
+     * @param mixed  $value   The value to set
      *
-     * @param  string $column The column name
-     * @param  mixed  $value  The value to set
      * @return self
      */
     public function set(string $column, mixed $value): self
@@ -87,10 +95,10 @@ final class Update extends Abs
     }
 
     /**
+     * @param string $column    The column name
+     * @param mixed  $value     The value to compare against
+     * @param string $operator  The comparison operator
      *
-     * @param  string $column   The column name
-     * @param  mixed  $value    The value to compare against
-     * @param  string $operator The comparison operator
      * @return self
      */
     public function where(string $column, mixed $value, string $operator = '='): WhereBuilder
@@ -102,6 +110,14 @@ final class Update extends Abs
         return $whereBuilder;
     }
 
+    /**
+     * Where raw.
+     *
+     * @param string $expression  SQL expression.
+     * @param array  $params      Named parameter values.
+     *
+     * @return WhereBuilder Configured WhereBuilder builder.
+     */
     public function whereRaw(string $expression, array $params = []): WhereBuilder
     {
         $clone = clone $this;
@@ -112,10 +128,10 @@ final class Update extends Abs
     }
 
     /**
+     * @param string $left      The left column
+     * @param string $right     The right column
+     * @param string $operator  The comparison operator
      *
-     * @param  string $left     The left column
-     * @param  string $right    The right column
-     * @param  string $operator The comparison operator
      * @return self
      */
     public function whereColumn(string $left, string $right, string $operator = '='): WhereBuilder
@@ -128,8 +144,8 @@ final class Update extends Abs
     }
 
     /**
+     * @return int The number of affected rows
      *
-     * @return int            The number of affected rows
      * @throws QueryException If not bound to a driver
      */
     public function exec(): int
@@ -137,6 +153,13 @@ final class Update extends Abs
         return $this->delegateThroughDatabase('exec');
     }
 
+    /**
+     * Returning.
+     *
+     * @param string ...$columns  Column names.
+     *
+     * @return self Configured instance.
+     */
     public function returning(string ...$columns): self
     {
         $this->assertDialectCapability(
@@ -150,6 +173,13 @@ final class Update extends Abs
         return $clone;
     }
 
+    /**
+     * Execute and return one row.
+     *
+     * @return ?array Result array.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function row(): ?array
     {
         if ($this->returning === null) {
@@ -161,6 +191,13 @@ final class Update extends Abs
         return $rows[0] ?? null;
     }
 
+    /**
+     * Execute and return all rows.
+     *
+     * @return array Result array.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function rows(): array
     {
         if ($this->returning === null) {
@@ -170,6 +207,13 @@ final class Update extends Abs
         return $this->delegateReturning();
     }
 
+    /**
+     * Execute and return a single value.
+     *
+     * @return mixed Execution result.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function value(): mixed
     {
         if ($this->returning === null) {
@@ -181,49 +225,32 @@ final class Update extends Abs
         return $row === null ? null : (array_values($row)[0] ?? null);
     }
 
-    public function list(): array
+    /**
+     * Execute RETURNING and return the first row as a numeric list.
+     *
+     * @return ?array<int,mixed> Row values or null.
+     *
+     * @throws QueryException If the operation fails.
+     */
+    public function list(): ?array
     {
         if ($this->returning === null) {
             throw new QueryException('Call returning() before requesting returning rows.');
         }
 
-        return $this->rows();
+        $row = $this->row();
+
+        return $row === null ? null : array_values($row);
     }
 
-    public function explain(): array
-    {
-        return $this->delegateThroughDatabase('explain');
-    }
-
-    public function explainAnalyze(): array
-    {
-        return $this->delegateThroughDatabase('explainAnalyze');
-    }
-
-    // Query builders are immutable and do not execute - they only produce Sql objects
-    // Execution is handled exclusively by the Driver class
+    // Query builders produce Sql objects; execution is coordinated by Database.
 
     /**
-     * Generates a SQL UPDATE statement with SET and WHERE clauses.
+     * Build immutable `Sql` for this UPDATE.
      *
-     * This method constructs a parameterized UPDATE statement with proper
-     * column quoting and named parameter placeholders. The WHERE clause is
-     * included if any conditions have been specified.
+     * @return Sql
      *
-     * @return Sql            The executable SQL UPDATE statement with named parameters
-     * @throws QueryException If no table is defined (via table() method)
-     * @throws QueryException If no column values have been set (via set() method)
-     *
-     * @see Update::set() Method to define column updates
-     * @see Update::where() Method to add WHERE conditions
-     * @see Update::whereColumn() Method for column-to-column comparisons
-     * @example
-     * $query = new Update();
-     * $sql = $query->table('users')
-     * ->set('status', 'inactive')
-     * ->where('last_login', '2022-01-01', '<')
-     * ->toSql();
-     * // Returns: Sql object with "UPDATE users SET status = :p0 WHERE last_login < :p1"
+     * @throws QueryException If table or SET columns are missing
      */
     public function toSql(): Sql
     {
@@ -268,6 +295,11 @@ final class Update extends Abs
         return $this->cachedSql;
     }
 
+    /**
+     * Build where clause.
+     *
+     * @return ?string String result, or null when absent.
+     */
     private function buildWhereClause(): ?string
     {
         if ($this->builtWhere !== null) {
@@ -281,6 +313,13 @@ final class Update extends Abs
         return null;
     }
 
+    /**
+     * Add hint table.
+     *
+     * @param string $table  Target table name.
+     *
+     * @return void No return value.
+     */
     private function addHintTable(string $table): void
     {
         if ($table === '') {
@@ -292,6 +331,11 @@ final class Update extends Abs
         }
     }
 
+    /**
+     * Return tables.
+     *
+     * @return array Result array.
+     */
     private function getTables(): array
     {
         $tables = $this->hintTables;
@@ -311,6 +355,13 @@ final class Update extends Abs
         }));
     }
 
+    /**
+     * Merge subquery tables.
+     *
+     * @param Sql $sql  SQL string, SQL message, or builder SQL object.
+     *
+     * @return void No return value.
+     */
     protected function mergeSubqueryTables(Sql $sql): void
     {
         foreach ($sql->getCacheTables() as $table) {
@@ -318,20 +369,15 @@ final class Update extends Abs
         }
     }
 
+    /**
+     * Cte context.
+     *
+     * @return string String result.
+     */
     protected function cteContext(): string
     {
         return 'update';
     }
 
-    protected function fingerprintPayload(): array
-    {
-        return [
-            'ctes' => $this->fingerprintCtes(),
-            'table' => $this->table,
-            'setColumns' => array_keys($this->sets),
-            'where' => $this->builtWhere,
-            'whereFragments' => $this->where,
-            'returning' => $this->returning,
-        ];
-    }
 }
+

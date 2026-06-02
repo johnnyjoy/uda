@@ -28,9 +28,11 @@ class OrderBy
     /**
      * Create a new ORDER BY clause with allowlist enforcement
      *
-     * @param  string                  $column    The column to order by
-     * @param  array                   $allowlist The allowed columns
+     * @param string $column     The column to order by
+     * @param array  $allowlist  The allowed columns
+     *
      * @return self
+     *
      * @throws InvalidOrderByException If the column is not in the allowlist
      */
     public static function allow(string $column, array $allowlist): self
@@ -49,7 +51,7 @@ class OrderBy
     /**
      * Private constructor to enforce factory method usage
      *
-     * @param string $column The column to order by
+     * @param string $column  The column to order by
      */
     private function __construct(string $column)
     {

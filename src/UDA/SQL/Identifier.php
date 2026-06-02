@@ -17,8 +17,10 @@ declare(strict_types=1);
 
 namespace UDA\SQL;
 
+use UDA\Driver;
+
 /**
- * Identifier validation with driver-based quoting
+ * Identifier validation with engine-based quoting
  */
 class Identifier
 {
@@ -27,7 +29,8 @@ class Identifier
     /**
      * Create a new identifier
      *
-     * @param  string                     ...$segments The identifier segments
+     * @param string ...$segments  The identifier segments
+     *
      * @throws InvalidIdentifierException If the identifier is invalid
      */
     public function __construct(string ...$segments)
@@ -46,17 +49,18 @@ class Identifier
     }
 
     /**
-     * Get the quoted identifier for a specific driver
+     * Get the quoted identifier for a specific engine.
      *
-     * @param  string $driver The database driver (sqlite, mysql, pgsql, etc.)
+     * @param string $engine  Engine key (sqlite, mariadb, pgsql, etc.)
+     *
      * @return string The quoted identifier
      */
-    public function quoted(string $driver): string
+    public function quoted(string $engine): string
     {
         $parts = explode('.', $this->name);
 
         return implode('.', array_map(
-            fn (string $part): string => $this->quoteSegment($part, $driver),
+            fn (string $part): string => $this->quoteSegment($part, $engine),
             $parts
         ));
     }
@@ -64,8 +68,10 @@ class Identifier
     /**
      * Validate and join identifier segments
      *
-     * @param  array                      $segments The identifier segments
-     * @return string                     The joined identifier
+     * @param array $segments  The identifier segments
+     *
+     * @return string The joined identifier
+     *
      * @throws InvalidIdentifierException If any segment is invalid
      */
     private function validateAndJoinSegments(array $segments): string
@@ -92,8 +98,9 @@ class Identifier
     /**
      * Check if an identifier is valid
      *
-     * @param  string $identifier The identifier to check
-     * @return bool   True if valid, false otherwise
+     * @param string $identifier  The identifier to check
+     *
+     * @return bool True if valid, false otherwise
      */
     private function isValidIdentifier(string $identifier): bool
     {
@@ -121,18 +128,15 @@ class Identifier
     }
 
     /**
-     * Quote a segment for a specific driver
+     * Quote a segment for a specific engine.
      *
-     * @param  string $segment The segment to quote
-     * @param  string $driver  The database driver
+     * @param string $segment  The segment to quote
+     * @param string $engine   Engine key
+     *
      * @return string The quoted segment
      */
-    private function quoteSegment(string $segment, string $driver): string
+    private function quoteSegment(string $segment, string $engine): string
     {
-        return match ($driver) {
-            'mysql' => "`{$segment}`",
-            'oci', 'oracle' => '"' . strtoupper($segment) . '"',
-            default => "\"{$segment}\"", // sqlite, pgsql, and others
-        };
+        return Driver::quoteIdentifier($engine, $segment);
     }
 }

@@ -12,27 +12,35 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: Oracle-specific driver implementation providing DSN construction,
- * quoting, pagination, and savepoint behavior for PDO_OCI connections.
+ * Purpose: Provides Oracle engine rules for the Driver domain.
+ *
+ * Oracle supplies pure PDO_OCI string and buffer rules. Driver owns the
+ * specialized RETURNING INTO execution path because that path binds PDO
+ * output parameters and must stay inside the single execution domain.
  */
 
 namespace UDA\Driver;
 
-use PDO;
-use PDOException;
-use UDA\Driver as BaseDriver;
 use UDA\Exception\ConfigException;
 use UDA\Exception\QueryException;
-use UDA\Query\Sql as BuilderSql;
-use UDA\SQL\SqlMessage;
 
-final class Oracle extends BaseDriver
+/**
+ * Static engine rules for Oracle PDO_OCI connections.
+ */
+final class Oracle
 {
     private const RETURNING_BUFFER_LENGTH = 4000;
 
-    protected ?string $dbtype = 'oci';
-
-    protected function buildDsn(array $params): string
+    /**
+     * Build an Oracle PDO DSN from normalized connection params.
+     *
+     * @param array<string,mixed> $params  Connection params keyed by config name.
+     *
+     * @return string PDO DSN string.
+     *
+     * @throws ConfigException If host/service configuration is incomplete.
+     */
+    public static function dsn(array $params): string
     {
         if (isset($params['dbname'])) {
             return 'oci:dbname=' . $params['dbname'];
@@ -49,7 +57,14 @@ final class Oracle extends BaseDriver
         return sprintf('oci:dbname=//%s:%d/%s', $host, $port, $service);
     }
 
-    protected function quoteIdentifier(string $identifier): string
+    /**
+     * Quote an Oracle identifier using uppercase double-quoted form.
+     *
+     * @param string $identifier  Identifier value.
+     *
+     * @return string Quoted identifier.
+     */
+    public static function quoteIdentifier(string $identifier): string
     {
         $clean = strtoupper(trim($identifier));
         $escaped = str_replace('"', '""', $clean);
@@ -57,7 +72,17 @@ final class Oracle extends BaseDriver
         return '"' . $escaped . '"';
     }
 
-    public function limitOffset(int $limit, int $offset): string
+    /**
+     * Build Oracle FETCH pagination.
+     *
+     * @param int $limit   Maximum number of rows.
+     * @param int $offset  Number of rows to skip.
+     *
+     * @return string Pagination SQL fragment.
+     *
+     * @throws QueryException If the operation fails.
+     */
+    public static function limitOffset(int $limit, int $offset): string
     {
         if ($limit < 0 || $offset < 0) {
             throw new QueryException('LIMIT/OFFSET must be non-negative');
@@ -66,144 +91,29 @@ final class Oracle extends BaseDriver
         return sprintf('OFFSET %d ROWS FETCH NEXT %d ROWS ONLY', $offset, $limit);
     }
 
-    protected function onConnect(): void
-    {
-        // Oracle session configuration (NLS, timezone) can be added here later
-    }
-
-    public function returning(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tables = null): array
-    {
-        $tableHints = $tables ?? ($sql instanceof BuilderSql ? $sql->getCacheTables() : []);
-        [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
-
-        $columns = $message->getReturningColumns();
-
-        if ($columns === []) {
-            return parent::returning($message, $normalized, $tableHints);
-        }
-        $valueSets = $message->getValuePlaceholders();
-
-        if ($valueSets === [] || count($valueSets) <= 1) {
-            $rows = $this->runOracleReturningStatement($message->getQuery(), $normalized, $columns);
-
-            if ($rows !== [] && $tableHints !== []) {
-                $this->cache->touchTables($tableHints);
-            }
-
-            return $rows;
-        }
-
-        $insertTable = $message->getInsertTable();
-        $insertColumns = $message->getInsertColumns();
-
-        if ($insertTable === null || $insertColumns === []) {
-            throw new QueryException('Oracle multi-row returning requires insert metadata.');
-        }
-
-        $quotedColumns = array_map(fn (string $col): string => $this->q(strtoupper($col)), $insertColumns);
-        $prefix = sprintf('INSERT INTO %s (%s)', $this->q($insertTable), implode(', ', $quotedColumns));
-
-        $rows = [];
-        foreach ($valueSets as $rowPlaceholders) {
-            $singleSql = $prefix . ' VALUES (' . implode(', ', $rowPlaceholders) . ')';
-            $rowParams = $this->extractParamsForPlaceholders($normalized, $rowPlaceholders);
-            $rows = array_merge($rows, $this->runOracleReturningStatement($singleSql, $rowParams, $columns));
-        }
-
-        if ($rows !== [] && $tableHints !== []) {
-            $this->cache->touchTables($tableHints);
-        }
-
-        return $rows;
-    }
-
     /**
-     * @param array<string,mixed> $normalized
-     * @param array<int,string>   $placeholders
+     * Append Oracle RETURNING INTO SQL for Driver-managed output bindings.
      *
-     * @return array<string,mixed>
+     * @param string            $baseQuery     Base SQL statement.
+     * @param array<int,string> $columns       Returning column names.
+     * @param array<int,string> $placeholders  Output parameter placeholders.
+     *
+     * @return string RETURNING SQL fragment.
      */
-    private function extractParamsForPlaceholders(array $normalized, array $placeholders): array
+    public static function returningIntoSql(string $baseQuery, array $columns, array $placeholders): string
     {
-        $subset = [];
-        foreach ($placeholders as $placeholder) {
-            $name = ltrim($placeholder, ':');
-            if (array_key_exists($name, $normalized)) {
-                $subset[$name] = $normalized[$name];
-            }
-        }
+        $quotedColumns = array_map(fn (string $col): string => self::quoteIdentifier(strtoupper($col)), $columns);
 
-        return $subset;
+        return $baseQuery . ' RETURNING ' . implode(', ', $quotedColumns) . ' INTO ' . implode(', ', $placeholders);
     }
 
     /**
-     * @param array<string,mixed> $params
+     * Return the default output buffer length for Oracle RETURNING bindings.
+     *
+     * @return int Integer result.
      */
-    private function runOracleReturningStatement(string $baseQuery, array $params, array $columns): array
+    public static function returningBufferLength(): int
     {
-        $quotedColumns = array_map(fn (string $col): string => $this->q(strtoupper($col)), $columns);
-        $placeholders = [];
-        $outValues = [];
-
-        foreach ($columns as $idx => $column) {
-            $placeholder = ':uda_return_' . $idx;
-            $placeholders[] = $placeholder;
-            $outValues[$idx] = '';
-        }
-
-        $query = $baseQuery . ' RETURNING ' . implode(', ', $quotedColumns) . ' INTO ' . implode(', ', $placeholders);
-
-        try {
-            $stmt = $this->acquirePreparedStatement($query);
-
-            foreach ($params as $name => $value) {
-                $paramName = str_starts_with((string) $name, ':') ? (string) $name : ':' . $name;
-                $stmt->bindValue($paramName, $value);
-            }
-
-            foreach ($placeholders as $idx => $placeholder) {
-                $stmt->bindParam(
-                    $placeholder,
-                    $outValues[$idx],
-                    PDO::PARAM_STR | PDO::PARAM_INPUT_OUTPUT,
-                    self::RETURNING_BUFFER_LENGTH
-                );
-            }
-
-            $stmt->execute();
-            $affected = $stmt->rowCount();
-        } catch (PDOException $ex) {
-            throw new QueryException('Oracle returning() execution failed: ' . $ex->getMessage(), 0, $ex);
-        }
-
-        $stmt->closeCursor();
-
-        $normalizedValues = [];
-
-        foreach ($outValues as $value) {
-            if (is_string($value)) {
-                $value = rtrim($value);
-                if ($value === '') {
-                    $value = null;
-                } elseif (ctype_digit($value)) {
-                    $value = (int) $value;
-                } elseif (is_numeric($value)) {
-                    $value = (float) $value;
-                }
-            }
-            $normalizedValues[] = $value;
-        }
-
-        if ($affected === 0) {
-            return [];
-        }
-
-        if ($affected > 1) {
-            throw new QueryException('Oracle returning() expects at most one row per statement.');
-        }
-
-        $normalizedColumns = array_map('strtolower', $columns);
-
-        return [array_combine($normalizedColumns, $normalizedValues) ?: []];
+        return self::RETURNING_BUFFER_LENGTH;
     }
 }

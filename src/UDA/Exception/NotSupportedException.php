@@ -9,8 +9,14 @@ use RuntimeException;
 /**
  * @package UDA
  * @subpackage Exception
- *
- * Purpose: Raised when a backend does not support a requested feature.
+ */
+
+/*
+ * Purpose: Represents unsupported engine capability requests in UDA.
+ */
+
+/**
+ * Raised when a domain cannot provide the requested engine capability.
  */
 final class NotSupportedException extends RuntimeException
 {

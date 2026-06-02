@@ -40,16 +40,16 @@ Any failure during loading or validation throws **`ConfigException`**.
 
 | Key             | Required | Description                                                                                                                             |
 | --------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **defaults**    | no       | String. Name of the default connection. Must exist in `connections`. Used when `Database::connect()` is called with no connection name. |
+| **defaults**    | no       | Object. `defaults.connection` names the default connection. It must exist in `connections`. |
 | **connections** | yes      | Object mapping connection name → connection definition. Must contain at least one entry.                                                |
 | **templates**   | no       | Object reserved for future mass-database generation patterns. Stored but not interpreted by Config.                                     |
-| **cache**       | no       | Object defining the process-wide cache store (Redis/Memcached/Array).                                                                   |
+| **cache**       | no       | Reserved for future process-wide cache defaults. V1 cache behavior is read from each connection's `cache` block.                        |
 
 ### Validation Rules
 
 * `connections` **must exist and be non-empty**
 * connection names **must be non-empty strings**
-* if `defaults` is defined, it **must reference an existing connection**
+* if `defaults.connection` is defined, it **must reference an existing connection**
 
 ---
 
@@ -57,16 +57,27 @@ Any failure during loading or validation throws **`ConfigException`**.
 
 Each entry in `connections` describes how a database connection is created.
 
-| Key          | Required | Description                                                                                             |
-| ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
-| **driver**   | yes      | Database driver. One of: `sqlite`, `pgsql`, `postgresql`, `mysql`, `mariadb`, `sqlsrv`, `dblib`, `oci`, `oracle`. Case-insensitive. |
-| **params**   | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
-| **user**     | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
-| **pass**     | no       | Password. May reference environment variable `{env:VAR_NAME}`.                                          |
-| **options**  | no       | Object of PDO options. Keys must be integers (`PDO::*`).                                                |
-| **dialect**  | no       | SQL dialect override.                                                                                   |
-| **init_sql** | no       | Array of SQL statements executed after connection.                                                      |
-| **cache**    | no       | Connection-specific cache policy configuration.                                                         |
+| Key            | Required | Description                                                                                             |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------- |
+| **driver**     | yes      | **Engine** / SQL family: `sqlite`, `pgsql`, `mysql`, `mariadb`, `sqlserver`, `sybase`, `oracle`, … Legacy transport aliases (`sqlsrv`, `dblib`) are accepted and normalized. Case-insensitive. |
+| **transport**  | no       | PDO DSN prefix when the engine supports more than one (`sqlsrv`, `dblib`, …). Defaults from engine when omitted. |
+| **params**     | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
+| **user**       | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
+| **pass**       | no       | Password. May reference environment variable `{env:VAR_NAME}`.                                          |
+| **options**    | no       | Object of PDO options. Keys must be integers (`PDO::*`).                                                |
+| **init_sql**   | no       | Array of SQL statements executed after connection.                                                      |
+| **cache**      | no       | Connection-specific cache policy configuration.                                                         |
+
+After ingestion, each connection stores normalized **`engine`** and **`transport`** fields. `Config::engine()` returns the engine; `Config::driver()` is a deprecated alias. `Config::transport()` returns the PDO prefix used for DSN construction.
+
+### Engine vs transport
+
+| Concept     | Config key    | Role |
+| ----------- | ------------- | ---- |
+| **Engine**  | `driver`      | SQL semantics — dialect selection, identifier quoting, pagination fragments. Routes to `UDA\Driver\{Engine}::dsn()` for most engines. |
+| **Transport** | `transport` | PDO DSN prefix only when the engine has more than one (today: SQL Server `sqlsrv` vs `dblib`). `UDA\Driver` still performs `new PDO()`; per-engine classes only build the DSN string. |
+
+Microsoft SQL Server over DBLib must set `"driver": "sqlserver", "transport": "dblib"`. Legacy `"driver": "dblib"` defaults to engine **sybase** + transport **dblib**.
 
 ### Important Rule
 
@@ -117,83 +128,71 @@ Secrets are **resolved during ingestion** so downstream code never handles place
 
 When present, `connections.<name>.cache` defines default caching policy and per-table overrides.
 
-This controls behavior of:
-
-```php
-$driver->cache()
-```
+This controls transparent read caching behind `Database`. Application code does
+not call cache APIs on the read path; it continues to call `rows()`, `row()`, `value()`, and
+builder terminators the same way whether cache is enabled or disabled. For ops-only
+purge after deploy or incidents, use `Database::flushCache()` (see `docs/caching.md`).
 
 ## Structure
 
-| Key               | Required | Description                              |
-| ----------------- | -------- | ---------------------------------------- |
-| **defaultPolicy** | yes      | Default cache policy for this connection |
-| **namespace**     | no       | Cache namespace prefix                   |
-| **tables**        | no       | Per-table cache rules                    |
-
----
-
-## Default Policy
-
-| Key                    | Required | Description                     |
-| ---------------------- | -------- | ------------------------------- |
-| **ttlSeconds**         | yes      | Cache lifetime. Must be > 0     |
-| **minIntervalSeconds** | no       | Minimum refresh interval        |
-| **allowStaleOnError**  | no       | Serve stale data if query fails |
-| **maxStaleSeconds**    | no       | Maximum stale window            |
+| Key           | Required | Description                              |
+| ------------- | -------- | ---------------------------------------- |
+| **store**     | yes      | Cache backend config for this connection |
+| **namespace** | no       | Cache namespace prefix                   |
+| **tables**    | no       | Per-table cache rules                    |
 
 ---
 
 ## Per-Table Rules
 
-Tables override the default policy.
+Tables can disable caching for statements that reference that table.
 
 Example:
 
 ```json
 "tables": {
-  "users": { "ttlSeconds": 30 },
+  "users": {},
   "audit_log": { "disable": true }
 }
 ```
 
 ### Rule Fields
 
-| Key                    | Description                                    |
-| ---------------------- | ---------------------------------------------- |
-| **disable**            | Disables caching if query references the table |
-| **ttlSeconds**         | Overrides TTL                                  |
-| **minIntervalSeconds** | Overrides minimum interval                     |
-| **allowStaleOnError**  | Overrides stale policy                         |
-| **maxStaleSeconds**    | Overrides stale window                         |
-
-### Merge Semantics
-
-When a query references multiple tables:
-
-| Field              | Merge Rule      |
-| ------------------ | --------------- |
-| ttlSeconds         | **minimum**     |
-| minIntervalSeconds | **maximum**     |
-| allowStaleOnError  | **logical AND** |
-| maxStaleSeconds    | **minimum**     |
+| Key         | Description                                    |
+| ----------- | ---------------------------------------------- |
+| **disable** | Disables caching if query references the table |
 
 ---
 
-# Top-Level Cache Store
+# Connection Cache Store
 
-The root `cache` key defines the **process-wide cache backend**.
+`connections.<name>.cache.store` defines the cache backend for that connection.
 
-If omitted or `driver = off`, caching is disabled.
+If omitted or `type = off`, caching is disabled.
 
 ## Structure
 
-| Key           | Required | Description                          |
-| ------------- | -------- | ------------------------------------ |
-| **driver**    | yes      | `redis`, `memcached`, `array`, `off` |
-| **redis**     | no       | Redis connection options             |
-| **memcached** | no       | Memcached servers and options        |
-| **array**     | no       | In-memory cache settings             |
+| Key          | Required | Description                          |
+| ------------ | -------- | ------------------------------------ |
+| **type**     | yes      | `redis`, `memcached`, `array`, `off` |
+| **host**     | no       | Redis/Memcached host                 |
+| **port**     | no       | Redis/Memcached port                 |
+| **timeout**  | no       | Redis connection timeout             |
+| **database** | no       | Redis database number                |
+
+### PHP extensions (deployment)
+
+Composer requires only `ext-pdo`. Cache store types need **additional extensions**
+in the runtime image when that store is configured:
+
+| `store.type` | PHP extension   | Notes                          |
+| ------------ | --------------- | ------------------------------ |
+| `off`        | —               | No cache                       |
+| `array`      | —               | In-process only                |
+| `redis`      | `ext-redis`     | Required when store is `redis` |
+| `memcached`  | `ext-memcached` | Required when store is `memcached` |
+
+Missing extensions throw at first cache client creation, not at `composer install`.
 
 ---
 
@@ -201,8 +200,8 @@ If omitted or `driver = off`, caching is disabled.
 
 ```json
 "cache": {
-  "driver": "redis",
-  "redis": {
+  "store": {
+    "type": "redis",
     "host": "localhost",
     "port": 6379,
     "timeout": 1
@@ -216,11 +215,10 @@ If omitted or `driver = off`, caching is disabled.
 
 ```json
 "cache": {
-  "driver": "memcached",
-  "memcached": {
-    "servers": [
-      { "host": "localhost", "port": 11211, "weight": 1 }
-    ]
+  "store": {
+    "type": "memcached",
+    "host": "localhost",
+    "port": 11211
   }
 }
 ```
@@ -266,7 +264,9 @@ No further configuration processing occurs after this stage.
 
 ```json
 {
-  "defaults": "sqlite_mem",
+  "defaults": {
+    "connection": "sqlite_mem"
+  },
   "connections": {
     "sqlite_mem": {
       "driver": "sqlite",
@@ -282,7 +282,9 @@ No further configuration processing occurs after this stage.
 
 ```json
 {
-  "defaults": "app",
+  "defaults": {
+    "connection": "app"
+  },
   "connections": {
     "app": {
       "driver": "pgsql",
@@ -293,22 +295,17 @@ No further configuration processing occurs after this stage.
       "user": "{env:DB_USER}",
       "pass": "{env:DB_PASS}",
       "cache": {
-        "defaultPolicy": {
-          "ttlSeconds": 60,
-          "minIntervalSeconds": 5
+        "namespace": "APP",
+        "store": {
+          "type": "redis",
+          "host": "localhost",
+          "port": 6379
         },
         "tables": {
-          "users": { "ttlSeconds": 30 },
+          "users": {},
           "audit_log": { "disable": true }
         }
       }
-    }
-  },
-  "cache": {
-    "driver": "redis",
-    "redis": {
-      "host": "localhost",
-      "port": 6379
     }
   }
 }
@@ -319,10 +316,10 @@ No further configuration processing occurs after this stage.
 # Using Configuration
 
 ```php
-$driver = Database::connect();                  // default connection (UDA_CONFIG)
-$driver = Database::connect('pgsql_test');      // named connection
-$driver = Database::connect('/config/app.json'); // explicit config file
-$driver = Database::connect('pgsql_test', '/config/app.json');
+$db = Database::connect();                       // default connection (UDA_CONFIG)
+$db = Database::connect('pgsql_test');           // named connection
+$db = Database::connect('/config/app.json');     // explicit config file
+$db = Database::connect('pgsql_test', '/config/app.json');
 ```
 
 Argument order is **position-independent**.

@@ -6,12 +6,28 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
-use UDA\SQL\SqlMessage;
 
+/*
+ * Purpose: Defines the base SQL compilation behavior for query dialects.
+ *
+ * Dialects translate immutable builder state objects into SQL strings and
+ * parameter bags. They do not own database connections or execute SQL.
+ */
+
+/**
+ * Base query dialect compiler.
+ */
 abstract class Dialect
 {
     abstract public function name(): string;
 
+    /**
+     * Compile select.
+     *
+     * @param SelectState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     */
     public function compileSelect(SelectState $state): Sql
     {
         $columns = $state->columns !== [] ? implode(', ', $state->columns) : '*';
@@ -55,6 +71,17 @@ abstract class Dialect
         return new Sql($query, $state->getParams(), $state->tables);
     }
 
+    /**
+     * Build cte block.
+     *
+     * @param array  $ctes          CTE definitions attached to the statement.
+     * @param bool   $hasRecursive  Whether any attached CTE is recursive.
+     * @param string $context       Compilation context label.
+     *
+     * @return string Generated SQL fragment.
+     *
+     * @throws QueryException If the operation fails.
+     */
     protected function buildCteBlock(array $ctes, bool $hasRecursive, string $context): string
     {
         if ($ctes === []) {
@@ -92,7 +119,11 @@ abstract class Dialect
     }
 
     /**
+     * Format cte materialization hint.
+     *
      * @param array{name:string,sql:string,recursive:bool,materialization:?string} $cte
+     *
+     * @return string String result.
      */
     private function formatCteMaterializationHint(array $cte): string
     {
@@ -109,6 +140,13 @@ abstract class Dialect
         };
     }
 
+    /**
+     * Compile select pagination.
+     *
+     * @param SelectState $state  Dialect compilation state.
+     *
+     * @return string Pagination SQL fragment.
+     */
     protected function compileSelectPagination(SelectState $state): string
     {
         $fragment = '';
@@ -124,36 +162,77 @@ abstract class Dialect
         return $fragment;
     }
 
+    /**
+     * Report whether supports cte.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsCte(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports recursive cte.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsRecursiveCte(): bool
     {
         return true;
     }
 
+    /**
+     * Cte keyword.
+     *
+     * @param bool $hasRecursive  Whether any attached CTE is recursive.
+     *
+     * @return string String result.
+     */
     protected function cteKeyword(bool $hasRecursive): string
     {
         return $hasRecursive ? 'WITH RECURSIVE ' : 'WITH ';
     }
 
+    /**
+     * Report whether supports writable cte.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsWritableCte(): bool
     {
         return false;
     }
 
+    /**
+     * Report whether supports recursive writable cte.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsRecursiveWritableCte(): bool
     {
         return $this->supportsRecursiveCte() && $this->supportsWritableCte();
     }
 
+    /**
+     * Report whether supports cte materialization hints.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsCteMaterializationHints(): bool
     {
         return false;
     }
 
+    /**
+     * Compile insert.
+     *
+     * @param InsertState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileInsert(InsertState $state): Sql
     {
         if ($state->table === null) {
@@ -218,7 +297,11 @@ abstract class Dialect
     /**
      * Normalize insert rows/columns and produce placeholders.
      *
+     * @param InsertState $state  Dialect compilation state.
+     *
      * @return array{0:array<int,string>,1:array<int,string>,2:array<int,string>,3:array<int,array<int,string>>}
+     *
+     * @throws QueryException If the operation fails.
      */
     protected function prepareInsertData(InsertState $state): array
     {
@@ -261,6 +344,15 @@ abstract class Dialect
         return [$columnNames, $quotedColumns, $values, $valuePlaceholders];
     }
 
+    /**
+     * Compile update.
+     *
+     * @param UpdateState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileUpdate(UpdateState $state): Sql
     {
         if ($state->table === null) {
@@ -301,6 +393,15 @@ abstract class Dialect
         return new Sql($sql, $state->getParams(), $state->tables, $state->returning ?? []);
     }
 
+    /**
+     * Compile delete.
+     *
+     * @param DeleteState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileDelete(DeleteState $state): Sql
     {
         if ($state->table === null) {
@@ -333,51 +434,61 @@ abstract class Dialect
 
     abstract public function compileUpsert(UpsertState $state): Sql;
 
+    /**
+     * Report whether supports returning.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsReturning(): bool
     {
         return false;
     }
 
-    public function supportsExplain(): bool
-    {
-        return false;
-    }
-
-    public function supportsExplainAnalyze(): bool
-    {
-        return false;
-    }
-
     /**
-     * @return iterable<int,SqlMessage>
+     * Report whether supports merge.
+     *
+     * @return bool Boolean result.
      */
-    public function buildExplainSql(SqlMessage $sql, bool $analyze): iterable
-    {
-        $descriptor = $analyze ? 'EXPLAIN ANALYZE' : 'EXPLAIN';
-
-        throw new QueryException($this->name() . sprintf(' dialect does not support %s statements.', $descriptor));
-    }
-
     public function supportsMerge(): bool
     {
         return false;
     }
 
+    /**
+     * Report whether supports upsert.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsUpsert(): bool
     {
         return false;
     }
 
+    /**
+     * Report whether supports intersect.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsIntersect(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports except.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsExcept(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports window functions.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsWindowFunctions(): bool
     {
         return true;

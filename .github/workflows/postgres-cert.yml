@@ -52,6 +52,8 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
+      - name: Run architecture guardrails
+        run: composer check
         
       - name: Run PostgreSQL certification suites
         env:
@@ -62,7 +64,7 @@ jobs:
           PGPASSWORD: postgres
           POSTGRES_REDIS_HOST: 127.0.0.1
           POSTGRES_MEMCACHED_HOST: 127.0.0.1
-        run: vendor/bin/phpunit tests/Postgres
+        run: vendor/bin/phpunit --bootstrap tests/postgres-bootstrap.php tests/Postgres
         
       - name: Reference Postgres certification docs
         run: echo "See docs/certification/postgresql.md for details"

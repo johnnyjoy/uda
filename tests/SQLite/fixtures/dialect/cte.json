@@ -1,3 +1,0 @@
-{
-    "cte-recursive-select": "WITH \"recent_hires\" AS MATERIALIZED (SELECT \"employees\".\"id\", \"employees\".\"name\", \"employees\".\"hired_at\" FROM \"employees\" WHERE \"employees\".\"hired_at\" >= :q1), \"salary_totals\" AS (SELECT \"salaries\".\"employee_id\", SUM(\"salaries\".\"amount\") AS total_paid FROM \"salaries\" GROUP BY \"salaries\".\"employee_id\" HAVING SUM(salaries.amount) >= :q2) SELECT \"recent_hires\".\"id\", \"recent_hires\".\"name\", COALESCE(\"salary_totals\".\"total_paid\", 0) AS total_paid FROM \"recent_hires\" LEFT JOIN \"salary_totals\" ON \"recent_hires\".\"id\" = \"salary_totals\".\"employee_id\" ORDER BY \"total_paid\" DESC"
-}

@@ -72,12 +72,20 @@ final class Select extends Abs
     /** @var ?Sql Cached Sql instance for repeated toSql() calls */
     private ?Sql $cachedSql = null;
 
+    /**
+     * Create the runtime object.
+     */
     public function __construct()
     {
         parent::__construct();
         $this->setStatementType('select');
     }
 
+    /**
+     *   clone.
+     *
+     * @return mixed Execution result.
+     */
     public function __clone()
     {
         parent::__clone();
@@ -86,6 +94,13 @@ final class Select extends Abs
         $this->cloneCtesOnClone();
     }
 
+    /**
+     * Add hint table.
+     *
+     * @param string $table  Target table name.
+     *
+     * @return void No return value.
+     */
     private function addHintTable(string $table): void
     {
         if ($table === '') {
@@ -98,8 +113,8 @@ final class Select extends Abs
     }
 
     /**
+     * @param string|Expr ...$columns  The columns or expressions to select
      *
-     * @param  string|Expr ...$columns The columns or expressions to select
      * @return self
      */
     public function select(string|Expr ...$columns): self
@@ -130,7 +145,8 @@ final class Select extends Abs
     /**
      * Add raw SQL expressions to SELECT clause
      *
-     * @param  string ...$expressions Raw SQL expressions
+     * @param string ...$expressions  Raw SQL expressions
+     *
      * @return self
      */
     public function selectRaw(string ...$expressions): self
@@ -145,13 +161,22 @@ final class Select extends Abs
     }
 
     /**
+     * @param string  $table  The table name
+     * @param ?string $alias  Optional table alias
      *
-     * @param  string  $table The table name
-     * @param  ?string $alias Optional table alias
      * @return self
      */
     public function from(string $table, ?string $alias = null): self
     {
+        // Support inline alias shorthand: ->from('employees e') == ->from('employees', 'e')
+        if ($alias === null && str_contains($table, ' ')) {
+            $parts = preg_split('/\s+/', trim($table), 2);
+
+            if ($parts !== false && count($parts) === 2) {
+                [$table, $alias] = $parts;
+            }
+        }
+
         $clone = clone $this;
         $clone->table = $table;
         $clone->alias = $alias;
@@ -163,6 +188,13 @@ final class Select extends Abs
 
     /**
      * Use a derived table / subquery in the FROM clause.
+     *
+     * @param Select|Sql $subquery  Subquery to embed.
+     * @param string     $alias     SQL alias.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
      */
     public function fromSub(Select|Sql $subquery, string $alias): self
     {
@@ -179,12 +211,12 @@ final class Select extends Abs
     }
 
     /**
+     * @param string  $table  The table to join
+     * @param string  $left   The left column
+     * @param string  $right  The right column
+     * @param string  $type   The join type (INNER, LEFT, RIGHT, etc.)
+     * @param ?string $alias  Optional table alias
      *
-     * @param  string  $table The table to join
-     * @param  string  $left  The left column
-     * @param  string  $right The right column
-     * @param  string  $type  The join type (INNER, LEFT, RIGHT, etc.)
-     * @param  ?string $alias Optional table alias
      * @return self
      */
     public function join(string $table, string $left, string $right, string $type = 'INNER', ?string $alias = null): self
@@ -202,6 +234,18 @@ final class Select extends Abs
         return $clone;
     }
 
+    /**
+     * Join sub.
+     *
+     * @param Select|Sql $subquery  Subquery to embed.
+     * @param string     $alias     SQL alias.
+     * @param string     $on        Join predicate SQL.
+     * @param string     $type      Join or set-operation type.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function joinSub(Select|Sql $subquery, string $alias, string $on, string $type = 'INNER'): self
     {
         if (trim($alias) === '') {
@@ -224,39 +268,68 @@ final class Select extends Abs
         return $clone;
     }
 
+    /**
+     * Left join sub.
+     *
+     * @param Select|Sql $subquery  Subquery to embed.
+     * @param string     $alias     SQL alias.
+     * @param string     $on        Join predicate SQL.
+     *
+     * @return self Configured instance.
+     */
     public function leftJoinSub(Select|Sql $subquery, string $alias, string $on): self
     {
         return $this->joinSub($subquery, $alias, $on, 'LEFT');
     }
 
+    /**
+     * Right join sub.
+     *
+     * @param Select|Sql $subquery  Subquery to embed.
+     * @param string     $alias     SQL alias.
+     * @param string     $on        Join predicate SQL.
+     *
+     * @return self Configured instance.
+     */
     public function rightJoinSub(Select|Sql $subquery, string $alias, string $on): self
     {
         return $this->joinSub($subquery, $alias, $on, 'RIGHT');
     }
 
-
     /**
+     * Start a WHERE chain.
      *
-     * @param  string|Expr $column   The column or expression to compare
-     * @param  mixed       $value    The value to compare against
-     * @param  string      $operator The comparison operator
-     * @return self
+     * When called with a value (`->where('id', $id)`), the condition is added
+     * immediately. When called without a value (`->where('hire_date')`), the
+     * returned WhereBuilder waits for a comparison operator such as
+     * `->between()`, `->gt()`, `->in()`, etc.
+     *
+     * @param string|Expr $column    The column or expression to compare.
+     * @param mixed       $value     Optional value; omit to use fluent operator chaining.
+     * @param string      $operator  The comparison operator (default '=').
+     *
+     * @return WhereBuilder
      */
-    public function where(string|Expr $column, mixed $value, string $operator = '='): WhereBuilder
+    public function where(string|Expr $column, mixed $value = null, string $operator = '='): WhereBuilder
     {
         $clone = clone $this;
         $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
-        $whereBuilder->where($column, $value, $operator);
+
+        if ($value !== null) {
+            $whereBuilder->where($column, $value, $operator);
+        } else {
+            $whereBuilder->setCurrentColumn($column);
+        }
 
         return $whereBuilder;
     }
 
     /**
+     * @param string $left      The left column
+     * @param string $right     The right column
+     * @param string $operator  The comparison operator
      *
-     * @param  string $left     The left column
-     * @param  string $right    The right column
-     * @param  string $operator The comparison operator
-     * @return self
+     * @return WhereBuilder
      */
     public function whereColumn(string $left, string $right, string $operator = '='): WhereBuilder
     {
@@ -268,8 +341,28 @@ final class Select extends Abs
     }
 
     /**
+     * Start a WHERE chain from a raw SQL condition fragment.
      *
-     * @param  string ...$columns The columns to group by
+     * Named parameters in the expression are allocated into the builder's
+     * parameter bag, so deterministic ordering is preserved.
+     *
+     * @param string $expression  Raw SQL condition (e.g., 't.employee_id = e.id').
+     * @param array  $params      Optional named parameter values.
+     *
+     * @return WhereBuilder
+     */
+    public function whereRaw(string $expression, array $params = []): WhereBuilder
+    {
+        $clone = clone $this;
+        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder->whereRaw($expression, $params);
+
+        return $whereBuilder;
+    }
+
+    /**
+     * @param string ...$columns  The columns to group by
+     *
      * @return self
      */
     public function groupBy(string ...$columns): self
@@ -286,7 +379,8 @@ final class Select extends Abs
     /**
      * Start a WHERE EXISTS chain
      *
-     * @param  Sql          $subquery Subquery to check for existence
+     * @param Sql $subquery  Subquery to check for existence
+     *
      * @return WhereBuilder
      */
     public function whereExists(Select|Sql $subquery): WhereBuilder
@@ -301,7 +395,8 @@ final class Select extends Abs
     /**
      * Start a WHERE NOT EXISTS chain
      *
-     * @param  Sql          $subquery Subquery to check for non-existence
+     * @param Sql $subquery  Subquery to check for non-existence
+     *
      * @return WhereBuilder
      */
     public function whereNotExists(Select|Sql $subquery): WhereBuilder
@@ -326,16 +421,38 @@ final class Select extends Abs
         return $clone;
     }
 
+    /**
+     * Union.
+     *
+     * @param Select $query  Query builder instance.
+     *
+     * @return self Configured instance.
+     */
     public function union(Select $query): self
     {
         return $this->addUnion('UNION', $query);
     }
 
+    /**
+     * Union all.
+     *
+     * @param Select $query  Query builder instance.
+     *
+     * @return self Configured instance.
+     */
     public function unionAll(Select $query): self
     {
         return $this->addUnion('UNION ALL', $query);
     }
 
+    /**
+     * Add union.
+     *
+     * @param string $type   Join or set-operation type.
+     * @param Select $query  Query builder instance.
+     *
+     * @return self Configured instance.
+     */
     private function addUnion(string $type, Select $query): self
     {
         $clone = clone $this;
@@ -350,9 +467,10 @@ final class Select extends Abs
     /**
      * Start a HAVING chain for aggregate filtering
      *
-     * @param  string|Expr  $column   Aggregate expression
-     * @param  mixed        $value    Comparison value (optional for fluent operator attachment)
-     * @param  string       $operator Comparison operator (=, !=, >, <, >=, <=)
+     * @param string|Expr $column    Aggregate expression
+     * @param mixed       $value     Comparison value (optional for fluent operator attachment)
+     * @param string      $operator  Comparison operator (=, !=, >, <, >=, <=)
+     *
      * @return WhereBuilder
      */
     public function having(string|Expr $column, mixed $value = null, string $operator = '='): WhereBuilder
@@ -372,6 +490,14 @@ final class Select extends Abs
         return $whereBuilder;
     }
 
+    /**
+     * Having raw.
+     *
+     * @param string $expression  SQL expression.
+     * @param array  $params      Named parameter values.
+     *
+     * @return self Configured instance.
+     */
     public function havingRaw(string $expression, array $params = []): self
     {
         $clone = clone $this;
@@ -383,11 +509,15 @@ final class Select extends Abs
     }
 
     /**
+     * Order by.
      *
-     * @param  string|Expr $column    The column or expression to order by
-     * @param  string      $direction The sort direction (ASC or DESC)
-     * @param  array       $allowlist Allowlist of valid columns
+     * @param string|Expr $column     The column or expression to order by
+     * @param string      $direction  The sort direction (ASC or DESC)
+     * @param array       $allowlist  Allowlist of valid columns
+     *
      * @return self
+     *
+     * @throws QueryException If the operation fails.
      */
     public function orderBy(string|Expr $column, string $direction = 'ASC', array $allowlist = []): self
     {
@@ -417,6 +547,14 @@ final class Select extends Abs
         return $clone;
     }
 
+    /**
+     * Report whether is allowed order column.
+     *
+     * @param string $column     Column name or expression.
+     * @param array  $allowlist  Allowed column names.
+     *
+     * @return bool Boolean result.
+     */
     private function isAllowedOrderColumn(string $column, array $allowlist): bool
     {
         $needle = strtolower($column);
@@ -433,9 +571,10 @@ final class Select extends Abs
     }
 
     /**
+     * @param int $limit  The limit value
      *
-     * @param  int            $limit The limit value
      * @return self
+     *
      * @throws QueryException If limit is negative
      */
     public function limit(int $limit): self
@@ -451,9 +590,10 @@ final class Select extends Abs
     }
 
     /**
+     * @param int $offset  The offset value
      *
-     * @param  int            $offset The offset value
      * @return self
+     *
      * @throws QueryException If offset is negative
      */
     public function offset(int $offset): self
@@ -468,11 +608,9 @@ final class Select extends Abs
         return $clone;
     }
 
-    // Query builders are immutable and do not execute - they only produce Sql objects
-    // Execution is handled exclusively by the Driver class
+    // Query builders produce Sql objects; execution is coordinated by Database.
 
     /**
-     *
      * @return ?array The tables for cache hinting
      */
     private function cacheTables(): ?array
@@ -484,6 +622,13 @@ final class Select extends Abs
         return array_values(array_unique($this->hintTables));
     }
 
+    /**
+     * Merge subquery tables.
+     *
+     * @param Sql $sql  SQL string, SQL message, or builder SQL object.
+     *
+     * @return void No return value.
+     */
     public function mergeSubqueryTables(Sql $sql): void
     {
         foreach ($sql->getCacheTables() as $table) {
@@ -515,120 +660,12 @@ final class Select extends Abs
         }));
     }
 
-    protected function fingerprintPayload(): array
-    {
-        return [
-            'ctes' => $this->fingerprintCtes(),
-            'distinct' => $this->distinct,
-            'columns' => array_map(fn ($column) => $this->fingerprintColumn($column), $this->columns),
-            'table' => $this->table,
-            'alias' => $this->alias,
-            'fromSubquery' => $this->fingerprintSubqueryDescriptor($this->fromSubquery),
-            'joins' => array_map(fn (array $join): array => $this->fingerprintJoin($join), $this->joins),
-            'where' => $this->builtWhere,
-            'whereFragments' => $this->where,
-            'groupBy' => $this->groupBy,
-            'having' => $this->builtHaving,
-            'havingFragments' => $this->having,
-            'orderBy' => array_map(fn ($clause) => $this->fingerprintOrderByClause($clause), $this->orderBy),
-            'limit' => $this->limit,
-            'offset' => $this->offset,
-            'unions' => array_map(function (array $union): array {
-                return [
-                    'type' => $union['type'],
-                    'query' => $this->fingerprintSubqueryDescriptor($union['query']),
-                ];
-            }, $this->unions),
-        ];
-    }
-
-    private function fingerprintColumn(mixed $column): mixed
-    {
-        if ($column instanceof Expr) {
-            return ['expr' => $column->fingerprintSql()];
-        }
-
-        if (is_array($column) && isset($column['expr'])) {
-            $expr = $column['expr'] instanceof Expr
-                ? $column['expr']->fingerprintSql()
-                : $column['expr'];
-
-            $payload = ['expr' => $expr];
-
-            if (isset($column['alias'])) {
-                $payload['alias'] = $column['alias'];
-            }
-
-            return $payload;
-        }
-
-        return $column;
-    }
-
-    private function fingerprintOrderByClause(mixed $clause): mixed
-    {
-        if (is_array($clause) && isset($clause['expr'], $clause['direction'])) {
-            $expr = $clause['expr'] instanceof Expr
-                ? $clause['expr']->fingerprintSql()
-                : $clause['expr'];
-
-            return [
-                'expr' => $expr,
-                'direction' => $clause['direction'],
-            ];
-        }
-
-        return $clause;
-    }
-
-    private function fingerprintJoin(array $join): array
-    {
-        return [
-            'type' => $join['type'],
-            'table' => $join['table'],
-            'alias' => $join['alias'],
-            'condition' => $join['condition'],
-            'subquery' => $this->fingerprintSubqueryDescriptor($join['subquery']),
-        ];
-    }
-
-    private function fingerprintSubqueryDescriptor(Select|Sql|null $subquery): ?array
-    {
-        if ($subquery === null) {
-            return null;
-        }
-
-        if ($subquery instanceof Select) {
-            return ['select' => $subquery->fingerprint()];
-        }
-
-        return [
-            'sql' => $subquery->getQuery(),
-            'params' => array_keys($subquery->getParams()),
-        ];
-    }
-
     /**
-     * Generates a SQL representation of this SELECT query as an executable Sql object.
+     * Build immutable `Sql` for this SELECT (memoised on the builder).
      *
-     * This method constructs the complete SQL string with proper parameter placeholders
-     * based on the query configuration (columns, joins, filters, ordering, etc.).
-     * The result is cached internally to avoid repeated string building for immutable queries.
+     * @return Sql SQL string and named parameters
      *
-     * @return Sql            The executable SQL object containing both SQL string and named parameters
-     * @throws QueryException If no table is defined (essential for FROM clause)
-     * @throws QueryException If the query builder is not properly configured
-     *
-     * @see Sql::class Executable SQL value object
-     * @see SqlMessage::class Alternative SQL representation for fragments
-     * @example
-     * $query = new Select();
-     * $sql = $query->from('users')
-     * ->select('id', 'name')
-     * ->where('status', 'active')
-     * ->orderBy('name')
-     * ->toSql();
-     * // Returns: Sql object with "SELECT id, name FROM users WHERE status = :p0 ORDER BY name"
+     * @throws QueryException If FROM/subquery is missing or SQL cannot be built
      */
     public function toSql(): \UDA\Query\Sql
     {
@@ -698,12 +735,12 @@ final class Select extends Abs
                 if ($column->usesWindow()) {
                     $this->assertWindowFunctionsSupported();
                 }
-                $rendered[] = $column->getSql($this->params);
+                $rendered[] = $column->getSql($this->params, engine: $this->engine);
                 continue;
             }
 
             if (is_array($column) && isset($column['expr']) && $column['expr'] instanceof Expr) {
-                $rendered[] = $column['expr']->getSql($this->params);
+                $rendered[] = $column['expr']->getSql($this->params, engine: $this->engine);
                 continue;
             }
 
@@ -743,11 +780,21 @@ final class Select extends Abs
         return $clauses;
     }
 
+    /**
+     * Cte context.
+     *
+     * @return string String result.
+     */
     protected function cteContext(): string
     {
         return 'select';
     }
 
+    /**
+     * Assert window functions supported.
+     *
+     * @return void No return value.
+     */
     private function assertWindowFunctionsSupported(): void
     {
         $this->assertDialectCapability(
@@ -757,8 +804,11 @@ final class Select extends Abs
     }
 
     /**
+     * Build from clause.
      *
      * @return string The FROM clause
+     *
+     * @throws QueryException If the operation fails.
      */
     private function buildFromClause(): string
     {
@@ -785,6 +835,11 @@ final class Select extends Abs
         return $clause;
     }
 
+    /**
+     * Build join clauses.
+     *
+     * @return array Result array.
+     */
     private function buildJoinClauses(): array
     {
         $clauses = [];
@@ -809,6 +864,13 @@ final class Select extends Abs
         return $clauses;
     }
 
+    /**
+     * Render subquery.
+     *
+     * @param Select|Sql $subquery  Subquery to embed.
+     *
+     * @return string String result.
+     */
     private function renderSubquery(Select|Sql $subquery): string
     {
         $sql = $subquery instanceof Select ? $subquery->toSql() : $subquery;
@@ -827,6 +889,11 @@ final class Select extends Abs
         return '(' . $query . ')';
     }
 
+    /**
+     * Build where clause.
+     *
+     * @return ?string String result, or null when absent.
+     */
     private function buildWhereClause(): ?string
     {
         if ($this->builtWhere !== null) {
@@ -840,6 +907,11 @@ final class Select extends Abs
         return null;
     }
 
+    /**
+     * Build having clause.
+     *
+     * @return ?string String result, or null when absent.
+     */
     private function buildHavingClause(): ?string
     {
         if ($this->builtHaving !== null) {
@@ -856,8 +928,8 @@ final class Select extends Abs
     // ----- Constitutional Execution Helpers -----
 
     /**
+     * @return ?array The single row result or null
      *
-     * @return ?array         The single row result or null
      * @throws QueryException If not bound to a driver
      */
     public function row(): ?array
@@ -865,36 +937,53 @@ final class Select extends Abs
         return $this->delegateThroughDatabase('row');
     }
 
+    /**
+     * Execute and return all rows.
+     *
+     * @return array Result array.
+     */
     public function rows(): array
     {
         return $this->delegateThroughDatabase('rows');
     }
 
+    /**
+     * Execute and return a single value.
+     *
+     * @return mixed Execution result.
+     */
     public function value(): mixed
     {
         return $this->delegateThroughDatabase('value');
     }
 
+    /**
+     * Execute and return the first column from every row.
+     *
+     * @return array Result array.
+     */
     public function values(): array
     {
         return $this->delegateThroughDatabase('values');
     }
 
-    public function list(): array
+    /**
+     * Execute and return the first row as a numeric list.
+     *
+     * @return ?array<int,mixed> Row values or null.
+     */
+    public function list(): ?array
     {
         return $this->delegateThroughDatabase('list');
     }
 
-    public function explain(): array
-    {
-        return $this->delegateThroughDatabase('explain');
-    }
-
-    public function explainAnalyze(): array
-    {
-        return $this->delegateThroughDatabase('explainAnalyze');
-    }
-
+    /**
+     * Each.
+     *
+     * @param callable $fn  Callback to execute.
+     *
+     * @return int Integer result.
+     */
     public function each(callable $fn): int
     {
         return $this->delegateThroughDatabase('each', $fn);
@@ -902,6 +991,10 @@ final class Select extends Abs
 
     /**
      * Execute COUNT(...) wrapping this query and return the scalar integer result.
+     *
+     * @param string $expression  SQL expression.
+     *
+     * @return int Integer result.
      */
     public function count(string $expression = '*'): int
     {
@@ -910,6 +1003,13 @@ final class Select extends Abs
         return (int) $this->executeSql('value', $countSql);
     }
 
+    /**
+     * Build count sql.
+     *
+     * @param string $expression  SQL expression.
+     *
+     * @return Sql Compiled SQL message.
+     */
     private function buildCountSql(string $expression): Sql
     {
         $inner = $this->toSql();

@@ -7,6 +7,13 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Carries UPSERT builder state into dialect compilation.
+ *
+ * UpsertState preserves conflict keys, write values, update actions, generated
+ * params, and quoting callbacks for dialect compilers.
+ */
+
 namespace UDA\Query\Dialect;
 
 use Closure;
@@ -17,6 +24,20 @@ use UDA\SQL\ParamBag;
  */
 final class UpsertState
 {
+    /**
+     * Create the runtime object.
+     *
+     * @param ?string  $table         Target table name.
+     * @param array    $values        Values to process.
+     * @param array    $rows          Column/value row data set.
+     * @param array    $conflictKeys  Columns that identify an upsert conflict.
+     * @param array    $updates       Column updates applied when an upsert conflict occurs.
+     * @param bool     $doNothing     Whether the upsert should ignore conflicts.
+     * @param array    $tables        Table names used for cache metadata.
+     * @param ParamBag $params        Named parameter values.
+     * @param Closure  $parameterize  Closure that stores a bound value and returns its placeholder.
+     * @param Closure  $quote         Closure that quotes an identifier for the active dialect.
+     */
     public function __construct(
         public readonly ?string $table,
         public readonly array $values,
@@ -31,6 +52,13 @@ final class UpsertState
     ) {
     }
 
+    /**
+     * Bind a value and return its generated placeholder.
+     *
+     * @param mixed $value  Value to render or bind.
+     *
+     * @return string Named placeholder.
+     */
     public function param(mixed $value): string
     {
         $fn = $this->parameterize;
@@ -38,6 +66,13 @@ final class UpsertState
         return $fn($value);
     }
 
+    /**
+     * Quote.
+     *
+     * @param string $identifier  Identifier value.
+     *
+     * @return string String result.
+     */
     public function quote(string $identifier): string
     {
         $fn = $this->quote;
@@ -45,6 +80,11 @@ final class UpsertState
         return $fn($identifier);
     }
 
+    /**
+     * Return accumulated named parameters.
+     *
+     * @return array Result array.
+     */
     public function getParams(): array
     {
         return $this->params->getParams();

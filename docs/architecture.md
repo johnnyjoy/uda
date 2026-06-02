@@ -28,13 +28,9 @@ Repository
      ↓
 Database
      ↓
-RetryPolicy (optional)
-     ↓
 Driver
      ↓
 Cache (decision)
-     ↓
-Executor
      ↓
 PDO
      ↓
@@ -58,13 +54,11 @@ Database
      ↓
 Driver
      ↓
-Executor
-     ↓
 PDO
      ↓
 Database Engine
      ↓
-TableWriteTracker
+Cache table touch
      ↓
 Cache invalidation
 ```
@@ -85,7 +79,7 @@ Driver
 Cache metadata decision
      ↓
 Cache hit → return result
-Cache miss → Executor → PDO
+Cache miss → PDO through Driver hot path
      ↓
 Store result in Cache
 ```
@@ -123,22 +117,16 @@ Responsibilities:
 * expose execution methods
 * create query builders
 * route RETURNING/OUTPUT requests through `returning()` so writes still flow through the single execution path
-* inject cross-cutting execution layers (retry, tracing) **after** guardrails but before Driver
+* keep application code on the single `Database -> Driver` path
 
 Database does **not execute SQL**.
 
-### Retry Policy Placement
+### Public API Placement
 
-When `Database::setRetryPolicy()` receives a `RetryPolicy`, the database wraps every execution closure with that policy:
-
-```
-builder/raw sql
-    ↓ guardrails
-Database retry wrapper (optional)
-    ↓ Driver
-```
-
-The wrapper respects the single-path rule by looping on the same driver call rather than branching execution. Guardrails always run before the loop so unsafe queries are blocked once, even when retries are enabled.
+`Database` is intentionally thin. It normalizes raw SQL and builder output into
+the execution envelope, then delegates to `Driver`. Retry, tracing, replay, and
+plan-cache layers are deferred from v1 until they can be proven without adding
+another public model or execution path.
 
 ---
 
@@ -187,96 +175,12 @@ Query objects must never:
 
 ---
 
-### Query Plan Cache
+### Deferred Runtime Extensions
 
-Repeatedly compiling identical builder trees wastes CPU. Database owns a **plan cache** that stores the `SqlMessage` produced for a builder fingerprint. The fingerprint captures the builder structure (selected columns, joins, where/having clauses, CTE definitions, etc.) but intentionally ignores runtime parameter values—`WHERE id = :q1` and `WHERE id = :q1` with different values reuse the same fingerprint. The plan cache key is `strtolower(dialect->name()) . ':' . fingerprint`. Dialect safety prevents, for example, PostgreSQL plans from being reused under SQLite.
-
-Cache implementation details:
-
-* global in-memory store `UDA\Query\QueryPlanCache`
-* FIFO eviction with configurable maximum (default 1000 compiled statements)
-* disabled/enabled toggle for benchmarks or diagnostics
-* stored `SqlMessage` instances are cloned on insert and retrieval so parameter binding/mutation cannot leak between executions
-
-Execution flow with caching:
-
-```
-Builder
-    ↓ fingerprint()
-Database → QueryPlanCache lookup (dialect + fingerprint)
-    ↓ miss → builder->toSql() → SqlMessage stored
-    ↓ hit  → cloned SqlMessage reused immediately
-Driver executes SqlMessage
-```
-
-Drivers remain unaware of caching; they still receive a `SqlMessage`. The optimization is entirely inside Database so query grammar and repositories remain unchanged.
-
----
-
-### Prepared Statement Cache
-
-Query plan caching stops redundant SQL compilation, but PDO would still re-prepare the same statement over and over. Each `Driver` instance therefore owns a connection-scoped **prepared statement cache**. Keys include the dialect name, an internal connection hash, and the raw SQL string (e.g., `sqlite:42:SELECT "id" FROM "users" WHERE "id" = :q1`). Values are the live `PDOStatement` handles. The cache is FIFO-bounded (default 500 statements per connection); eviction closes the cursor before discarding the handle. Every execution follows the same flow:
-
-```
-SqlMessage (from plan cache)
-    ↓
-Driver looks up statement cache key
-    ↓ miss → PDO::prepare() once, store handle
-    ↓ hit  → reuse prepared PDOStatement
-bind named parameters
-execute
-close cursor → ready for next bind
-```
-
-The cache never crosses connections or dialects because it lives inside each driver instance. Oracle’s `RETURNING … INTO` helpers use the same cache so output buffers remain stable even when statements are reused. Together, the plan cache + prepared statement cache remove both the SQL compilation cost and the database preparation cost while preserving determinism and the single execution path.
-
----
-
-### Query Tracing & Observability
-
-Every database execution now emits a `QueryTrace` event from the Database domain. The trace records the canonical SQL text, bound parameters (optionally redacted), connection name, dialect, execution time in milliseconds, inferred row/affected counts, cache signals (plan-cache hit, prepared-statement hit, result-cache hit), referenced tables, and a `slow` flag derived from the configured threshold. The capture point sits in `Database::traceOperation()` so both builder-driven and raw SQL paths flow through the same instrumentation without touching Driver.
-
-Traces are delivered to registered `QueryTraceListener` instances (via `Database::addTraceListener()`), which keeps observability pluggable. Two listeners ship by default:
-
-1. **QueryTraceLogger** – logs concise `[connection][dialect][ms][rows] SQL` summaries (slow traces automatically append ` [SLOW]`).
-2. **QueryTraceCollector** – retains traces in memory for testing, benchmarks, and diagnostics.
-
-Connection config enables tracing per connection:
-
-```
-"trace": {
-    "enabled": true,
-    "slow_query_ms": 100,
-    "log_slow_queries": true,
-    "redact_parameters": false
-}
-```
-
-* `enabled` toggles tracing even without listeners (useful for dev tooling and diagnostics).
-* `slow_query_ms` defines the threshold; any trace meeting or exceeding the value sets `slow = true`.
-* `log_slow_queries` writes slow-trace summaries to the PHP error log without requiring a listener.
-* `redact_parameters` replaces every bound value with `***` in the emitted payload.
-
-Example collector payload:
-
-```
-{
-  "operation": "row",
-  "sql": "SELECT \"label\" FROM \"trace_items\" WHERE \"id\" = :q1",
-  "parameters": {"q1": 42},
-  "dialect": "sqlite",
-  "connection": "trace_db",
-  "executionTimeMs": 0.87,
-  "rowCount": 1,
-  "planCacheHit": true,
-  "statementCacheHit": true,
-  "resultCacheHit": false,
-  "tables": ["trace_items"],
-  "slow": false
-}
-```
-
-When tracing is disabled and no listeners are registered the instrumentation short-circuits immediately to keep overhead negligible (<1%). When enabled, traces cover every Database entrypoint including `rows`, `row`, `exec`, `returning`, `each`, and the builder delegation path so repositories gain observability without modifying their query code. Plan inspection uses the exact same pathway: `plan()`, `explain()`, and `explainAnalyze()` emit operations of `plan`, `explain`, and `explain_analyze` with extra payload (`planDialect`, `planSql`, `explainFormat`, `planOutput`, `analyze`) so listeners can correlate captured plans with timings and cache signals. Analyze runs still participate in slow-query detection because they execute SQL; logical explains bypass the timer entirely because Driver never reaches PDO.
+Plan caches, prepared-statement caches, tracing, replay, and retry behavior are
+not part of the v1 architecture. They must not appear in user-facing docs or
+code paths until they are explicitly reaccepted and proven to preserve the
+single execution path.
 
 ---
 
@@ -424,7 +328,59 @@ Architectural simplicity is mandatory.
 Every SQL operation must follow:
 
 ```
-Repository → Database → Driver → Executor → PDO
+Repository → Database → Driver → PDO
 ```
 
 If any component bypasses this path, the architecture is invalid.
+
+---
+
+# Connection Pool
+
+UDA maintains one Database handle and one PDO connection per named connection
+per process lifetime. There is **one pool** — `Database::$databases`.
+
+**`Database::connect($name)`** is the entry point and the pool gate. The first
+call for a given name constructs and caches a `Database` instance (which owns
+a `Driver` instance, which owns the `PDO`). Every subsequent call for the same
+name returns the cached instance with a single array lookup. When the name is
+already known and pooled, argument parsing and `Config::init()` are bypassed
+entirely.
+
+**`Driver` has no static pool.** The `Driver` instance is long-lived because
+`Database` holds a stable reference to it. The `Driver` replaces only its
+internal `PDO` when `executeInternal()` hits a reconnectable connection failure
+(SQLSTATE class `08`, common MySQL `2006`/`2013`, or similar): it calls
+`reconnect()` and retries the same prepare/execute **once**. There is no
+proactive `SELECT 1` ping on the happy path.
+
+**Prepared statement LRU (per `Driver`):** Up to 64 distinct normalised SQL
+strings map to reused `PDOStatement` instances for the current `PDO`, reducing
+repeat `prepare()` cost in long-lived workers. The cache is keyed by the exact
+query string passed to `prepare()`. It is **cleared entirely on `reconnect()`**
+because statements are invalid after the `PDO` handle is replaced.
+
+Optional external timing: `tools/benchmark-prepared-lru.php` exercises the production
+LRU path only (no in-process disable switch). Compare runs across revisions or
+database targets; use APM/profiling for production evidence.
+
+**`Link` classes** cache the `Database` handle in a `private static ?Database`
+property on the consuming class. After the first call, `handle()` costs one null
+check — no syscalls, no Config reads, no pool lookups.
+
+## Process model notes
+
+| Process model | Pool behaviour |
+|---|---|
+| PHP-FPM (one process per request) | Pool resets between requests. One PDO per named connection per request. |
+| Long-running (Swoole, RoadRunner, Octane) | Pool persists across requests. Dropped connections are detected when a statement fails, then transparent reconnect + single retry. |
+
+## PDO error mode
+
+UDA enforces `PDO::ERRMODE_EXCEPTION` unconditionally. Consumer config may add
+or override other PDO options but cannot silence exceptions. This is required
+for reliable error handling and reconnect classification.
+
+For high-concurrency long-running deployments an external connection pooler
+(PgBouncer for PostgreSQL, ProxySQL for MySQL) is still recommended alongside
+UDA's process-level pool.

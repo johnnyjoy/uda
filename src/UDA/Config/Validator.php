@@ -12,7 +12,10 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: Validates JSON configuration files for database connections, ensuring structural correctness and preventing runtime errors.
+ * Purpose: Validates decoded UDA configuration before Snapshot creation.
+ *
+ * Validator checks the root shape, default connection settings, and connection
+ * entries so Config can publish one immutable process-wide snapshot.
  */
 
 namespace UDA\Config;
@@ -20,7 +23,7 @@ namespace UDA\Config;
 use UDA\Exception\ConfigException;
 
 /**
- * Config validator that ensures JSON structure and types are correct
+ * Validator for decoded configuration arrays.
  */
 final class Validator
 {
@@ -28,10 +31,13 @@ final class Validator
     private array $errors = [];
 
     /**
+     * Validate decoded config and return an immutable snapshot.
      *
-     * @param  array           $config The configuration to validate
-     * @return Snapshot        The validated configuration snapshot
-     * @throws ConfigException If validation fails
+     * @param array<string,mixed> $config  The decoded configuration.
+     *
+     * @return Snapshot The validated configuration snapshot.
+     *
+     * @throws ConfigException If validation fails.
      */
     public function validate(array $config): Snapshot
     {
@@ -46,17 +52,15 @@ final class Validator
             throw new ConfigException('Validation failed: ' . implode(', ', $this->errors));
         }
 
-        return new Snapshot(
-            $defaults['connection'] ?? null,
-            $connections,
-            $defaults
-        );
+        return new Snapshot($connections, $defaults);
     }
 
     /**
+     * Ensure the root config has a connections map.
      *
-     * @param  array $config The configuration to validate
-     * @return void
+     * @param array<string,mixed> $config  The decoded configuration.
+     *
+     * @return void No return value.
      */
     private function validateTopLevel(array $config): void
     {
@@ -66,9 +70,11 @@ final class Validator
     }
 
     /**
+     * Extract defaults and support the legacy top-level default key.
      *
-     * @param  array $config The configuration to validate
-     * @return array The validated default configuration values
+     * @param array<string,mixed> $config  The decoded configuration.
+     *
+     * @return array<string,mixed> The validated default configuration values.
      */
     private function validateAndExtractDefaults(array $config): array
     {
@@ -88,13 +94,19 @@ final class Validator
             $this->errors[] = "defaults.options must be an array";
         }
 
+        if (isset($config['default']) && is_string($config['default']) && !isset($defaults['connection'])) {
+            $defaults['connection'] = $config['default'];
+        }
+
         return $defaults;
     }
 
     /**
+     * Validate named connection entries.
      *
-     * @param  array $config The configuration to validate
-     * @return array The validated connection configurations
+     * @param array<string,mixed> $config  The decoded configuration.
+     *
+     * @return array<string,array<string,mixed>> The validated connection configurations.
      */
     private function validateConnections(array $config): array
     {
@@ -109,6 +121,11 @@ final class Validator
 
             if (!isset($connection['driver']) || !is_string($connection['driver'])) {
                 $this->errors[] = "Connection '$name' must have 'driver' as string";
+                continue;
+            }
+
+            if (isset($connection['transport']) && !is_string($connection['transport'])) {
+                $this->errors[] = "Connection '$name' 'transport' must be a string";
                 continue;
             }
 

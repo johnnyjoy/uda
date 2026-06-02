@@ -1,20 +1,3 @@
-Your README is already **very close to ideal** for a systems-style project. The main thing to tighten is **clarity of hierarchy and enforcement**, so someone new to the repo understands immediately:
-
-* which docs are **normative**
-* which are **explanatory**
-* which are **developer-facing**
-
-Right now it’s good, but it can be sharpened slightly so it reads more like a **technical constitution index** rather than a general README.
-
-Below is a **refined version** that keeps your intent but improves:
-
-* scanability
-* document taxonomy
-* enforcement language
-* onboarding clarity
-
----
-
 # UDA Documentation Index (Normative Order)
 
 **UDA — Universal Data Abstractor**
@@ -61,6 +44,7 @@ Anyone modifying UDA must read these documents first.
 | Document            | Purpose                                        |
 | ------------------- | ---------------------------------------------- |
 | **constitution.md** | design philosophy and project goals            |
+| **product-contract-v1.md** | finished v1 product promise and boundaries |
 | **style-guide.md**  | formatting, naming, documentation requirements |
 | **contract.md**     | hard architectural rules                       |
 | **spec.md**         | detailed system contract and invariants        |
@@ -94,6 +78,7 @@ These documents describe **how application developers should use UDA**.
 | Document              | Purpose                         |
 | --------------------- | ------------------------------- |
 | **public-api.md**     | official API surface            |
+| **getting-started.md** | install, config, connect, and common usage examples |
 | **repositories.md**   | recommended repository pattern  |
 | **query-cookbook.md** | common SQL composition patterns |
 

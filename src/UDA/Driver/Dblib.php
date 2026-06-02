@@ -12,22 +12,28 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: Implements SQL Server connectivity via the dblib PDO extension for FreeTDS compatibility.
+ * Purpose: dblib: PDO DSN builder for DBLib transport.
+ *
+ * Used when engine sqlserver selects transport dblib, or when building Sybase
+ * connections via Driver\Sybase::dsn(). SQL fragment rules live on the engine
+ * class (SQLServer or Sybase), not here.
  */
 
 namespace UDA\Driver;
 
-use UDA\Driver as BaseDriver;
-use UDA\Exception\QueryException;
-
-final class Dblib extends BaseDriver
+/**
+ * DBLib PDO transport — DSN construction only.
+ */
+final class Dblib
 {
     /**
-     * DBLib format: dblib:host=server:port;dbname=database
+     * Build a DBLib PDO DSN from normalized connection params.
+     *
+     * @param array<string,mixed> $params  Connection params keyed by config name.
+     *
+     * @return string PDO DSN string.
      */
-    protected ?string $dbtype = 'dblib';
-
-    protected function buildDsn(array $params): string
+    public static function dsn(array $params): string
     {
         $host = $params['host'] ?? 'localhost';
         $port = isset($params['port']) ? ':' . $params['port'] : '';
@@ -40,42 +46,5 @@ final class Dblib extends BaseDriver
         }
 
         return $dsn;
-    }
-
-    protected function quoteIdentifier(string $identifier): string
-    {
-        $clean = trim($identifier);
-        $escaped = str_replace(']', ']]', $clean);
-
-        return '[' . $escaped . ']';
-    }
-
-    public function limitOffset(int $limit, int $offset): string
-    {
-        if ($limit < 0 || $offset < 0) {
-            throw new QueryException('LIMIT/OFFSET must be non-negative');
-        }
-
-        return sprintf('OFFSET %d ROWS FETCH NEXT %d ROWS ONLY', $offset, $limit);
-    }
-
-    protected function savepointSql(string $name): ?string
-    {
-        return 'SAVE TRANSACTION ' . $name;
-    }
-
-    protected function releaseSavepointSql(string $name): ?string
-    {
-        return null;
-    }
-
-    protected function rollbackSavepointSql(string $name): ?string
-    {
-        return 'ROLLBACK TRANSACTION ' . $name;
-    }
-
-    protected function onConnect(): void
-    {
-        // DB-Library driver does not require special session setup
     }
 }

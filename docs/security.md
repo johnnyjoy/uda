@@ -69,12 +69,10 @@ Database
    ↓
 Driver
    ↓
-Executor
-   ↓
 PDO
 ```
 
-The **Executor** is the only place where SQL reaches PDO.
+The **Driver** is the only place where SQL reaches PDO.
 
 Internally it performs:
 
@@ -201,18 +199,15 @@ It must **never include**:
 
 ---
 
-# 7. Query Tracing Hygiene
+# 7. Inspection Hygiene
 
-The new query tracing system exposes SQL text and parameter metadata for observability. To keep sensitive values protected:
+V1 exposes only small debugging helpers: `lastSql()`, `lastParams()`, and
+builder `toSql()`. These helpers are useful during development, but application
+code must still treat SQL text and parameter values as sensitive operational
+data.
 
-* Tracing is **disabled by default**. Enable it per connection (via `trace.enabled`) only when needed.
-* Use `trace.redact_parameters = true` in production to replace every parameter value with `***` before a trace is dispatched or logged.
-* Restrict slow-query logging to trusted destinations. `trace.log_slow_queries` writes summaries to the PHP error log; ensure that log target is access-controlled.
-* Traces include table names and connection identifiers so they can be correlated with cache invalidation without leaking raw data. Avoid attaching request IDs or user data unless they are sanitized.
-
-The trace payload deliberately omits actual result sets. Only metadata (SQL text, timing, row counts, cache flags) is exposed to listeners so observability stays safe-by-default.
-
-This prevents sensitive information from leaking into logs.
+Do not write raw parameter values, credentials, or full request-derived SQL to
+untrusted logs.
 
 ---
 

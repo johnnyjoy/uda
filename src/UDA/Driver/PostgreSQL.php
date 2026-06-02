@@ -12,44 +12,40 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: PostgreSQL-specific database driver implementation for UDA.
+ * Purpose: Provides PostgreSQL engine rules for the Driver domain.
+ *
+ * PostgreSQL supplies pure DSN, identifier quoting, and RETURNING clause
+ * fragments. It does not own PDO or execute SQL.
  */
 
 namespace UDA\Driver;
 
-use PDO;
-use UDA\Driver;
-use UDA\Query\Upsert;
-
 /**
- * PostgreSQL driver that handles PostgreSQL-specific DSN building and dialect
+ * PostgreSQL engine rules for the Driver domain.
  */
-final class PostgreSQL extends Driver
+final class PostgreSQL
 {
-    protected ?string $dbtype = 'pgsql';
     /**
      * Builds a PostgreSQL DSN (Data Source Name) string from connection parameters.
-     *
      * Constructs a DSN in the format `pgsql:host=...;port=...;dbname=...` for use
      * with PDO. Omits optional fields (like SSL) if not provided in $params.
-     *
-     * @param  array<string, string> $params Connection parameters with optional keys:
      *                                       - 'host': Database server hostname/IP (defaults omit)
      *                                       - 'port': Database port (defaults omit)
      *                                       - 'dbname': Database name (defaults omit)
-     * @return string                The constructed DSN string
-     *
-     * @see PDO::__construct() PDO DSN format requirements
-     * @see Driver::buildDsn() Generic DSN builder for other drivers
-     * @example
      * // Returns: "pgsql:host=localhost;port=5432;dbname=mydb"
-     * $this->buildDsn([
+     * self::dsn([
      * 'host' => 'localhost',
      * 'port' => '5432',
      * 'dbname' => 'mydb'
      * ]);
+     *
+     * @return string The constructed DSN string
+     *
+     * @param  array<string, string> $params Connection parameters with optional keys:
+     * @see \PDO::__construct() PDO DSN format requirements
+     * @example
      */
-    protected function buildDsn(array $params): string
+    public static function dsn(array $params): string
     {
         $parts = ['pgsql'];
 
@@ -77,50 +73,42 @@ final class PostgreSQL extends Driver
 
     /**
      * Generates a PostgreSQL RETURNING clause for retrieving inserted/updated rows.
-     *
      * The RETURNING clause allows immediate access to modified data without a separate
      * SELECT query. This is especially useful for retrieving generated IDs or sequences.
-     *
-     * @param  string        $table   The table name (used for documentation; not in output SQL)
-     * @param  array<string> $columns Column names to return (e.g., ["id", "created_at"])
-     * @return string        SQL fragment like ` RETURNING id, created_at`
-     *
-     * @throws \RuntimeException If column array is empty
-     * @see PDOStatement::fetch() Methods to process returned rows
-     * @example
      * // Insert and return generated data
      * $sql = "INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com')"
      * . $driver->buildReturningSql('users', ['id', 'created_at']);
      * $result = $driver->row($sql); // Returns ['id' => 1, 'created_at' => '2023-01-01']
+     *
+     * @param string        $table    The table name (used for documentation; not in output SQL)
+     * @param array<string> $columns  Column names to return (e.g., ["id", "created_at"])
+     *
+     * @return string SQL fragment like ` RETURNING id, created_at`
+     *
+     * @throws \RuntimeException If column array is empty
+     *
+     * @see PDOStatement::fetch() Methods to process returned rows
+     * @example
      */
-    public function buildReturningSql(string $table, array $columns): string
+    public static function returningSql(string $table, array $columns): string
     {
-        $quotedCols = array_map([$this, 'q'], $columns);
+        $quotedCols = array_map([self::class, 'quoteIdentifier'], $columns);
 
         return ' RETURNING ' . implode(', ', $quotedCols);
     }
 
     /**
+     * Quote a PostgreSQL identifier with ANSI double quotes.
      *
-     * @return string The savepoint name
+     * @param string $identifier  Identifier value.
+     *
+     * @return string Quoted identifier.
      */
-    protected function createSavepointName(): string
+    public static function quoteIdentifier(string $identifier): string
     {
-        $this->savepointCounter++;
+        $clean = trim($identifier);
+        $escaped = str_replace('"', '""', $clean);
 
-        return 'uda_sp_' . $this->savepointCounter;
-    }
-
-    protected function onConnect(): void
-    {
-        // PostgreSQL session initialization (timezone, encoding, etc.)
-        // Can be configured via connection options
-    }
-
-    public function upsertExec(Upsert $query): int
-    {
-        $sql = $query->toSql();
-
-        return $this->exec($this->toSqlMessage($sql), [], $sql->getCacheTables());
+        return '"' . $escaped . '"';
     }
 }

@@ -1,0 +1,36 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- `skills/` agent skill pack for application DAL on UDA (`uda-dal-layer`, `uda-sql-and-cache`, `uda-config-deploy`, `uda-change-gates`); see `skills/README.md`.
+- `UDA\Cache::flush($connectionName)` and `Database::flushCache()` for ops-only cache purge (per-connection namespace scope).
+- `.gitlab/` MR + issue templates; `CONTRIBUTING.md`; `SECURITY.md`; `docs/releases.md`.
+
+### Removed
+
+- **`UDA\Query` static facade** — redundant second ingress; all paths use `Database::connect()` or `Link`. See `memory-bank/creative/creative-query-ingress.md`.
+
+### Changed
+
+- `UDA\Driver::engineKey()` centralizes engine alias normalization; `Database::queryDialect()` selects dialects using canonical keys only (Driver cannot import Query).
+- Config ingestion normalizes each connection to **`engine`** + **`transport`**; per-engine classes under `UDA\Driver\` build DSN strings; **`UDA\Driver` always owns `new PDO()`**. DSN routing is by engine (transport only selects `sqlsrv` vs `dblib` for SQL Server).
+- `UDA\Driver::transportName()` and `Config::transport()` expose the normalized PDO transport prefix.
+- `UDA\Driver\Sybase` engine class; Sybase dialect disables MERGE/UPSERT until ASE certified (`supportsMerge`/`supportsUpsert` false).
+- Removed `db2` from `Database::queryDialect()` until `Driver/Db2.php` exists; `Query/Dialect/Db2.php` retained for future compilation.
+- Removed in-process `UDA_DRIVER_DISABLE_PREPARED_LRU` benchmark bypass from `Driver::getOrPrepareStatement()`; `tools/benchmark-prepared-lru.php` times production LRU path only.
+- Documented engine vs driver vs transport vocabulary (`docs/driver.md`, `docs/public-api.md` §12).
+- Removed `Query\Dialect\Registry` (redundant indirection).
+- `UDA\Driver::engineName()` replaces internal `$dbtype`; `limitOffsetForBackend` renamed to `limitOffsetFor`.
+- Removed unused `Driver::resolveCredentials`, stub `isTransient`, and stub `consumeResultCacheHit`.
+- `Query\Expr` expression aliases now quote via `SQL\Identifier` / `Driver::quoteIdentifier()` (same rules as column identifiers), not a separate ANSI-only path.
+- Docs: certification status synced with CI; cache ops (`flush`/`clear`), optional cache extensions, and read-path vs ops-only cache API (`docs/caching.md`, `docs/configuration.md`, `docs/public-api.md`, certification/support docs).
+- **Breaking:** `UDA\Cache::clearForTests()` renamed to `UDA\Cache::clear()`; docblock now states scope (process-local statics only, not remote store purge).
+- Docs: where CI runs; contributor expectations before merge.
+- PHPDoc: shorter summaries on `Sql`, `Abs::param()`, `WhereBuilder::in()`/`build()`, and `toSql()` on concrete builders.

@@ -1,21 +1,3 @@
-This is already strong and coherent with your **Contract**, but there are a few places where tightening it will make it **more enforceable and less contradictory** with the rest of the UDA constitution.
-
-Main issues I see:
-
-1. **Purpose statements are too verbose to enforce** — CI cannot realistically verify “comprehensive purpose statements”.
-2. **Driver vs Database terminology drift** — your other docs increasingly say *Database is the public domain* while Driver is internal.
-3. **Cache rule conflicts with earlier API doc** — earlier you allowed `$driver->cache()`. This guide forbids it. Pick one.
-4. **Style vs Architecture mixing** — style guides should define **how code looks**, not system architecture rules (execution path, cache rules, etc.). Those belong in the **Contract**.
-
-The fix is simple:
-
-* keep architecture rules in the **Contract**
-* keep coding discipline in the **Style Guide**
-
-Below is a **cleaned, enforceable version** that keeps your philosophy but removes contradictions.
-
----
-
 # UDA Style Guide
 
 This document defines how code in **Universal Data Abstractor (UDA)** must be written.
@@ -65,6 +47,39 @@ They should be **short and precise**.
 Purpose statements exist to prevent scope creep.
 
 CI must fail if any source file lacks a `Purpose:` statement.
+
+---
+
+# 1.1 PHPDoc Blocks Use PEAR Style
+
+PHPDoc blocks must follow PEAR-style formatting.
+
+Method docblocks must:
+
+* include `@param` for every declared parameter
+* include `@return` for every non-constructor method
+* include `@throws` when the method raises a domain exception
+* align `@param` type and variable columns
+* separate `@param`, `@return`, and `@throws` groups with blank docblock lines
+* use meaningful descriptions instead of generated filler
+
+Example:
+
+```php
+/**
+ * Build SQL Server-style pagination for DBLib.
+ *
+ * @param int $limit   Maximum number of rows.
+ * @param int $offset  Number of rows to skip.
+ *
+ * @return string Pagination SQL fragment.
+ *
+ * @throws QueryException If limit or offset is negative.
+ */
+```
+
+Inline examples are not the boundary of the rule. If another PEAR-standard
+tag improves clarity or static analysis, use it.
 
 ---
 
@@ -517,6 +532,32 @@ CI must fail on dependency violations.
 
 ---
 
+# What CI enforces today (enforcement map)
+
+This table is the **maintainer-facing truth** for automation that actually runs
+under `composer check` and related scripts. It sits alongside aspirational rules
+elsewhere in this document: if a rule is not listed here as enforced, treat it
+as **review-enforced** until a tool is added.
+
+| Style-guide topic | Verified by | Scope / notes |
+| ----------------- | ------------- | --------------- |
+| §1 `Purpose:` in PHP sources | `tools/check-purpose.php` | `src/UDA/**/*.php` only (`tests/` and `tools/` are not scanned) |
+| §1.1 PEAR PHPDoc layout | **Review** + optional `vendor/bin/php-cs-fixer fix` (`.php-cs-fixer.dist.php` enables `phpdoc_align`, `@PSR12`, etc.) | **Not** part of `composer check` |
+| §2 Named parameters only | Runtime normalisation + integration tests | Positional `?` rejected before PDO |
+| §3 / §14.2 Single `prepare` / `execute` ownership | `tools/check-pdo-usage.php`, `tools/check-execution-path.php` | Ensures PDO prepare/execute stay on the Driver hot path |
+| §4 Query↔Cache / boundary imports | `tools/check-imports.php` | Query→Cache, Cache→Driver, Query→PDO `use` lines |
+| §7 / §14.4 Forbidden class suffixes | `tools/check-forbidden-names.php` | Banned suffixes under `src/UDA` |
+
+**PHP-CS-Fixer dry-run (representative):** On 2026-05-12, `php-cs-fixer fix --dry-run`
+under PHP 8.2 reported diffs in **51 of 71** tracked PHP files, mostly vertical
+`@param` alignment. CI does **not** gate on fixer today; a repo-wide alignment PR
+is optional and separate from architectural checks.
+
+**PHPDoc:** Treat full PEAR docblock compliance as **review-enforced** unless
+maintainers add PHP-CS-Fixer (dry-run or fix) to CI.
+
+---
+
 # CI Philosophy
 
 Static analysis rules exist to enforce architecture automatically.
@@ -535,9 +576,13 @@ Architecture remains stable because the tooling refuses drift.
 
 # Enforcement Principle
 
-If a rule cannot be verified automatically, it should not exist as a rule.
+Rules that protect architecture should be automated where practical so that
+`violations → CI failure`. A few normative rules (PEAR PHPDoc prose quality,
+cache heuristics beyond import checks, duplication budgets) remain **review-enforced**
+until a specific tool is adopted; those are called out in the **enforcement map**
+above rather than pretending they are already CI-gated.
 
-Architecture should be protected by tools, not by memory.
+Architecture should be protected by tools, not by memory alone.
 
 ---
 

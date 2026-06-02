@@ -12,34 +12,35 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: Compatibility shim and alias for SQLite driver implementation in UDA.
+ * Purpose: Provides SQLite engine rules for the Driver domain.
+ *
+ * SQLite supplies pure DSN and identifier quoting rules. It does not own
+ * PDO or execute SQL.
  */
 
 namespace UDA\Driver;
 
-use UDA\Driver as Driver;
 use UDA\Exception\ConfigException;
-use UDA\Query\Upsert;
 
 /**
- * Compatibility shim that aliases the SQLite driver implementation
+ * SQLite engine rules for the Driver domain.
  */
-class SQLite extends Driver
+final class SQLite
 {
-    protected ?string $dbtype = 'sqlite';
-
     /**
      * Builds a SQLite DSN (Data Source Name) string from connection parameters.
-     *
      * Constructs a DSN in the format `sqlite:/path/to/database` or `sqlite::memory:`.
      *
-     * @param  array           $params Connection parameters (must contain 'path' or 'host')
-     * @return string          The constructed DSN string
+     * @param array $params  Connection parameters (must contain 'path' or 'host')
+     *
+     * @return string The constructed DSN string
+     *
      * @throws ConfigException If required parameters are missing
+     *
      * @see PDO::__construct() PDO DSN format requirements
-     * @see Driver::buildDsn() Generic DSN builder for other drivers
+     * @see \PDO::__construct() PDO DSN format requirements
      */
-    protected function buildDsn(array $params): string
+    public static function dsn(array $params): string
     {
         $path = $params['path'] ?? $params['host'] ?? null;
 
@@ -51,15 +52,18 @@ class SQLite extends Driver
         return 'sqlite:' . $path;
     }
 
-    protected function onConnect(): void
+    /**
+     * Quote a SQLite identifier with ANSI double quotes.
+     *
+     * @param string $identifier  Identifier value.
+     *
+     * @return string Quoted identifier.
+     */
+    public static function quoteIdentifier(string $identifier): string
     {
-        // SQLite doesn't require session-level configuration
-    }
+        $clean = trim($identifier);
+        $escaped = str_replace('"', '""', $clean);
 
-    public function upsertExec(Upsert $query): int
-    {
-        $sql = $query->toSql();
-
-        return $this->exec($this->toSqlMessage($sql), [], $sql->getCacheTables());
+        return '"' . $escaped . '"';
     }
 }

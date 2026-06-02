@@ -45,7 +45,8 @@ class Keyword
     /**
      * Create a new keyword token
      *
-     * @param  string                  $keyword The keyword
+     * @param string $keyword  The keyword
+     *
      * @throws InvalidKeywordException If the keyword is invalid or dangerous
      */
     public function __construct(string $keyword)

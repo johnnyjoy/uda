@@ -7,8 +7,6 @@ namespace UDA;
 use UDA\Config\Snapshot;
 use UDA\Config\Validator;
 use UDA\Exception\ConfigException;
-use UDA\Replay\ReplayConfig;
-use UDA\Safety\GuardrailConfig;
 
 /**
  * @package UDA
@@ -20,9 +18,16 @@ use UDA\Safety\GuardrailConfig;
  */
 
 /*
- * Purpose: Owns the process-wide configuration state for UDA and exposes a static query API backed by an immutable Snapshot.
+ * Purpose: Owns process-wide configuration state for UDA.
+ *
+ * Config loads one validated source into an immutable Snapshot and answers
+ * connection, cache, and engine questions by connection name. Runtime domains
+ * read configuration through this static API instead of holding raw config files.
  */
 
+/**
+ * Process-wide configuration gateway backed by an immutable snapshot.
+ */
 final class Config
 {
     /**
@@ -31,13 +36,6 @@ final class Config
      * @var Snapshot|null
      */
     private static ?Snapshot $snapshot = null;
-
-    /**
-     * @var array<string,GuardrailConfig>
-     */
-    private static array $guardrailConfigCache = [];
-
-    private static ?ReplayConfig $replayConfig = null;
 
     /**
      * Canonical file path used to initialize the snapshot.
@@ -51,27 +49,24 @@ final class Config
 
     /**
      * Initialize configuration for this process.
-     *
      * Two routes:
      * - init() : loads from UDA_CONFIG environment variable
      * - init($filePath) : loads explicitly from the given JSON file path
-     *
      * Idempotence / single-source rule:
      * - First init wins for the process lifetime.
      * - Calling init() repeatedly with the same canonical path is a no-op.
      * - Calling init() with a different file path than originally used throws.
-     *
      * This is intended to be called by Database::connect() implicitly (lazy init),
      * or by bootstrapping code early in the process.
+     *                         the file path is invalid, the file is unreadable,
+     *                         the JSON is invalid, validation fails, or init is
+     *                         attempted from a conflicting source.
      *
-     * @param string|null $file Optional explicit JSON config file path.
+     * @param string|null $file  Optional explicit JSON config file path.
      *
      * @return void
      *
      * @throws ConfigException If the environment variable is missing/empty,
-     *                         the file path is invalid, the file is unreadable,
-     *                         the JSON is invalid, validation fails, or init is
-     *                         attempted from a conflicting source.
      */
     public static function init(?string $file = null): void
     {
@@ -95,27 +90,126 @@ final class Config
     }
 
     /**
-     * Get an effective (merged, canonical) connection configuration.
+     * Check if a connection exists.
      *
-     * Default resolution:
-     * - If $name is null/empty, the Snapshot's configured default connection is used.
-     * - If no default is configured, ConfigException is thrown.
+     * @param string $name  Connection name
      *
-     * This method is the only place where "default connection" resolution occurs.
-     * Caller code must not implement default resolution.
+     * @return bool True if the connection exists, false otherwise
+     */
+    public static function hasConnection(string $name = 'default'): bool
+    {
+        $snap = self::requireSnapshot();
+        return $snap->hasConnection($name);
+    }
+
+    /**
+     * Get the configured default connection name.
      *
-     * Returned data must be treated as canonical by downstream domains; it should
-     * not require lowercasing, trimming, type-casting, or schema checks outside Config.
+     * @return string String result.
+     */
+    public static function default(): string
+    {
+        return self::requireSnapshot()->getDefaultConnection() ?? 'default';
+    }
+
+    /**
+     * Get the configured engine (SQL family) for a connection.
      *
-     * @param string|null $name Connection name, or null/empty to use default.
+     * After ingestion, this is the normalized canonical engine key (e.g. sqlserver, sybase).
      *
-     * @return array<string,mixed> Canonical connection configuration.
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return string The engine key
+     *
+     * @throws ConfigException If configuration is not initialized or connection is missing
+     */
+    public static function engine(?string $name = 'default'): string
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        return (string) ($conn['engine'] ?? $conn['driver'] ?? '');
+    }
+
+    /**
+     * @deprecated Use engine() — config key `driver` holds the engine identity.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return string The engine key
      *
      * @throws ConfigException If configuration is not initialized and cannot be
-     *                         initialized from env; if default is required but missing;
-     *                         or if the requested connection is not found.
      */
-    public static function connection(?string $name = null): array
+    public static function driver(?string $name = 'default'): string
+    {
+        return self::engine($name);
+    }
+
+    /**
+     * Get the configured PDO transport for a connection.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return string The transport key (e.g. sqlsrv, dblib, pgsql)
+     *
+     * @throws ConfigException If configuration is not initialized or connection is missing
+     */
+    public static function transport(?string $name = 'default'): string
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        if (!isset($conn['transport']) || !is_string($conn['transport'])) {
+            throw new ConfigException("Connection '{$resolved}' missing normalized transport");
+        }
+
+        return $conn['transport'];
+    }
+
+    /**
+     * Return the raw validated connection configuration.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return array<string,mixed>
+     *
+     * @throws ConfigException If the requested connection is not found.
+     */
+    public static function connection(?string $name = 'default'): array
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        return $conn;
+    }
+
+    /**
+     * Check if caching is enabled for a connection and tables.
+     *                         initialized from env; if the requested connection is not found.
+     *
+     * @param string|null $name    Connection name, or null/empty to use default
+     * @param array       $tables  Table names referenced in the query
+     *
+     * @return bool True if caching is enabled for all tables, false otherwise
+     *
+     * @throws ConfigException If configuration is not initialized and cannot be
+     */
+    public static function hasCache(string $name, array $tables): bool
     {
         $snap = self::requireSnapshot();
         $resolved = self::resolveConnectionName($snap, $name);
@@ -126,24 +220,174 @@ final class Config
             throw new ConfigException("Connection '{$resolved}' not found");
         }
 
-        $conn['guardrailConfig'] = self::guardrailConfigForConnection($resolved, $conn);
+        // Check global cache configuration
+        $globalCacheEnabled = self::cacheStore($resolved) !== 'off';
+        if (!$globalCacheEnabled) {
+            return false;
+        }
 
-        return $conn;
+        // Check connection-specific cache configuration
+        $cacheConfig = $conn['cache'] ?? null;
+        if (!is_array($cacheConfig)) {
+            return true; // Global cache enabled, no connection-specific config
+        }
+
+        // Check if any table is disabled
+        $tableRules = $cacheConfig['tables'] ?? [];
+        if (is_array($tableRules)) {
+            foreach ($tables as $table) {
+                $tableRule = $tableRules[$table] ?? null;
+                if (is_array($tableRule) && !empty($tableRule['disable'])) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
-    public static function resolvedConnectionName(?string $name = null): string
+    /**
+     * Get the cache store type for a connection.
+     *                         initialized from env; if the requested connection is not found.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return string The cache store type ('redis', 'memcached', 'array', 'off')
+     *
+     * @throws ConfigException If configuration is not initialized and cannot be
+     */
+    public static function cacheStore(?string $name = null): string
     {
         $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
 
-        return self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        $cache = $conn['cache'] ?? null;
+
+        if (!is_array($cache)) {
+            return 'off';
+        }
+
+        $store = $cache['store'] ?? null;
+        if (!is_array($store)) {
+            return 'off';
+        }
+
+        $driver = $store['type'] ?? 'off';
+        return is_string($driver) ? $driver : 'off';
+    }
+
+    /**
+     * Get the username for a connection.
+     *                         initialized from env; if the requested connection is not found.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return string The username
+     *
+     * @throws ConfigException If configuration is not initialized and cannot be
+     */
+    public static function username(string $name = 'default'): string
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        return $conn['user'] ?? $conn['username'] ?? '';
+    }
+
+    /**
+     * Get the password for a connection.
+     *                         initialized from env; if the requested connection is not found.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return string The password
+     *
+     * @throws ConfigException If configuration is not initialized and cannot be
+     */
+    public static function password(?string $name = 'default'): string
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        return $conn['pass'] ?? $conn['password'] ?? '';
+    }
+
+    /**
+     * Get the PDO options for a connection.
+     *                         initialized from env; if the requested connection is not found.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return array The PDO options
+     *
+     * @throws ConfigException If configuration is not initialized and cannot be
+     */
+    public static function pdoOptions(?string $name = 'default'): array
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        $options = $conn['options'] ?? [];
+        return is_array($options) ? $options : [];
+    }
+
+    /**
+     * Get the init SQL statements for a connection.
+     *                         initialized from env; if the requested connection is not found.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default
+     *
+     * @return array The init SQL statements
+     *
+     * @throws ConfigException If configuration is not initialized and cannot be
+     */
+    public static function initSql(?string $name = 'default'): array
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        $initSql = $conn['init_sql'] ?? [];
+
+        if (!is_array($initSql)) {
+            return [];
+        }
+
+        // Ensure we only return a flat list of strings
+        return array_filter($initSql, 'is_string');
     }
 
     /**
      * Return all configured connection names.
-     *
      * Intended for diagnostics and tooling.
      *
-     * @return array<int,string>
+     * @return array<int,string> The connection names
      *
      * @throws ConfigException If configuration is not initialized and env boot fails.
      */
@@ -152,50 +396,79 @@ final class Config
         return self::requireSnapshot()->getConnectionNames();
     }
 
-    public static function guardrailConfig(?string $name = null): GuardrailConfig
+    /**
+     * Cache namespace.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return string String result.
+     */
+    public static function cacheNamespace(?string $name = 'default'): string
     {
-        $snap = self::requireSnapshot();
-        $resolved = self::resolveConnectionName($snap, $name);
+        $cache = self::cacheConfig($name);
 
-        $conn = $snap->getConnection($resolved);
-
-        if ($conn === null) {
-            throw new ConfigException("Connection '{$resolved}' not found");
-        }
-
-        return self::guardrailConfigForConnection($resolved, $conn);
-    }
-
-    public static function replay(): ReplayConfig
-    {
-        self::requireSnapshot();
-
-        if (self::$replayConfig === null) {
-            self::$replayConfig = ReplayConfig::defaults();
-        }
-
-        return self::$replayConfig;
+        return is_string($cache['namespace'] ?? null) ? $cache['namespace'] : 'UDA';
     }
 
     /**
-     * Clears configuration state.
+     * Cache host.
      *
-     * This is intended strictly for tests. Production code should not reset global
-     * configuration mid-process.
+     * @param ?string $name  Name value.
      *
-     * @return void
+     * @return string String result.
      */
-    public static function clearForTests(): void
+    public static function cacheHost(?string $name = 'default'): string
     {
-        self::$snapshot = null;
-        self::$sourcePath = null;
-        self::$guardrailConfigCache = [];
-        self::$replayConfig = null;
+        $store = self::cacheStoreConfig($name);
+
+        return is_string($store['host'] ?? null) ? $store['host'] : '127.0.0.1';
+    }
+
+    /**
+     * Cache port.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return int Integer result.
+     */
+    public static function cachePort(?string $name = 'default'): int
+    {
+        $store = self::cacheStoreConfig($name);
+        $type = strtolower((string)($store['type'] ?? ''));
+
+        return (int)($store['port'] ?? ($type === 'memcached' ? 11211 : 6379));
+    }
+
+    /**
+     * Cache timeout.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return float Floating point result.
+     */
+    public static function cacheTimeout(?string $name = 'default'): float
+    {
+        $store = self::cacheStoreConfig($name);
+
+        return (float)($store['timeout'] ?? 1.5);
+    }
+
+    /**
+     * Cache database.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return int Integer result.
+     */
+    public static function cacheDatabase(?string $name = 'default'): int
+    {
+        $store = self::cacheStoreConfig($name);
+
+        return (int)($store['database'] ?? 0);
     }
 
     /**
      * Require an initialized snapshot, lazily initializing from env if needed.
-     *
      * Design choice:
      * - We allow lazy init because the default production path is environment-driven.
      * - If UDA_CONFIG is missing/invalid, we throw ConfigException.
@@ -214,6 +487,62 @@ final class Config
         $snap = self::$snapshot;
 
         return $snap;
+    }
+
+    /**
+     * Resolve connection name.
+     *
+     * @param Snapshot $snapshot  Validated configuration snapshot.
+     * @param ?string  $name      Name value.
+     *
+     * @return string String result.
+     */
+    private static function resolveConnectionName(Snapshot $snapshot, ?string $name): string
+    {
+        if ($name === null || $name === '') {
+            return $snapshot->getDefaultConnection() ?? 'default';
+        }
+
+        return $name;
+    }
+
+    /**
+     * Cache config.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return array<string,mixed>
+     *
+     * @throws ConfigException If the operation fails.
+     */
+    private static function cacheConfig(?string $name): array
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+        $conn = $snap->getConnection($resolved);
+
+        if ($conn === null) {
+            throw new ConfigException("Connection '{$resolved}' not found");
+        }
+
+        $cache = $conn['cache'] ?? [];
+
+        return is_array($cache) ? $cache : [];
+    }
+
+    /**
+     * Cache store config.
+     *
+     * @param ?string $name  Name value.
+     *
+     * @return array<string,mixed>
+     */
+    private static function cacheStoreConfig(?string $name): array
+    {
+        $cache = self::cacheConfig($name);
+        $store = $cache['store'] ?? [];
+
+        return is_array($store) ? $store : [];
     }
 
     /**
@@ -242,16 +571,14 @@ final class Config
 
     /**
      * Normalize and validate a config file path.
-     *
      * Validates:
      * - non-empty
      * - .json extension
      * - file exists and is readable
-     *
      * Canonicalization:
      * - resolves realpath() when possible
      *
-     * @param string $path File path.
+     * @param string $path  File path.
      *
      * @return string Canonical validated file path.
      *
@@ -288,13 +615,13 @@ final class Config
 
     /**
      * Load and validate a config JSON file into an immutable Snapshot.
+     *                         or schema validation fails.
      *
-     * @param string $path Canonical validated config file path.
+     * @param string $path  Canonical validated config file path.
      *
      * @return Snapshot Validated immutable snapshot.
      *
      * @throws ConfigException If file read fails, JSON parse fails, root is not an object,
-     *                         or schema validation fails.
      */
     private static function loadAndValidate(string $path): Snapshot
     {
@@ -320,52 +647,6 @@ final class Config
 
         $snapshot = $validator->validate($decoded);
 
-        self::$replayConfig = ReplayConfig::fromArray($decoded['replay'] ?? []);
-
         return $snapshot;
-    }
-
-    private static function resolveConnectionName(Snapshot $snap, ?string $name): string
-    {
-        $resolved = ($name !== null && $name !== '')
-            ? $name
-            : $snap->getDefaultConnection();
-
-        if ($resolved === null || $resolved === '') {
-            throw new ConfigException('No default connection configured');
-        }
-
-        if (!$snap->hasConnection($resolved)) {
-            throw new ConfigException("Connection '{$resolved}' not found");
-        }
-
-        return $resolved;
-    }
-
-    /**
-     * @param array<string,mixed> $connection
-     */
-    private static function guardrailConfigForConnection(string $name, array $connection): GuardrailConfig
-    {
-        if (isset(self::$guardrailConfigCache[$name])) {
-            return self::$guardrailConfigCache[$name];
-        }
-
-        $existing = $connection['guardrailConfig'] ?? null;
-        if ($existing instanceof GuardrailConfig) {
-            $config = $existing;
-        } else {
-            $guardrails = $connection['guardrails'] ?? [];
-
-            if (!is_array($guardrails)) {
-                $guardrails = [];
-            }
-
-            $config = GuardrailConfig::fromArray($guardrails);
-        }
-
-        self::$guardrailConfigCache[$name] = $config;
-
-        return $config;
     }
 }

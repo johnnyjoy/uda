@@ -124,10 +124,11 @@ Those responsibilities belong to other domains.
 ### Connect
 
 ```
-Database::connect(?string $connectionName=null, ?string $configFile=null): Database
+Database::connect(string ...$args): Database
 ```
 
-Arguments are **position independent**.
+Arguments are **position independent**. A JSON file path argument selects the
+configuration file; any other argument selects the configured connection name.
 
 Examples:
 
@@ -175,16 +176,10 @@ lastSql()
 lastParams()
 ```
 
-Plan inspection:
-
-```
-plan()
-explain(callable|Sql|Select $query, bool $analyze = false)
-```
-
-- `plan()` terminates any builder and returns the compiled `SqlMessage` (SQL text, parameter map, dialect, referenced tables) without touching PDO. Repositories use it to capture deterministic statements or feed observability tooling.
-- `explain()` exposes the connection’s native EXPLAIN surface. Passing `$analyze = true` (or using `explainAnalyze()` on builders) runs the query so the engine can attach actual timing/row data.
-- Both entrypoints reuse the single execution path—Database fingerprints the builder, checks dialect capabilities, and flips dialect-specific switches (PostgreSQL `EXPLAIN`, SQL Server `SET SHOWPLAN_XML`, MariaDB `EXPLAIN FORMAT=JSON`, etc.). Unsupported dialects fail fast with `QueryException` so PDO never receives an illegal verb.
+Plan inspection and retry/replay features are deferred from the v1 public
+contract unless explicitly reaccepted. Builders may expose `toSql()` for
+debugging, but v1 application code must not depend on plan-cache, replay, retry,
+or tracing APIs.
 
 ---
 
@@ -218,7 +213,7 @@ Supported engines: PostgreSQL, SQLite (3.35+), SQL Server, Sybase, Oracle. Maria
 - `UDA\Query\Expr` provides optional helpers for structured expressions (aggregates, COALESCE, trusted raw fragments). Builders accept `string|Expr` for select columns, HAVING filters, and ORDER BY clauses while reusing the parent parameter bag so placeholder ordering stays deterministic.
 - Every builder memoizes its compiled `Sql` value object per instance. The first `toSql()` call invokes the dialect; subsequent calls on the same builder reuse the cached result to avoid redundant compilation while preserving immutability (cloned builders rebuild their own cache).
 - `with()` / `withRecursive()` now work on `Select`, `Insert`, `Update`, and `Delete`. CTEs participate in the builder’s parameter bag (deterministic ordering, no collisions), dialects render `WITH`/`WITH RECURSIVE` per engine, and referenced tables from CTE bodies propagate into the final `Sql` cache hints. Writable CTEs are currently enabled for PostgreSQL and SQLite; other dialects throw explicit `QueryException`s when asked to attach a CTE to INSERT/UPDATE/DELETE so the failure mode stays obvious.
-- Optional `materialized()` / `notMaterialized()` toggles apply to the previously declared CTE. PostgreSQL and SQLite emit `AS MATERIALIZED` / `AS NOT MATERIALIZED`; other dialects ignore the hint while still accepting the fluent call. Hints attach to the fingerprint payload so the plan cache distinguishes otherwise identical builders. `tests/Query/CteMaterializationTest.php` proves both emission and fallback behavior.
+- Optional `materialized()` / `notMaterialized()` toggles apply to the previously declared CTE. PostgreSQL and SQLite emit `AS MATERIALIZED` / `AS NOT MATERIALIZED`; other dialects ignore the hint while still accepting the fluent call. Hints remain part of the builder's deterministic SQL output.
 - `Insert::columns()` + `Insert::select()` introduce `INSERT ... SELECT` support that cooperates with CTEs. `Update`/`Delete` expose `whereRaw()` for the occasional subquery-driven predicate (e.g., `id IN (SELECT ...)`).
 
 ### Writable CTE support matrix
@@ -242,7 +237,7 @@ Builders now consult the dialect’s declared capabilities before emitting SQL. 
 | Feature / Dialect | PostgreSQL | SQLite | SQL Server | Sybase | Oracle | MariaDB | DB2 |
 | ----------------- | :--------: | :----: | :--------: | :----: | :----: | :-----: | :--: |
 | RETURNING         |     ✔️     |   ✔️   |     ✔️     |   ✔️   |   ✔️   |    ✖️   |  ✖️  |
-| MERGE (Upsert)    |     ✖️     |   ✖️   |     ✔️     |   ✔️   |   ✔️   |    ✖️   |  ✔️  |
+| MERGE (Upsert)    |     ✖️     |   ✖️   |     ✔️     |   ✖️   |   ✔️   |    ✖️   |  ✔️  |
 | Recursive CTE     |     ✔️     |   ✔️   |     ✔️     |   ✔️   |   ✔️   |    ✔️   |  ✔️  |
 | Writable CTE      |     ✔️     |   ✔️   |     ✖️     |   ✖️   |   ✖️   |    ✖️   |  ✖️  |
 | CTE Materialization Hints |  ✔️  |  ✔️  |    ✖️     |   ✖️   |   ✖️   |    ✖️   |  ✖️  |
@@ -251,8 +246,9 @@ Builders now consult the dialect’s declared capabilities before emitting SQL. 
 | EXPLAIN ANALYZE   |     ✔️     |   ✔️   |     ✔️     |   ✖️   |   ✖️   |    ✔️   |  ✖️  |
 
 * PostgreSQL/SQLite use `INSERT ... ON CONFLICT` and therefore do not require MERGE support.
-* SQL Server/Sybase/Oracle/DB2 compile UPSERT through MERGE; MariaDB uses `ON DUPLICATE KEY`.
-* Dialect capability flags are validated by `tests/Query/DialectCapabilitiesTest.php`, covering returning enforcement, recursive CTE gating, materialization hint exposure, window-function guards, and the per-dialect matrix above.
+* SQL Server/Oracle/DB2 compile UPSERT through MERGE when supported; Sybase UPSERT builders are disabled until ASE MERGE is certified; MariaDB uses `ON DUPLICATE KEY`.
+* **DB2:** `Query/Dialect/Db2.php` compiles MERGE/pagination for future use; engine `db2` is not connectable and is excluded from `Database::queryDialect()` until `Driver/Db2.php` lands.
+* Dialect capability flags are validated by `tests/Query/SybaseCapabilitiesTest.php` and related runtime tests, covering returning enforcement, recursive CTE gating, materialization hint exposure, window-function guards, and the per-dialect matrix above.
 - Window helpers (`Expr::rowNumber()`, `Expr::sum(...)->over()` etc.) live entirely within `Expr`. They expose `over()`, `partitionBy()`, `orderBy()`, and frame helpers, remain immutable, merge their parameters into the parent builder deterministically, and let dialects render `OVER (...)` clauses without modifying the core builder grammar.
 - Window functions support ranking (`rowNumber()`, `rank()`, `denseRank()`), offsets (`lag()`, `lead()`), and aggregates (`sum/avg/count/min/max`). Call `over()` to begin the window definition, then chain `partitionBy()`, `orderBy()`, and frame helpers (`rowsBetween()`, `rowsBetweenUnboundedPreceding()`, `rowsCurrentRow()`, `rangeBetween()`, `rangeBetweenUnboundedPreceding()`, `rangeCurrentRow()`). All official dialects report `supportsWindowFunctions() === true`, so WO022’s capability checks allow window usage everywhere.
 
@@ -289,125 +285,21 @@ $db->select()->from('users')->where('id = :id')->row();
 
 ---
 
-### Query Plan Cache
+### Deferred Surfaces
 
-UDA reuses compiled SQL plans for identical builder structures. When a builder executes through `Database`, the database computes a structural fingerprint (columns, joins, WHERE/HAVING clauses, unions, window definitions, CTEs, etc.) that explicitly excludes runtime parameter values. Example key:
+Plan caches, prepared-statement caches, tracing, replay, and retry layers are
+not part of the v1 public contract. They may return in a later release only if
+they preserve the single execution path and prove they improve uniformity,
+performance, safety, determinism, or developer clarity.
 
-```
-sqlite:0446d0c8a89f0b6a0ee8e0d66f7cb069bdfe4c89ff7e4dfcdc3ce66d6a9da3f7
-```
+The v1 debugging surface is deliberately small:
 
-The prefix is the lowercase dialect name; the suffix is `hash('sha256', fingerprintPayload)`. A cache hit clones the stored `SqlMessage` and skips builder->toSql() entirely; a miss compiles the builder once, stores the cloned `SqlMessage`, and returns it. Dialect separation is guaranteed because the dialect name participates in the key (`postgres:...` and `sqlite:...` never collide).
+* `lastSql()`
+* `lastParams()`
+* builder `toSql()`
 
-Implementation rules:
-
-* Cache lives in `UDA\Query\QueryPlanCache` (process-wide, in-memory, FIFO eviction)
-* Default capacity: 1000 compiled statements; configurable for tests/benchmarks
-* Explicit enable/disable toggle (benchmarks compare both modes)
-* Cached `SqlMessage` instances are cloned on put/get so parameter binding cannot mutate the stored plan
-* Cache key intentionally ignores runtime parameter values—`WHERE id = :q1` is compiled once and reused for `id = 1`, `id = 2`, etc.
-
-This optimization is internal to `Database::executeBuilder()`—repositories and builders retain the same public grammar.
-
----
-
-### Prepared Statement Cache
-
-After the plan cache hands back a `SqlMessage`, the driver reuses PDO prepared statements whenever the SQL text, connection, and dialect match. Each driver instance keeps a FIFO-bounded (`statement_cache_limit`, default 500) map:
-
-```
-{dialect}:{connectionHash}:{sql} → PDOStatement
-```
-
-Example key:
-
-```
-sqlite:128:SELECT "id" FROM "ps_reuse" WHERE "id" = :q1
-```
-
-Every execution performs:
-
-```
-lookup prepared statement
-  ↓ miss → PDO::prepare() → store
-bind named parameters
-execute
-close cursor so it can be reused immediately
-```
-
-Statements never cross connections because the cache is owned by the driver instance. Setting `statement_cache_limit` to `0` disables reuse entirely (useful for benchmarks). Returning/OUTPUT statements participate in the same cache—drivers still re-bind each execution so output buffers remain isolated.
-
----
-
-### Query Tracing & Retries
-
-Every query execution emits a `QueryTrace` event from the `Database` domain. When a `RetryPolicy` is installed, the policy hooks into the same instrumentation: each retry attempt dispatches `traceType = retry_attempt`, and the final trace (success or failure) carries retry metadata so observability pipelines stay consistent. The trace object contains:
-
-* operation (rows/row/exec/returning/each/value/etc.)
-* SQL text and merged parameters (optionally redacted)
-* connection identity + dialect name
-* execution time in milliseconds
-* derived row count or affected rows
-* cache signals: plan cache hit, prepared-statement hit, result-cache hit
-* referenced tables (carried forward from the originating `SqlMessage`)
-* slow-query flag (based on `trace.slow_query_ms`)
-
-Configuration lives under each connection’s `trace` block:
-
-```
-"trace": {
-    "enabled": true,
-    "slow_query_ms": 100,
-    "log_slow_queries": true,
-    "redact_parameters": false
-}
-```
-
-* `enabled` toggles tracing even if no listeners are registered.
-* `slow_query_ms` defines the threshold (ms). Any trace meeting or exceeding the value is marked `slow = true`.
-* `log_slow_queries` writes slow traces to the error log automatically.
-* `redact_parameters` replaces every parameter value with `***` before dispatching the trace.
-
-Plan inspection surfaces enter the tracer as `plan`, `explain`, or `explain_analyze` operations. The payload extends with `planSql`/`planDialect` when builders call `plan()`, and with `explainFormat`, `planOutput`, and an `analyze` flag when Database issues engine-level EXPLAINs. Slow-query detection still applies to analyze runs because they execute the underlying SQL; pure logical explains bypass slow classification because Driver never hits PDO.
-
-Listeners implement `QueryTraceListener` and are registered via `Database::addTraceListener()`. Built-ins include a logging listener (`QueryTraceLogger`) for human-readable diagnostics and an in-memory collector (`QueryTraceCollector`) for tests/benchmarks. Traces cover `rows`, `row`, `exec`, `returning`, `each`, `value`, `plan`, `explain`, `explain_analyze`, and the builder delegation path (`executeBuilder`, `executeBuilderReturning`). Tests live in `tests/Query/QueryTracingTest.php`.
-
-A sample payload:
-
-```
-{
-  "operation": "row",
-  "sql": "SELECT \"label\" FROM \"trace_items\" WHERE \"id\" = :q1",
-  "parameters": {"q1": 42},
-  "dialect": "sqlite",
-  "connection": "trace_db",
-  "executionTimeMs": 0.87,
-  "rowCount": 1,
-  "planCacheHit": true,
-  "statementCacheHit": true,
-  "resultCacheHit": false,
-  "tables": ["trace_items"],
-  "slow": false
-}
-```
-
-When tracing is disabled (and no listeners exist) Database short-circuits immediately so overhead remains negligible (<1%). Retry metadata is included only when a policy is installed; otherwise the fields remain `null`/`false` as today.
-
-### Retry Layer
-
-UDA’s retry system is a thin execution wrapper that lives **inside Database** directly above the driver. It obeys the single-path rule by wrapping the canonical execution closure rather than forking logic.
-
-Key rules:
-
-1. **Explicit installation.** Retries activate only when `Database::setRetryPolicy()` receives a `RetryPolicy` instance. The default is “no retry” so the hot path remains untouched.
-2. **Guardrails first.** Guardrail validation and builder normalization still run before the policy loops, ensuring unsafe queries cannot sneak through under retried executions.
-3. **Read-only by default.** Safe read operations (`rows`, `row`, `value`, `values`, `list`, `each`, `explain`, `explain_analyze`) retry automatically. Writes (`exec`, `returning`, builder terminators that mutate data) require both `retryWrites=true` and a per-query override.
-4. **Transaction boundaries respected.** `retryInTransactions=false` blocks retries whenever `Database` is inside a transaction. Enabling it is opt-in and discouraged unless the backend guarantees idempotent blocks.
-5. **Builder metadata.** Immutable builders expose `allowRetry()` / `noRetry()` helpers which translate into `SqlMessage->retryAllowed` so retries can be forced on/off per statement even when the operation defaults differ.
-6. **Classifier driven.** `TransientErrorClassifier` determines retriable exceptions via driver hints (`Driver::isTransientError()`), curated SQLSTATE tables, and message heuristics. Non-transient exceptions surface immediately.
-7. **Instrumentation friendly.** Each attempt emits a `retry_attempt` trace and the final trace stores `retryCount`, `retried`, `finalFailure`, and `retryReasons`. Replay snapshots persist the same metadata so recorded NDJSON streams remain faithful.
-
-See `docs/retry.md` for configuration guidance and code examples.
+These surfaces inspect already-compiled statements; they do not create another
+execution model.
 
 ---
 
@@ -595,75 +487,28 @@ If caching is disabled:
 
 Cache decisions must be **metadata-first**.
 
-Cache backend must provide:
-
-```
-getMeta(string $key)
-getResult(string $key)
-set(string $key, Meta $meta, mixed $result, int $ttl)
-```
-
 Decision flow:
 
 1. retrieve metadata
-2. evaluate TTL
-3. evaluate table mtime
-4. determine action
-5. retrieve payload if selected
+2. evaluate table mtime
+3. determine action
+4. retrieve payload if selected
 
 Payload deserialization before decision is forbidden.
 
 ---
 
-# 10. TTL Model
+# 10. Deferred Cache Policy
 
-Every cache entry must have TTL.
-
-TTL resolution hierarchy:
-
-1. per-call override
-2. per-table override
-3. per-connection default
-4. global default
-
-TTL ≤ 0 disables caching.
-
-Infinite TTL is forbidden.
+TTL policy, TTL-as-interval behavior, and stale-on-error behavior are deferred
+from the v1 runtime. V1 cache usability is determined by metadata presence and
+table write timestamps.
 
 ---
 
-# 11. TTL-as-Interval Mode
+# 11. Table Write Tracking
 
-If `ignoreTableMtimeWithinTtl = true`:
-
-* cached result returned if TTL valid
-* table writes ignored within TTL
-
-If false:
-
-* table mtime invalidates immediately
-
-This mode throttles write-heavy tables.
-
----
-
-# 12. Stale-on-Error Doctrine
-
-If:
-
-* database throws transient exception
-* policy allows stale
-* cache age ≤ maxStaleSeconds
-
-then cached result SHALL be returned.
-
-Otherwise exception propagates.
-
----
-
-# 13. Table Write Tracking
-
-Driver informs **TableWriteTracker** when DML succeeds.
+Driver updates table write timestamps when DML succeeds.
 
 Write timestamps are tracked:
 

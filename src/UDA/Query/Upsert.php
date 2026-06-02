@@ -46,12 +46,20 @@ final class Upsert extends Abs
     /** @var ?Sql Cached Sql instance for repeated toSql() calls */
     private ?Sql $cachedSql = null;
 
+    /**
+     * Create the runtime object.
+     */
     public function __construct()
     {
         parent::__construct();
         $this->setStatementType('upsert');
     }
 
+    /**
+     *   clone.
+     *
+     * @return mixed Execution result.
+     */
     public function __clone()
     {
         parent::__clone();
@@ -59,8 +67,8 @@ final class Upsert extends Abs
     }
 
     /**
+     * @param string $table  The table name
      *
-     * @param  string $table The table name
      * @return self
      */
     public function into(string $table): self
@@ -72,8 +80,8 @@ final class Upsert extends Abs
     }
 
     /**
+     * @param array $row  The values to insert
      *
-     * @param  array $row The values to insert
      * @return self
      */
     public function values(array $row): self
@@ -88,7 +96,8 @@ final class Upsert extends Abs
     /**
      * Set multiple rows for bulk UPSERT
      *
-     * @param  array $rows Array of associative arrays
+     * @param array $rows  Array of associative arrays
+     *
      * @return self
      */
     public function rows(array $rows): self
@@ -101,8 +110,8 @@ final class Upsert extends Abs
     }
 
     /**
+     * @param array $columns  The conflict keys
      *
-     * @param  array $columns The conflict keys
      * @return self
      */
     public function key(array $columns): self
@@ -114,8 +123,8 @@ final class Upsert extends Abs
     }
 
     /**
+     * @param array $columns  The columns to update
      *
-     * @param  array $columns The columns to update
      * @return self
      */
     public function update(array $columns): self
@@ -127,7 +136,6 @@ final class Upsert extends Abs
     }
 
     /**
-     *
      * @return self
      */
     public function doNothing(): self
@@ -139,8 +147,8 @@ final class Upsert extends Abs
     }
 
     /**
+     * @return int The number of affected rows
      *
-     * @return int            The number of affected rows
      * @throws QueryException If not bound to a driver
      */
     public function exec(): int
@@ -148,45 +156,14 @@ final class Upsert extends Abs
         return $this->delegateThroughDatabase('exec');
     }
 
-    public function explain(): array
-    {
-        return $this->delegateThroughDatabase('explain');
-    }
-
-    public function explainAnalyze(): array
-    {
-        return $this->delegateThroughDatabase('explainAnalyze');
-    }
-
-    // Query builders are immutable and do not execute - they only produce Sql objects
-    // Execution is handled exclusively by the Driver class
+    // Query builders produce Sql objects; execution is coordinated by Database.
 
     /**
-     * Generates a SQL UPSERT (INSERT ON CONFLICT) statement.
+     * Build immutable `Sql` for this UPSERT (PostgreSQL-style `ON CONFLICT`).
      *
-     * This method constructs a PostgreSQL-style UPSERT statement with proper
-     * conflict detection and resolution logic. It supports both "DO NOTHING"
-     * and "DO UPDATE SET" conflict handling strategies.
+     * @return Sql
      *
-     * @return Sql            The executable SQL UPSERT statement with named parameters
-     * @throws QueryException If no table is defined (via into() method)
-     * @throws QueryException If no values are provided (via values() method)
-     * @throws QueryException If conflict keys are not specified (via key() method)
-     *
-     * @see Upsert::values() Method to specify data to insert
-     * @see Upsert::key() Method to define conflict detection columns
-     * @see Upsert::update() Method to specify columns to update on conflict
-     * @see Upsert::doNothing() Method to specify "DO NOTHING" behavior
-     * @example
-     * $query = new Upsert();
-     * $sql = $query->into('users')
-     * ->values(['email' => 'john@example.com', 'name' => 'John'])
-     * ->key(['email'])
-     * ->update(['name'])
-     * ->toSql();
-     * // Returns: Sql object with "INSERT INTO users (email, name) VALUES (:p0, :p1)
-     * // ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name"
-     * @note This generates PostgreSQL syntax; other databases may require different syntax.
+     * @throws QueryException If `into()`, `values()`, or `key()` is incomplete
      */
     public function toSql(): Sql
     {
@@ -231,16 +208,5 @@ final class Upsert extends Abs
         return $this->cachedSql;
     }
 
-    protected function fingerprintPayload(): array
-    {
-        return [
-            'table' => $this->table,
-            'valuesColumns' => array_keys($this->values),
-            'rowsStructure' => array_map(static fn (array $row): array => array_keys($row), $this->rows),
-            'rowsCount' => count($this->rows),
-            'conflictKeys' => $this->conflictKeys,
-            'updates' => $this->updates,
-            'doNothing' => $this->doNothing,
-        ];
-    }
 }
+

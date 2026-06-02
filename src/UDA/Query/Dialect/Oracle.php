@@ -7,37 +7,70 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Compiles query builders into Oracle-specific SQL.
+ *
+ * Handles Oracle pagination, MERGE/upsert forms, and RETURNING metadata for
+ * Driver-owned Oracle execution.
+ */
+
 namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
-use UDA\SQL\SqlMessage;
 
 /**
  * Oracle dialect implementation (MERGE, FETCH pagination, RETURNING metadata).
  */
 final class Oracle extends Dialect
 {
+    /**
+     * Name.
+     *
+     * @return string Dialect name.
+     */
     public function name(): string
     {
         return 'Oracle';
     }
 
+    /**
+     * Report whether supports returning.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsReturning(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports merge.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsMerge(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports upsert.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsUpsert(): bool
     {
         return true;
     }
 
+    /**
+     * Compile select pagination.
+     *
+     * @param SelectState $state  Dialect compilation state.
+     *
+     * @return string Pagination SQL fragment.
+     */
     protected function compileSelectPagination(SelectState $state): string
     {
         $fragment = '';
@@ -56,6 +89,15 @@ final class Oracle extends Dialect
         return $fragment;
     }
 
+    /**
+     * Compile insert.
+     *
+     * @param InsertState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileInsert(InsertState $state): Sql
     {
         if ($state->table === null) {
@@ -90,6 +132,15 @@ final class Oracle extends Dialect
         );
     }
 
+    /**
+     * Compile update.
+     *
+     * @param UpdateState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileUpdate(UpdateState $state): Sql
     {
         if ($state->table === null) {
@@ -122,6 +173,15 @@ final class Oracle extends Dialect
         return new Sql($sql, $state->getParams(), $state->tables, $state->returning ?? []);
     }
 
+    /**
+     * Compile delete.
+     *
+     * @param DeleteState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileDelete(DeleteState $state): Sql
     {
         if ($state->table === null) {
@@ -144,6 +204,15 @@ final class Oracle extends Dialect
         return new Sql($sql, $state->getParams(), $state->tables, $state->returning ?? []);
     }
 
+    /**
+     * Compile upsert.
+     *
+     * @param UpsertState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileUpsert(UpsertState $state): Sql
     {
         if ($state->table === null) {
@@ -194,23 +263,16 @@ final class Oracle extends Dialect
         return new Sql($sql, $state->getParams(), $state->tables);
     }
 
+    /**
+     * Cte keyword.
+     *
+     * @param bool $hasRecursive  Whether any attached CTE is recursive.
+     *
+     * @return string String result.
+     */
     protected function cteKeyword(bool $hasRecursive): string
     {
         return 'WITH ';
     }
 
-    public function supportsExplain(): bool
-    {
-        return true;
-    }
-
-    public function buildExplainSql(SqlMessage $sql, bool $analyze): iterable
-    {
-        if ($analyze) {
-            throw new QueryException('Oracle dialect does not support EXPLAIN ANALYZE statements.');
-        }
-
-        yield new SqlMessage('EXPLAIN PLAN FOR ' . $sql->getQuery(), $sql->getParams(), $sql->getCacheTables());
-        yield new SqlMessage('SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())', [], $sql->getCacheTables());
-    }
 }

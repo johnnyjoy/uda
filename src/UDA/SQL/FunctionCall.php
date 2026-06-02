@@ -42,8 +42,9 @@ class FunctionCall
     /**
      * Create a new function call
      *
-     * @param  string                   $function     The function name
-     * @param  string                   ...$arguments The function arguments
+     * @param string $function      The function name
+     * @param string ...$arguments  The function arguments
+     *
      * @throws InvalidFunctionException If the function is invalid or dangerous
      */
     public function __construct(string $function, string ...$arguments)

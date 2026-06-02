@@ -29,7 +29,7 @@ class ParamBag
     /**
      * Create a new parameter bag
      *
-     * @param string $prefix The prefix for parameter names (default: 'p')
+     * @param string $prefix  The prefix for parameter names (default: 'p')
      */
     public function __construct(string $prefix = 'p')
     {
@@ -51,8 +51,9 @@ class ParamBag
     /**
      * Assign a value to a parameter
      *
-     * @param  string $param The parameter name
-     * @param  mixed  $value The value to assign
+     * @param string $param  The parameter name
+     * @param mixed  $value  The value to assign
+     *
      * @return void
      */
     public function assign(string $param, mixed $value): void

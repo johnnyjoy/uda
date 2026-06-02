@@ -50,12 +50,20 @@ final class Insert extends Abs
     /** @var ?Sql Cached Sql instance for repeated toSql() calls */
     private ?Sql $cachedSql = null;
 
+    /**
+     * Create the runtime object.
+     */
     public function __construct()
     {
         parent::__construct();
         $this->setStatementType('insert');
     }
 
+    /**
+     *   clone.
+     *
+     * @return mixed Execution result.
+     */
     public function __clone()
     {
         parent::__clone();
@@ -67,8 +75,8 @@ final class Insert extends Abs
     }
 
     /**
+     * @param string $table  The table name
      *
-     * @param  string $table The table name
      * @return self
      */
     public function into(string $table): self
@@ -81,10 +89,14 @@ final class Insert extends Abs
     }
 
     /**
+     * Set.
      *
-     * @param  string $column The column name
-     * @param  mixed  $value  The value to insert
+     * @param string $column  The column name
+     * @param mixed  $value   The value to insert
+     *
      * @return self
+     *
+     * @throws QueryException If the operation fails.
      */
     public function set(string $column, mixed $value): self
     {
@@ -98,6 +110,15 @@ final class Insert extends Abs
         return $clone;
     }
 
+    /**
+     * Columns.
+     *
+     * @param string ...$columns  Column names.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function columns(string ...$columns): self
     {
         if ($columns === []) {
@@ -122,6 +143,15 @@ final class Insert extends Abs
         return $clone;
     }
 
+    /**
+     * Create a SELECT builder bound to this runtime.
+     *
+     * @param Select|Sql $query  Query builder instance.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function select(Select|Sql $query): self
     {
         if ($this->insertColumns === []) {
@@ -138,6 +168,15 @@ final class Insert extends Abs
         return $clone;
     }
 
+    /**
+     * Execute and return the first column from every row.
+     *
+     * @param ?array $row  Column/value row data.
+     *
+     * @return self|array Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function values(?array $row = null): self|array
     {
         if ($row !== null) {
@@ -155,6 +194,15 @@ final class Insert extends Abs
         return array_map('current', $this->rows());
     }
 
+    /**
+     * Execute and return all rows.
+     *
+     * @param ?array $rows  Column/value row data set.
+     *
+     * @return self|array Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function rows(?array $rows = null): self|array
     {
         if ($rows !== null) {
@@ -176,8 +224,8 @@ final class Insert extends Abs
     }
 
     /**
+     * @param string ...$columns  The columns to return
      *
-     * @param  string ...$columns The columns to return
      * @return self
      */
     public function returning(string ...$columns): self
@@ -194,8 +242,8 @@ final class Insert extends Abs
     }
 
     /**
+     * @return int The number of affected rows
      *
-     * @return int            The number of affected rows
      * @throws QueryException If not bound to a driver
      */
     public function exec(): int
@@ -203,6 +251,13 @@ final class Insert extends Abs
         return $this->delegateThroughDatabase('exec');
     }
 
+    /**
+     * Execute and return one row.
+     *
+     * @return ?array Result array.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function row(): ?array
     {
         if ($this->returning === null) {
@@ -213,6 +268,13 @@ final class Insert extends Abs
         return $rows[0] ?? null;
     }
 
+    /**
+     * Execute and return a single value.
+     *
+     * @return mixed Execution result.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function value(): mixed
     {
         if ($this->returning === null) {
@@ -227,49 +289,32 @@ final class Insert extends Abs
         return array_values($row)[0] ?? null;
     }
 
-    public function list(): array
+    /**
+     * Execute RETURNING and return the first row as a numeric list.
+     *
+     * @return ?array<int,mixed> Row values or null.
+     *
+     * @throws QueryException If the operation fails.
+     */
+    public function list(): ?array
     {
         if ($this->returning === null) {
             throw new QueryException('Call returning() before requesting returning rows.');
         }
 
-        return $this->rows();
+        $row = $this->row();
+
+        return $row === null ? null : array_values($row);
     }
 
-    public function explain(): array
-    {
-        return $this->delegateThroughDatabase('explain');
-    }
-
-    public function explainAnalyze(): array
-    {
-        return $this->delegateThroughDatabase('explainAnalyze');
-    }
-
-    // Query builders are immutable and do not execute - they only produce Sql objects
-    // Execution is handled exclusively by the Driver class
+    // Query builders produce Sql objects; execution is coordinated by Database.
 
     /**
-     * Generates a SQL INSERT statement with appropriate parameter placeholders.
+     * Build immutable `Sql` for this INSERT.
      *
-     * This method constructs a parameterized INSERT statement suitable for
-     * safe execution against the database. Column names are automatically quoted,
-     * and values are replaced with named placeholders to prevent SQL injection.
+     * @return Sql
      *
-     * @return Sql            The executable SQL INSERT statement with named parameters
-     * @throws QueryException If no table is defined (via into() method)
-     * @throws QueryException If no columns have been set (via set() method)
-     *
-     * @see Insert::set() Method to add column-value pairs
-     * @see Insert::into() Method to specify target table
-     * @see Insert::returning() Method to add RETURNING clause (PostgreSQL)
-     * @example
-     * $query = new Insert();
-     * $sql = $query->into('users')
-     * ->set('name', 'John')
-     * ->set('email', 'john@example.com')
-     * ->toSql();
-     * // Returns: Sql object with "INSERT INTO users (name, email) VALUES (:p0, :p1)"
+     * @throws QueryException If `into()` or column values are missing
      */
     public function toSql(): Sql
     {
@@ -323,6 +368,13 @@ final class Insert extends Abs
         return $this->cachedSql;
     }
 
+    /**
+     * Add hint table.
+     *
+     * @param string $table  Target table name.
+     *
+     * @return void No return value.
+     */
     private function addHintTable(string $table): void
     {
         if ($table === '') {
@@ -334,6 +386,11 @@ final class Insert extends Abs
         }
     }
 
+    /**
+     * Return tables.
+     *
+     * @return array Result array.
+     */
     private function getTables(): array
     {
         $tables = $this->hintTables;
@@ -353,6 +410,13 @@ final class Insert extends Abs
         }));
     }
 
+    /**
+     * Merge subquery tables.
+     *
+     * @param Sql $sql  SQL string, SQL message, or builder SQL object.
+     *
+     * @return void No return value.
+     */
     protected function mergeSubqueryTables(Sql $sql): void
     {
         foreach ($sql->getCacheTables() as $table) {
@@ -360,6 +424,11 @@ final class Insert extends Abs
         }
     }
 
+    /**
+     * Render insert select query.
+     *
+     * @return ?string String result, or null when absent.
+     */
     private function renderInsertSelectQuery(): ?string
     {
         if ($this->selectQuery === null) {
@@ -383,38 +452,15 @@ final class Insert extends Abs
         return $query;
     }
 
+    /**
+     * Cte context.
+     *
+     * @return string String result.
+     */
     protected function cteContext(): string
     {
         return 'insert';
     }
 
-    protected function fingerprintPayload(): array
-    {
-        return [
-            'ctes' => $this->fingerprintCtes(),
-            'table' => $this->table,
-            'singleRowColumns' => array_keys($this->columns),
-            'rowsStructure' => array_map(static fn (array $row): array => array_keys($row), $this->rows),
-            'rowsCount' => count($this->rows),
-            'insertColumns' => $this->insertColumns,
-            'selectQuery' => $this->fingerprintSelectQueryDescriptor(),
-            'returning' => $this->returning,
-        ];
-    }
-
-    private function fingerprintSelectQueryDescriptor(): ?array
-    {
-        if ($this->selectQuery === null) {
-            return null;
-        }
-
-        if ($this->selectQuery instanceof Select) {
-            return ['select' => $this->selectQuery->fingerprint()];
-        }
-
-        return [
-            'sql' => $this->selectQuery->getQuery(),
-            'params' => array_keys($this->selectQuery->getParams()),
-        ];
-    }
 }
+

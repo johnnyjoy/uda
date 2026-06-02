@@ -93,22 +93,20 @@ final class WhereBuilder
     /** @var bool Whether this builder is for HAVING clause (vs WHERE) */
     private bool $isHaving = false;
 
-
     /**
      * Creates a new WHERE or HAVING clause builder.
-     *
      * This constructor is typically called internally by query builders when
      * starting a WHERE or HAVING chain. Application code usually interacts with
      * WhereBuilder through the fluent interface rather than instantiating it directly.
-     *
-     * @param Select|Update|Delete $parent The query builder that
      *                                     owns this WHERE/HAVING clause. Used to return control via `end()`.
-     * @param ParamBag             $params Shared parameter bag for storing all bound values
      *                                     across the query. Ensures parameter names are unique and values are
      *                                     properly escaped through prepared statements.
-     * @param callable             $quoter Function that safely quotes SQL identifiers
      *                                     (table/column names). Signature: `fn(string $identifier): string`.
      *                                     This abstraction allows database-specific quoting rules.
+     *
+     * @param Select|Update|Delete $parent  The query builder that
+     * @param ParamBag             $params  Shared parameter bag for storing all bound values
+     * @param callable             $quoter  Function that safely quotes SQL identifiers
      */
     public function __construct(Select|Update|Delete $parent, ParamBag $params, callable $quoter)
     {
@@ -120,9 +118,10 @@ final class WhereBuilder
     /**
      * Add a simple column=value condition
      *
-     * @param  string|Expr $column   Column name or structured expression
-     * @param  mixed       $value    Comparison value
-     * @param  string      $operator Comparison operator (=, !=, >, <, >=, <=)
+     * @param string|Expr $column    Column name or structured expression
+     * @param mixed       $value     Comparison value
+     * @param string      $operator  Comparison operator (=, !=, >, <, >=, <=)
+     *
      * @return self
      */
     public function where(string|Expr $column, mixed $value, string $operator = '='): self
@@ -137,9 +136,10 @@ final class WhereBuilder
     /**
      * Add a column comparison condition
      *
-     * @param  string $left     Left column name
-     * @param  string $right    Right column name
-     * @param  string $operator Comparison operator (=, !=, >, <, >=, <=)
+     * @param string $left      Left column name
+     * @param string $right     Right column name
+     * @param string $operator  Comparison operator (=, !=, >, <, >=, <=)
+     *
      * @return self
      */
     public function whereColumn(string $left, string $right, string $operator = '='): self
@@ -154,7 +154,8 @@ final class WhereBuilder
     /**
      * Switch to AND mode for subsequent conditions
      *
-     * @param  string|Expr|callable|null $column Optional column/expression for operator attachment pattern, or closure for nested group
+     * @param string|Expr|callable|null $column  Optional column/expression for operator attachment pattern, or closure for nested group
+     *
      * @return self
      */
     public function and(string|Expr|callable|null $column = null): self
@@ -179,7 +180,8 @@ final class WhereBuilder
     /**
      * Switch to OR mode for subsequent conditions
      *
-     * @param  string|Expr|callable|null $column Optional column/expression for operator attachment pattern, or closure for nested group
+     * @param string|Expr|callable|null $column  Optional column/expression for operator attachment pattern, or closure for nested group
+     *
      * @return self
      */
     public function or(string|Expr|callable|null $column = null): self
@@ -220,28 +222,14 @@ final class WhereBuilder
     }
 
     /**
-     * Creates an IN condition for the current column.
+     * IN on the current column (after `and($column)` / `or($column)`).
+     * Scalars are named parameters; subquery via `Select` / `Sql`. Empty array → `1 = 0`.
      *
-     * This method attaches an IN operator to the column specified by a preceding
-     * `and($column)` or `or($column)` call. The values are properly parameterized
-     * to prevent SQL injection.
+     * @param array|Select|Sql $values  List of scalars, or subquery
      *
-     * Example:
-     * ```php
-     * ->where('department_id', [10, 20, 30]) // Simple IN
-     * // OR using fluent chain:
-     * ->and('department_id')->in([10, 20, 30])
-     * ```
-     *
-     * Empty list behavior: `->in([])` produces `1 = 0` (always false) for safety.
-     * This prevents SQL syntax errors while maintaining logical correctness.
-     *
-     * @param  array          $values Array of values to match against. Can be mixed types
-     *                                (strings, integers, etc.) as long as they're compatible
-     *                                with the column type.
      * @return self
-     * @throws QueryException If called without a preceding column context
-     *                        (e.g., `in([...])` without `and($column)` first)
+     *
+     * @throws QueryException If no column is awaiting an operator
      */
     public function in(array|Select|Sql $values): self
     {
@@ -267,6 +255,15 @@ final class WhereBuilder
         return $this;
     }
 
+    /**
+     * Not in.
+     *
+     * @param array|Select|Sql $values  Values to process.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function notIn(array|Select|Sql $values): self
     {
         if (!$this->awaitingOperator) {
@@ -294,9 +291,11 @@ final class WhereBuilder
     /**
      * Attach BETWEEN operator to current column
      *
-     * @param  mixed          $lower Lower bound value
-     * @param  mixed          $upper Upper bound value
+     * @param mixed $lower  Lower bound value
+     * @param mixed $upper  Upper bound value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function between(mixed $lower, mixed $upper): self
@@ -318,6 +317,13 @@ final class WhereBuilder
         return $this;
     }
 
+    /**
+     * Report whether is null.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function isNull(): self
     {
         if (!$this->awaitingOperator) {
@@ -331,6 +337,13 @@ final class WhereBuilder
         return $this;
     }
 
+    /**
+     * Report whether is not null.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function isNotNull(): self
     {
         if (!$this->awaitingOperator) {
@@ -347,8 +360,10 @@ final class WhereBuilder
     /**
      * Attach LIKE operator to current column
      *
-     * @param  string         $pattern LIKE pattern
+     * @param string $pattern  LIKE pattern
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function like(string $pattern): self
@@ -365,6 +380,15 @@ final class WhereBuilder
         return $this;
     }
 
+    /**
+     * Not like.
+     *
+     * @param string $pattern  LIKE pattern.
+     *
+     * @return self Configured instance.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function notLike(string $pattern): self
     {
         if (!$this->awaitingOperator) {
@@ -382,8 +406,10 @@ final class WhereBuilder
     /**
      * Attach > operator to current column
      *
-     * @param  mixed          $value Comparison value
+     * @param mixed $value  Comparison value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function gt(mixed $value): self
@@ -403,8 +429,10 @@ final class WhereBuilder
     /**
      * Attach < operator to current column
      *
-     * @param  mixed          $value Comparison value
+     * @param mixed $value  Comparison value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function lt(mixed $value): self
@@ -424,8 +452,10 @@ final class WhereBuilder
     /**
      * Attach >= operator to current column
      *
-     * @param  mixed          $value Comparison value
+     * @param mixed $value  Comparison value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function gte(mixed $value): self
@@ -445,8 +475,10 @@ final class WhereBuilder
     /**
      * Attach <= operator to current column
      *
-     * @param  mixed          $value Comparison value
+     * @param mixed $value  Comparison value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function lte(mixed $value): self
@@ -466,8 +498,10 @@ final class WhereBuilder
     /**
      * Attach = operator to current column
      *
-     * @param  mixed          $value Comparison value
+     * @param mixed $value  Comparison value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function eq(mixed $value): self
@@ -487,8 +521,10 @@ final class WhereBuilder
     /**
      * Attach != operator to current column
      *
-     * @param  mixed          $value Comparison value
+     * @param mixed $value  Comparison value
+     *
      * @return self
+     *
      * @throws QueryException If no column is awaiting an operator
      */
     public function neq(mixed $value): self
@@ -508,7 +544,8 @@ final class WhereBuilder
     /**
      * Create EXISTS condition with subquery
      *
-     * @param  Sql  $subquery Subquery to check for existence
+     * @param Sql $subquery  Subquery to check for existence
+     *
      * @return self
      */
     public function exists(Select|Sql $subquery): self
@@ -521,7 +558,8 @@ final class WhereBuilder
     /**
      * Create NOT EXISTS condition with subquery
      *
-     * @param  Sql  $subquery Subquery to check for non-existence
+     * @param Sql $subquery  Subquery to check for non-existence
+     *
      * @return self
      */
     public function notExists(Select|Sql $subquery): self
@@ -534,7 +572,8 @@ final class WhereBuilder
     /**
      * Start a nested expression group using closure
      *
-     * @param  callable $callback Receives a WhereBuilder for nested conditions
+     * @param callable $callback  Receives a WhereBuilder for nested conditions
+     *
      * @return self
      */
     public function group(callable $callback): self
@@ -553,9 +592,11 @@ final class WhereBuilder
     }
 
     /**
-     * End the current WHERE/HAVING chain and return to parent query builder
+     * End the current WHERE/HAVING chain and return to parent query builder.
      *
      * @return Select|Update|Delete Parent query builder
+     *
+     * @throws QueryException If the operation fails.
      */
     public function end()
     {
@@ -579,10 +620,147 @@ final class WhereBuilder
         return $this->parent;
     }
 
+    // -------------------------------------------------------------------------
+    // Proxy terminators — call end() then forward, so ->where(...)->rows() works
+    // without requiring an explicit ->end() call.
+    // -------------------------------------------------------------------------
+
+    /**
+     * End the chain and return all matching rows.
+     *
+     * @return array Result array.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function rows(): array
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('rows() is only available on SELECT builders.');
+        }
+
+        return $parent->rows();
+    }
+
+    /**
+     * End the chain and return the first row (or null).
+     *
+     * @return ?array The first row or null.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function row(): ?array
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('row() is only available on SELECT builders.');
+        }
+
+        return $parent->row();
+    }
+
+    /**
+     * End the chain and return a single column value.
+     *
+     * @return mixed Execution result.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function value(): mixed
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('value() is only available on SELECT builders.');
+        }
+
+        return $parent->value();
+    }
+
+    /**
+     * End the chain and return the first column from every row.
+     *
+     * @return array Result array.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function values(): array
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('values() is only available on SELECT builders.');
+        }
+
+        return $parent->values();
+    }
+
+    /**
+     * End the chain and return the first row as a numeric list.
+     *
+     * @return ?array<int,mixed> Row values or null.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function list(): ?array
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('list() is only available on SELECT builders.');
+        }
+
+        return $parent->list();
+    }
+
+    /**
+     * End the chain and stream each row to a callable.
+     *
+     * @param callable $fn  Callback to execute.
+     *
+     * @return int Number of rows processed.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function each(callable $fn): int
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('each() is only available on SELECT builders.');
+        }
+
+        return $parent->each($fn);
+    }
+
+    /**
+     * End the chain and execute COUNT(*) or COUNT(expression).
+     *
+     * @param string $expression  SQL expression (default '*').
+     *
+     * @return int Row count.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function count(string $expression = '*'): int
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('count() is only available on SELECT builders.');
+        }
+
+        return $parent->count($expression);
+    }
+
     /**
      * Set whether this builder is for HAVING clause
      *
-     * @param bool $isHaving True for HAVING, false for WHERE
+     * @param bool $isHaving  True for HAVING, false for WHERE
+     *
+     * @return void No return value.
      */
     public function setHavingMode(bool $isHaving): void
     {
@@ -592,7 +770,9 @@ final class WhereBuilder
     /**
      * Set current column for fluent operator attachment
      *
-     * @param string|Expr $column Column/expression
+     * @param string|Expr $column  Column/expression
+     *
+     * @return void No return value.
      */
     public function setCurrentColumn(string|Expr $column): void
     {
@@ -601,30 +781,10 @@ final class WhereBuilder
     }
 
     /**
-     * Compiles the constructed conditions into a SQL fragment.
+     * Compile chained conditions into a WHERE/HAVING fragment (no leading keyword).
+     * Called from `end()`; returns '' when there are no conditions.
      *
-     * This internal method converts the chain of conditions built through
-     * the fluent interface into a proper SQL WHERE or HAVING clause fragment.
-     * It handles operator precedence, negation, and proper spacing.
-     *
-     * The compilation process:
-     * 1. Combines all conditions with their appropriate logical operators (AND/OR)
-     * 2. Applies negation (`NOT`) where specified
-     * 3. Returns empty string if no conditions were added
-     * 4. Properly formats the SQL for inclusion in a larger query
-     *
-     * Example output:
-     * ```sql
-     * active = :param1 AND department_id IN (:param2, :param3, :param4)
-     * OR (title LIKE :param5 AND hire_date BETWEEN :param6 AND :param7)
-     * ```
-     *
-     * Note: This method is typically called internally by `end()` when
-     * returning to the parent query builder. Application code rarely needs
-     * to call it directly.
-     *
-     * @return string SQL fragment ready for inclusion in WHERE/HAVING clause,
-     *                or empty string if no conditions were specified
+     * @return string SQL fragment
      */
     public function build(): string
     {
@@ -669,7 +829,9 @@ final class WhereBuilder
     /**
      * Add a condition to the current chain
      *
-     * @param string $condition SQL condition fragment
+     * @param string $condition  SQL condition fragment
+     *
+     * @return void No return value.
      */
     private function addCondition(string $condition): void
     {
@@ -681,6 +843,14 @@ final class WhereBuilder
         $this->nextOperator = 'AND'; // Reset to AND for next condition
     }
 
+    /**
+     * Where raw.
+     *
+     * @param string $sql     SQL string, SQL message, or builder SQL object.
+     * @param array  $params  Named parameter values.
+     *
+     * @return self Configured instance.
+     */
     public function whereRaw(string $sql, array $params = []): self
     {
         foreach ($params as $key => $value) {
@@ -699,6 +869,16 @@ final class WhereBuilder
         return $this;
     }
 
+    /**
+     * Replace first placeholder.
+     *
+     * @param string $sql    SQL string, SQL message, or builder SQL object.
+     * @param string $value  Value to render or bind.
+     *
+     * @return string String result.
+     *
+     * @throws QueryException If the operation fails.
+     */
     private function replaceFirstPlaceholder(string $sql, string $value): string
     {
         $pos = strpos($sql, '?');
@@ -710,6 +890,17 @@ final class WhereBuilder
         return substr($sql, 0, $pos) . $value . substr($sql, $pos + 1);
     }
 
+    /**
+     * Replace named placeholder.
+     *
+     * @param string $sql    SQL string, SQL message, or builder SQL object.
+     * @param string $token  SQL token.
+     * @param string $value  Value to render or bind.
+     *
+     * @return string String result.
+     *
+     * @throws QueryException If the operation fails.
+     */
     private function replaceNamedPlaceholder(string $sql, string $token, string $value): string
     {
         if (strpos($sql, $token) === false) {
@@ -719,6 +910,13 @@ final class WhereBuilder
         return preg_replace('/' . preg_quote($token, '/') . '/', $value, $sql, 1) ?? $sql;
     }
 
+    /**
+     * Render subquery.
+     *
+     * @param Select|Sql $subquery  Subquery to embed.
+     *
+     * @return string String result.
+     */
     private function renderSubquery(Select|Sql $subquery): string
     {
         $sql = $subquery instanceof Select ? $subquery->toSql() : $subquery;
@@ -743,7 +941,8 @@ final class WhereBuilder
     /**
      * Quote an identifier
      *
-     * @param  string $identifier Identifier to quote
+     * @param string $identifier  Identifier to quote
+     *
      * @return string Quoted identifier
      */
     private function quote(string $identifier): string
@@ -754,7 +953,8 @@ final class WhereBuilder
     /**
      * Convert value to parameter placeholder
      *
-     * @param  mixed  $value Value to parameterize
+     * @param mixed $value  Value to parameterize
+     *
      * @return string Parameter placeholder
      */
     private function param(mixed $value): string
@@ -765,7 +965,8 @@ final class WhereBuilder
     /**
      * Quote column or expression
      *
-     * @param  string $column Column name or expression
+     * @param string $column  Column name or expression
+     *
      * @return string Quoted column or raw expression
      */
     private function quoteColumn(string|Expr $column): string

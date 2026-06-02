@@ -1,23 +1,55 @@
 # Docs Index (Source of Truth Map)
 
-## Doctrine / Constitution
-- docs/constitution.md
+**Normative (read before changing code or public behaviour):** constitution,
+product contract, spec, contract, architecture, style guide, public API,
+getting started, configuration, caching doctrine, security.
 
-## Spec
+**Operational / patterns:** driver reference, caching operations, repository
+patterns cookbook, certification docs, **`skills/`** (agent checklists for application DAL on UDA).
+
+**Historical / design archive:** `docs/plans/**` — local drafts (gitignored until
+public-suitable); context only when present; do not treat as current behaviour
+unless cross-checked against code.
+
+---
+
+## Doctrine / Constitution (normative)
+
+- docs/constitution.md
+- docs/product-contract-v1.md
+
+## Spec (normative)
+
 - docs/spec.md
 
-## Public API
+## Architecture and style (normative)
+
+- docs/contract.md
+- docs/architecture.md
+- docs/style-guide.md
+
+## Public API (normative)
+
+- docs/getting-started.md
 - docs/public-api.md
 
-## Caching
+## Releases (normative)
+
+- docs/releases.md
+- CHANGELOG.md (repository root)
+
+## Caching (normative + operational)
+
 - docs/cache-doctrine.md
 - docs/caching.md
 
 ## Query usage
-- docs/query-cookbook.md
-- docs/repositories.md
+
+- docs/query-cookbook.md (guide; edits require explicit approval)
+- docs/patterns.md — repository patterns cookbook
 
 ## Drivers / Config / Security
+
 - docs/driver.md
 - docs/configuration.md
 - docs/security.md

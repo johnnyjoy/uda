@@ -7,6 +7,13 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Carries INSERT builder state into dialect compilation.
+ *
+ * InsertState preserves values, generated params, returning metadata, and CTE
+ * inputs for dialect compilers.
+ */
+
 namespace UDA\Query\Dialect;
 
 use Closure;
@@ -17,6 +24,21 @@ use UDA\SQL\ParamBag;
  */
 final class InsertState
 {
+    /**
+     * Create the runtime object.
+     *
+     * @param array    $ctes           CTE definitions attached to the statement.
+     * @param ?string  $table          Target table name.
+     * @param array    $columns        Column names.
+     * @param array    $rows           Column/value row data set.
+     * @param ?array   $returning      Returning column list, or null when not requested.
+     * @param array    $tables         Table names used for cache metadata.
+     * @param ParamBag $params         Named parameter values.
+     * @param Closure  $parameterize   Closure that stores a bound value and returns its placeholder.
+     * @param Closure  $quote          Closure that quotes an identifier for the active dialect.
+     * @param ?string  $selectQuery    SELECT SQL used as the INSERT source.
+     * @param array    $selectColumns  Column names read from the SELECT source.
+     */
     public function __construct(
         public readonly array $ctes,
         public readonly ?string $table,
@@ -32,6 +54,11 @@ final class InsertState
     ) {
     }
 
+    /**
+     * Report whether any attached CTE is recursive.
+     *
+     * @return bool Boolean result.
+     */
     public function hasRecursiveCte(): bool
     {
         foreach ($this->ctes as $cte) {
@@ -43,6 +70,13 @@ final class InsertState
         return false;
     }
 
+    /**
+     * Bind a value and return its generated placeholder.
+     *
+     * @param mixed $value  Value to render or bind.
+     *
+     * @return string Named placeholder.
+     */
     public function param(mixed $value): string
     {
         $fn = $this->parameterize;
@@ -50,6 +84,13 @@ final class InsertState
         return $fn($value);
     }
 
+    /**
+     * Quote.
+     *
+     * @param string $identifier  Identifier value.
+     *
+     * @return string String result.
+     */
     public function quote(string $identifier): string
     {
         $fn = $this->quote;
@@ -57,6 +98,11 @@ final class InsertState
         return $fn($identifier);
     }
 
+    /**
+     * Return accumulated named parameters.
+     *
+     * @return array Result array.
+     */
     public function getParams(): array
     {
         return $this->params->getParams();

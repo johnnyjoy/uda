@@ -53,8 +53,6 @@ Database
     ↓
 Driver
     ↓
-Executor
-    ↓
 PDO
 ```
 
@@ -142,10 +140,9 @@ Driver decides whether cache is consulted.
 Cache reads must occur in this order:
 
 1. retrieve metadata only
-2. evaluate TTL
-3. evaluate table write timestamps
-4. determine usability
-5. retrieve payload only if selected
+2. evaluate table write timestamps
+3. determine usability
+4. retrieve payload only if selected
 
 Deserializing payload before the decision is forbidden.
 
@@ -153,23 +150,9 @@ Deserializing payload before the decision is forbidden.
 
 ## Stale Usage Rules
 
-Stale cache may be served only in two cases:
-
-### TTL-as-interval
-
-Cached data may be served within TTL even if table mtime changed.
-
-Purpose: reduce database load.
-
-### Stale-on-error
-
-If:
-
-* database execution fails
-* policy allows stale
-* cached age ≤ `maxStaleSeconds`
-
-then stale results may be returned.
+Stale-on-error and TTL-as-interval behavior are deferred from the v1 runtime.
+Until explicitly reaccepted, stale entries must not be served after table mtime
+invalidates them.
 
 ---
 

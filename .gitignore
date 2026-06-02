@@ -1,42 +1,66 @@
 # Composer
 /vendor/
 /composer.lock
+/composer.phar
 
 # PHPUnit
 /phpunit.xml
+/phpunit.cache/
+/.phpunit.cache/
+/.phpunit.result.cache
+phpunit.xml
 
-# IDE
+# PHP-CS-Fixer
+/.php-cs-fixer.cache
+
+# IDE / editors
 .idea/
 .vscode/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Environment
-.env
-
-logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-dev-debug.log
-# Dependency directories
-node_modules/
-# Environment variables
-# Editor directories and files
-.idea
-.vscode
+.cursor/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-# OS specific
 
-# Task files
-# tasks.json
-# tasks/ 
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+logs/
+*.log
+
+# Node (local tooling only; vitest removed)
+node_modules/
+package.json
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+
+# Git worktrees
+.worktrees/
+
+# --- Agent / productivity tooling (local only; do not push) ---
+memory-bank/
+.axon/
+.roam/
+.opencode/
+.taskmaster/
+.understand-anything/
+.claude-collective/
+PROJECT_ANALYSIS.md
+tasks.json
+tasks/
+
+# Internal design/plan drafts (not public-ready)
+docs/plans/
+
+# Local MCP / editor config (machine-specific)
+.mcp.json
+
+# Local certification / benchmark output
+build/

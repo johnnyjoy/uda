@@ -1,398 +1,112 @@
 # UDA Caching
 
-## Purpose
+Caching is transparent and configuration-driven on the **read path**. Application
+code does not opt in to caching for ordinary queries. **Ops-only** exceptions:
+`Database::flushCache()` and `Cache::flush()` for deploy or incident purge — see
+[Flush (ops)](#flush-ops) below.
 
-Caching in UDA provides **transparent read acceleration**.
+## Runtime Path
 
-Caching exists for exactly two reasons:
-
-1. **Speed**
-2. **Resilience**
-
-Caching must not introduce alternate execution paths or additional public APIs.
-
----
-
-# Core Principle
-
-> Cache is not called. Cache happens.
-
-Caching is **configuration-driven**.
-
-If caching is enabled for a connection:
-
-* read helpers automatically consult cache
-* write helpers automatically trigger invalidation
-
-Application code continues to use the same methods:
-
-```
-row()
-rows()
-value()
-values()
-list()
-each()
+```text
+Repository -> Database -> Driver -> Cache metadata decision
+                                      | hit  -> result array
+                                      | miss -> PDO through Driver hot path
 ```
 
-No public cache API exists.
+If caching is disabled, the path is:
 
-The caching system is **completely transparent** to callers.
-
----
-
-# Runtime Ownership
-
-Only the **Driver domain** interacts with Cache during execution.
-
-Driver responsibilities:
-
-1. evaluate cache policy
-2. retrieve cache metadata
-3. determine cache usability
-4. execute database query when required
-5. populate cache after successful reads
-6. notify cache of writes
-
-The runtime pipeline is fixed:
-
-```
-Repository → Database → Driver → Cache → Executor → PDO
+```text
+Repository -> Database -> Driver -> PDO
 ```
 
-No alternate cache execution path may exist.
+## Configuration
 
----
-
-# Shared Cache Infrastructure
-
-Each Driver receives a **connection-scoped cache controller** during construction.
-
-The controller is created via configuration wiring:
-
-```
-$setup = new \UDA\Cache\Setup($store, $tracker, $serializer, ...);
-$cache = Cache::fromSetup($connectionName, $setup);
-```
-
-The setup encapsulates the cache store, serializer, table write tracker, namespace, and policy data for that connection.
-The controller is private to the Driver and never exposed publicly.
-
----
-
-# Store Backends
-
-Cache stores live under:
-
-```
-UDA\Cache\Store
-```
-
-Supported backends:
-
-| Backend       | Class            | Extension     | Notes                              |
-| ------------- | ---------------- | ------------- | ---------------------------------- |
-| Redis         | `RedisStore`     | ext-redis     | Prefix optional (default `UDA:`)   |
-| Memcached     | `MemcachedStore` | ext-memcached | TTL > 30 days uses absolute expiry |
-| Process-local | `ArrayStore`     | none          | In-memory only                     |
-
-Store configuration occurs in the **top-level config cache block**.
-
----
-
-# Transparent Read Behavior
-
-When caching is enabled for a connection:
-
-```
-Repository
-    ↓
-Database
-    ↓
-Driver
-    ↓
-Cache metadata decision
-    ↓
-Cache hit → return result
-Cache miss → Executor → PDO
-    ↓
-Cache store update
-```
-
-If caching is disabled, the path becomes:
-
-```
-Repository → Database → Driver → Executor → PDO
-```
-
-Cache code must not execute.
-
----
-
-# Metadata-First Doctrine
-
-Cache decisions must use **metadata only**.
-
-Payload retrieval must occur only if the metadata indicates the cached entry is usable.
-
-Decision sequence:
-
-1. retrieve metadata
-2. evaluate TTL
-3. evaluate table write timestamps
-4. determine usability
-5. retrieve cached payload if selected
-
-Deserializing unused payload is forbidden.
-
----
-
-# Cache Key Scheme
-
-```
-UDA|{serializer_id}|v{format_version}|{connection}|{tables}|{query_hash}
-```
-
-Components:
-
-| Component      | Description                          |
-| -------------- | ------------------------------------ |
-| serializer_id  | serializer implementation identifier |
-| format_version | cache format version                 |
-| connection     | connection name                      |
-| tables         | normalized table list                |
-| query_hash     | hash of SQL and parameters           |
-
----
-
-## Table Segment
-
-Tables are:
-
-* normalized
-* sorted
-* joined with `+`
-
-If the segment exceeds `MAX_TABLES_SEGMENT_LENGTH`, it becomes:
-
-```
-t:{sha256(tablesJoined)}
-```
-
----
-
-## Query Hash
-
-```
-sha256(normalized_sql + "\n" + stable_param_encoding)
-```
-
-This ensures deterministic cache keys.
-
----
-
-# Serializer
-
-Serialization strategy:
-
-1. igbinary (if available)
-2. PHP `serialize()`
-
-Serializer identity is embedded in the cache key to prevent collisions between formats.
-
----
-
-# TTL Model
-
-Every cached entry must have a TTL.
-
-Infinite TTL is forbidden.
-
-TTL resolution order:
-
-1. per-call override
-2. per-table override
-3. per-connection default
-4. global default
-
-```
-ttlSeconds <= 0
-```
-
-disables caching.
-
----
-
-# Interval Gating
-
-`minIntervalSeconds` throttles repeated database queries.
-
-Within the interval window:
-
-* cached results are served
-* database queries are suppressed
-
-This reduces load for frequently requested queries.
-
----
-
-# Stale-on-Error
-
-If a database execution fails and the error is considered transient:
-
-```
-allowStaleOnError = true
-```
-
-and:
-
-```
-cache_age <= maxStaleSeconds
-```
-
-then stale results may be returned.
-
-Otherwise the database exception propagates.
-
-Transient detection occurs in:
-
-```
-Driver::isTransient()
-```
-
----
-
-# Table Write Tracking
-
-Cache invalidation relies on table write timestamps.
-
-Driver must notify the tracker when a write succeeds.
-
-Tracked operations:
-
-* INSERT
-* UPDATE
-* DELETE
-* UPSERT
-
-Write tracking occurs only when:
-
-```
-affectedRows > 0
-```
-
-Fluent write helpers automatically notify the tracker.
-
-For raw SQL writes:
-
-```
-$driver->touchTables(['table1','table2'])
-```
-
-must be called.
-
-## Raw SQL table hints
-
-All public read helpers on `UDA\Database` now accept an optional `$tableHints` array argument. When you execute literal SQL outside the query builders, pass the list of tables touched by the statement so the cache and tracing layers receive accurate metadata:
-
-```php
-$db->rows('SELECT * FROM users WHERE id = :id', ['id' => 7], ['users']);
-```
-
-Providing hints keeps cache invalidation and query traces accurate even before the builders can infer table names. If you omit the parameter, UDA falls back to whatever metadata it can derive from builders or cached plans.
-
----
-
-# Table Staleness
-
-A cached entry becomes stale when:
-
-```
-lastTouched(table) >= cachedEntry.createdAt
-```
-
-This comparison is performed for every table involved in the query.
-
----
-
-# Per-Connection Policy
-
-Connections may define default caching policy.
-
-Example:
+Cache is enabled per connection:
 
 ```json
-"cache": {
-  "defaultPolicy": {
-    "ttlSeconds": 60,
-    "minIntervalSeconds": 5,
-    "allowStaleOnError": false,
-    "maxStaleSeconds": 0
-  },
-  "namespace": "app1",
-  "tables": {
-    "users": {"ttlSeconds": 30},
-    "audit_log": {"disable": true}
+{
+  "connections": {
+    "app": {
+      "driver": "sqlite",
+      "params": {"path": "/tmp/app.sqlite"},
+      "cache": {
+        "namespace": "APP",
+        "store": {"type": "array"},
+        "tables": {
+          "audit_log": {"disable": true}
+        }
+      }
+    }
   }
 }
 ```
 
----
+Supported `store.type` values are `array`, `redis`, `memcached`, and `off`.
 
-# Table Policy Merge
+## Table Hints
 
-When multiple tables appear in a query, policies are merged conservatively.
+Raw SQL callers provide table hints when they want cache attribution:
 
-| Field              | Merge Rule  |
-| ------------------ | ----------- |
-| ttlSeconds         | minimum     |
-| minIntervalSeconds | maximum     |
-| allowStaleOnError  | logical AND |
-| maxStaleSeconds    | minimum     |
-
-If any table rule specifies:
-
-```
-disable: true
+```php
+$rows = $db->rows(
+    'SELECT id, name FROM users WHERE active = :active',
+    ['active' => 1],
+    ['users']
+);
 ```
 
-caching is disabled.
+Builders carry their own table metadata when they compile SQL.
 
----
+## Metadata-First Rule
 
-# Performance Behavior
+Cache reads must inspect metadata before reading payload:
 
-Cache writes occur:
+1. compute the cache key from SQL and named parameters
+2. read metadata key
+3. compare entry creation time with table write timestamps
+4. read payload only if metadata is usable
 
-* on initial cache population
-* on cache refill
+This prevents unnecessary payload deserialization and keeps invalidation tied to
+successful writes.
 
-Cache hits do not rewrite entries unless interval gating requires it.
+## Write Touch
 
-This minimizes write amplification.
+`Driver` calls `Cache::touch()` only after successful DML with affected rows.
+The touch is keyed by connection name and table name so multiple connections of
+the same backend stay isolated.
 
----
+## Boundaries
 
-# Anti-Goals
+Cache must not:
 
-The caching system must never introduce:
+* execute SQL
+* expose public cache handles
+* parse SQL for table names
+* require repository code to branch on cache state
 
-* Scope classes
-* alternate read APIs
-* explicit cache invocation
-* SQL parsing for table discovery
-* application-controlled cache execution
+## Process-local reset
 
-Caching must remain **fully transparent**.
+`UDA\Cache::clear()` drops in-process static client and namespace maps for the
+current PHP process. It does **not** purge Redis, Memcached, or other remote
+payload/metadata keys. Normal application flows do not call it; it exists for
+test isolation, long-lived workers, or similar controlled reset of client reuse
+state.
 
----
+## Flush (ops)
 
-# Architectural Invariant
+`UDA\Cache::flush($connectionName)` and `Database::flushCache()` delete cached
+payload, metadata (`m:…`), and table-mtime (`t:…`) keys for one configured
+connection. Use after deploys or during incidents when automatic invalidation is
+not enough.
 
-All cached reads must follow:
+| Store | Behavior |
+| ----- | -------- |
+| `array` | Deletes matching in-process keys |
+| `redis` | `SCAN` + delete by namespace/connection prefix (not `FLUSHDB`) |
+| `memcached` | Deletes keys when `getAllKeys()` is available; otherwise throws `NotSupportedException` |
+| `off` | No-op |
 
-```
-Repository → Database → Driver → Cache → Executor → PDO
-```
+`flush()` is not part of the transparent read path. Repository code should not
+branch on cache state for ordinary queries.
 
-If any component bypasses this path, the architecture is invalid.
+Do not confuse **`flush()`** (remote keys) with **`clear()`** (process-local client maps).

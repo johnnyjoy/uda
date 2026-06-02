@@ -12,16 +12,21 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: Provides an immutable, validated snapshot of database connection configurations for UDA.
+ * Purpose: Stores validated configuration data for the active UDA process.
+ *
+ * Snapshot is immutable after construction and is read only through Config.
+ * It normalizes default connection behavior and keeps connection definitions
+ * indexed by connection name.
  */
 
 namespace UDA\Config;
 
 use PDO;
+use UDA\Driver;
 use UDA\Exception\ConfigException;
 
 /**
- * Immutable validated configuration snapshot that stores connections and defaults
+ * Immutable validated configuration snapshot.
  */
 final class Snapshot
 {
@@ -32,31 +37,29 @@ final class Snapshot
     private array $connections;
 
     /**
+     * Create a validated snapshot from connection and default arrays.
      *
-     * @param ?string $defaultConnection The default connection name
-     * @param array   $connections       The connection configurations
-     * @param array   $defaults          The default configuration values
+     * @param array<string,array<string,mixed>> $connections  Connection configurations keyed by name.
+     * @param array<string,mixed>               $defaults     Default configuration values.
      */
     public function __construct(
-        ?string $defaultConnection,
         array $connections,
         array $defaults = []
     ) {
-        if ($defaultConnection === null) {
-            $defaultConnection = $defaults['connection'] ?? null;
-        }
-
         $this->defaults = $this->validateDefaults($defaults);
         $this->connections = $this->validateConnections($connections);
 
-        $this->defaults['connection'] = $defaultConnection;
+        $this->defaults['connection'] = $this->defaults['connection'] ?? 'default';
     }
 
     /**
+     * Validate default values before storing them in the snapshot.
      *
-     * @param  array           $defaults The default configuration values
-     * @return array           The validated default configuration values
-     * @throws ConfigException If defaults are invalid
+     * @param array<string,mixed> $defaults  The default configuration values.
+     *
+     * @return array<string,mixed> The validated default configuration values.
+     *
+     * @throws ConfigException If defaults are invalid.
      */
     private function validateDefaults(array $defaults): array
     {
@@ -72,10 +75,13 @@ final class Snapshot
     }
 
     /**
+     * Validate named connection configurations.
      *
-     * @param  array           $connections The connection configurations
-     * @return array           The validated connection configurations
-     * @throws ConfigException If connections are invalid
+     * @param array<string,mixed> $connections  The connection configurations.
+     *
+     * @return array<string,array<string,mixed>> The validated connection configurations.
+     *
+     * @throws ConfigException If connections are invalid.
      */
     private function validateConnections(array $connections): array
     {
@@ -90,6 +96,19 @@ final class Snapshot
                 throw new ConfigException("Connection '$name' missing 'driver' as string");
             }
 
+            if (isset($config['transport']) && !is_string($config['transport'])) {
+                throw new ConfigException("Connection '$name' 'transport' must be a string");
+            }
+
+            [$engine, $transport] = Driver::resolveEngineTransport(
+                $config['driver'],
+                isset($config['transport']) ? $config['transport'] : null
+            );
+
+            $config['engine'] = $engine;
+            $config['transport'] = $transport;
+            $config['driver'] = $engine;
+
             $validated[$name] = $config;
         }
 
@@ -98,19 +117,18 @@ final class Snapshot
 
     /**
      * Retrieves the configured default connection name.
-     *
      * Returns null if no default connection was specified in the configuration.
      * The default connection is used when calling Database methods without specifying
      * a connection name.
+     * if ($snapshot->getDefaultConnection() === null) {
+     * throw new ConfigException("No default connection configured");
+     * }
      *
      * @return ?string The default connection name or null if unspecified
      *
      * @see Snapshot::getConnection() To access specific connection configurations
      * @see Database::connect() Database initialization with default connection
      * @example
-     * if ($snapshot->getDefaultConnection() === null) {
-     * throw new ConfigException("No default connection configured");
-     * }
      */
     public function getDefaultConnection(): ?string
     {
@@ -118,7 +136,6 @@ final class Snapshot
     }
 
     /**
-     *
      * @return array The connection names
      */
     public function getConnectionNames(): array
@@ -127,17 +144,18 @@ final class Snapshot
     }
 
     /**
+     * @param string $name  The connection name
      *
-     * @param  string $name The connection name
      * @return ?array The connection configuration or null
      */
-    public function getConnection(string $name): ?array
+    public function getConnection(?string $name = 'default'): ?array
     {
+        $name = $name ?? $this->getDefaultConnection() ?? 'default';
+
         return $this->connections[$name] ?? null;
     }
 
     /**
-     *
      * @return array The default PDO options
      */
     public function getDefaultOptions(): array
@@ -155,31 +173,35 @@ final class Snapshot
     }
 
     /**
+     * @param string $name  The connection name
      *
-     * @param  string $name The connection name
-     * @return bool   True if the connection exists, false otherwise
+     * @return bool True if the connection exists, false otherwise
      */
-    public function hasConnection(string $name): bool
+    public function hasConnection(?string $name = 'default'): bool
     {
         return isset($this->connections[$name]);
     }
 
     /**
+     * Return merged options.
      *
-     * @param  string          $connectionName The connection name
-     * @return array           The merged PDO options
+     * @param ?string $name            Name value.
+     * @param string  $connectionName  The connection name
+     *
+     * @return array The merged PDO options
+     *
      * @throws ConfigException If the connection is not found
      */
-    public function getMergedOptions(string $connectionName): array
+    public function getMergedOptions(?string $name = 'default'): array
     {
-        $connection = $this->getConnection($connectionName);
+        $conn = $this->getConnection($name);
 
-        if ($connection === null) {
-            throw new ConfigException("Connection '$connectionName' not found");
+        if ($conn === null) {
+            throw new ConfigException("Connection '$name' not found");
         }
 
         $defaults = $this->getDefaultOptions();
-        $overrides = $connection['options'] ?? [];
+        $overrides = $conn['options'] ?? [];
 
         // Preserve numeric keys while allowing overrides to replace defaults
         return $overrides + $defaults;

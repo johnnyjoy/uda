@@ -13,8 +13,7 @@
             },
             "pass": {
                 "env": "PG_PASS"
-            },
-            "dialect": "postgres"
+            }
         },
         "audit_sqlite": {
             "driver": "sqlite",
@@ -22,13 +21,13 @@
                 "path": ":memory:"
             },
             "user": null,
-            "pass": null,
-            "dialect": "sqlite"
+            "pass": null
         },
         "client_0123": {
-            "driver": "sqlsrv",
+            "driver": "sqlserver",
+            "transport": "sqlsrv",
             "params": {
-                "server": "sql01.internal",
+                "host": "sql01.internal",
                 "port": 1433,
                 "database": "Client0123"
             },
@@ -37,8 +36,34 @@
             },
             "pass": {
                 "env": "SQL_PASS"
+            }
+        },
+        "legacy_ase_dblib": {
+            "driver": "dblib",
+            "params": {
+                "host": "ase.internal",
+                "dbname": "legacy"
             },
-            "dialect": "sqlserver"
+            "user": {
+                "env": "ASE_USER"
+            },
+            "pass": {
+                "env": "ASE_PASS"
+            }
+        },
+        "mssql_over_dblib": {
+            "driver": "sqlserver",
+            "transport": "dblib",
+            "params": {
+                "host": "mssql.internal",
+                "dbname": "app"
+            },
+            "user": {
+                "env": "SQL_USER"
+            },
+            "pass": {
+                "env": "SQL_PASS"
+            }
         }
     }
 }

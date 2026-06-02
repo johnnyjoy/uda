@@ -7,22 +7,41 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Compiles query builders into MariaDB/MySQL-specific SQL.
+ *
+ * Handles ON DUPLICATE KEY update forms and MariaDB-compatible query syntax.
+ */
+
 namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
-use UDA\SQL\SqlMessage;
 
 /**
  * MariaDB/MySQL-compatible dialect handling INSERT IGNORE and ON DUPLICATE KEY.
  */
 final class MariaDb extends Dialect
 {
+    /**
+     * Name.
+     *
+     * @return string Dialect name.
+     */
     public function name(): string
     {
         return 'MariaDB';
     }
 
+    /**
+     * Compile upsert.
+     *
+     * @param UpsertState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileUpsert(UpsertState $state): Sql
     {
         if ($state->table === null) {
@@ -71,25 +90,14 @@ final class MariaDb extends Dialect
         return new Sql($sql, $state->getParams(), $state->tables);
     }
 
+    /**
+     * Report whether supports upsert.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsUpsert(): bool
     {
         return true;
     }
 
-    public function supportsExplain(): bool
-    {
-        return true;
-    }
-
-    public function supportsExplainAnalyze(): bool
-    {
-        return true;
-    }
-
-    public function buildExplainSql(SqlMessage $sql, bool $analyze): iterable
-    {
-        $prefix = $analyze ? 'EXPLAIN ANALYZE ' : 'EXPLAIN ';
-
-        yield new SqlMessage($prefix . $sql->getQuery(), $sql->getParams(), $sql->getCacheTables());
-    }
 }

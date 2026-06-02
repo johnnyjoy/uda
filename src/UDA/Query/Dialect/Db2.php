@@ -7,6 +7,14 @@ declare(strict_types=1);
  * @subpackage Query\Dialect
  */
 
+/*
+ * Purpose: Compiles query builders into DB2-specific SQL.
+ *
+ * Handles DB2 pagination and MERGE/upsert syntax in the Query domain.
+ * Not connectable until UDA\Driver\Db2 exists — Database::queryDialect()
+ * intentionally excludes engine db2 until then.
+ */
+
 namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
@@ -17,11 +25,23 @@ use UDA\Query\Sql;
  */
 final class Db2 extends Dialect
 {
+    /**
+     * Name.
+     *
+     * @return string Dialect name.
+     */
     public function name(): string
     {
         return 'DB2';
     }
 
+    /**
+     * Compile select pagination.
+     *
+     * @param SelectState $state  Dialect compilation state.
+     *
+     * @return string Pagination SQL fragment.
+     */
     protected function compileSelectPagination(SelectState $state): string
     {
         if ($state->limit === null && $state->offset === null) {
@@ -41,6 +61,15 @@ final class Db2 extends Dialect
         return $fragment;
     }
 
+    /**
+     * Compile upsert.
+     *
+     * @param UpsertState $state  Dialect compilation state.
+     *
+     * @return Sql Compiled SQL message.
+     *
+     * @throws QueryException If the operation fails.
+     */
     public function compileUpsert(UpsertState $state): Sql
     {
         if ($state->table === null) {
@@ -99,11 +128,21 @@ final class Db2 extends Dialect
         return new Sql($sql, $state->getParams(), $state->tables);
     }
 
+    /**
+     * Report whether supports merge.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsMerge(): bool
     {
         return true;
     }
 
+    /**
+     * Report whether supports upsert.
+     *
+     * @return bool Boolean result.
+     */
     public function supportsUpsert(): bool
     {
         return true;

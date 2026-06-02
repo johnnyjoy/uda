@@ -55,21 +55,18 @@ class Sql
     private bool $hasWhereClause;
     private bool $hasLimitClause;
     private bool $unsafe;
-    private ?bool $retryAllowed;
+
     /**
      * Creates a new Sql instance representing a parameterized SQL query.
      *
-     * @param string   $sql         The SQL query string with named parameter placeholders
-     *                              (e.g., ":name", ":email"). Never concatenate values directly
-     *                              into SQL strings to prevent injection vulnerabilities.
-     * @param array    $params      Associative array mapping parameter names to values.
-     *                              Example: ['name' => 'Alice', 'email' => 'alice@example.com']
-     * @param string[] $cacheTables Tables this query reads from or writes to.
-     *                              Used by the cache system to invalidate stale entries
-     *                              when these tables are modified. For SELECT queries,
-     *                              list all tables referenced (including joins). For
-     *                              INSERT/UPDATE/DELETE, list the target table(s).
-     *                              Defaults to empty array (no cache involvement).
+     * @param string   $sql                The SQL query string with named parameter placeholders.
+     * @param array    $params             Associative array mapping parameter names to values.
+     * @param string[] $cacheTables        Tables this query reads from or writes to.
+     * @param array    $returningColumns   Columns requested from RETURNING/OUTPUT.
+     * @param ?string  $insertTable        Insert target table.
+     * @param array    $insertColumns      Insert target columns.
+     * @param array    $valuePlaceholders  Parameter placeholders for inserted values.
+     * @param array    $metadata           Guardrail and cache metadata.
      */
     public function __construct(
         public readonly string $sql,
@@ -79,25 +76,19 @@ class Sql
         public readonly ?string $insertTable = null,
         public readonly array $insertColumns = [],
         public readonly array $valuePlaceholders = [],
-        array $metadata = [],
-        ?bool $retryAllowed = null
+        array $metadata = []
     ) {
         [$statementType, $hasWhere, $hasLimit, $unsafe] = GuardrailMetadata::normalize($metadata);
         $this->statementType = $statementType;
         $this->hasWhereClause = $hasWhere;
         $this->hasLimitClause = $hasLimit;
         $this->unsafe = $unsafe;
-        $this->retryAllowed = $retryAllowed;
     }
 
     /**
-     * Returns the SQL query string as provided during construction.
+     * SQL text as constructed (named placeholders only; values live in `getParams()`).
      *
-     * This method provides access to the raw SQL for debugging, logging, or
-     * when the SQL needs to be passed to systems that don't understand Sql objects.
-     * The returned string contains parameter placeholders, not actual values.
-     *
-     * @return string The SQL query string with parameter placeholders
+     * @return string
      */
     public function getQuery(): string
     {
@@ -105,13 +96,9 @@ class Sql
     }
 
     /**
-     * Returns the parameters bound to this SQL query.
+     * Parameter values as provided at construction (same keys as placeholders).
      *
-     * The parameters are returned exactly as provided during construction,
-     * preserving their types and the associative array structure. These parameters
-     * should be passed to PDO's prepared statement execution methods.
-     *
-     * @return array The query parameters as associative array
+     * @return array<string, mixed>
      */
     public function getParams(): array
     {
@@ -119,32 +106,18 @@ class Sql
     }
 
     /**
-     * Factory method for creating Sql instances with explicit cache attribution.
+     * Construct immutable `Sql` with optional cache tables and RETURNING metadata.
      *
-     * This is the recommended way to create Sql objects as it makes cache
-     * involvement explicit and self-documenting. The method name `of()` follows
-     * the convention of value object factories (e.g., `Money::of(100, 'USD')`).
+     * @param string   $sql                SQL with named placeholders
+     * @param array    $params             Parameter values
+     * @param string[] $cacheTables        Tables for cache attribution
+     * @param array    $returningColumns   RETURNING / OUTPUT columns
+     * @param ?string  $insertTable        Insert target table
+     * @param array    $insertColumns      Insert target columns
+     * @param array    $valuePlaceholders  Placeholders for inserted values
+     * @param array    $metadata           Guardrail / cache metadata
      *
-     * Example with cache attribution:
-     * ```php
-     * // Query reads from 'users' table - cache will be invalidated when users changes
-     * $query = Sql::of(
-     * "SELECT * FROM users WHERE id = :id",
-     * ['id' => 123],
-     * ['users']
-     * );
-     * ```
-     *
-     * Example without cache involvement:
-     * ```php
-     * // Raw SQL without cache tracking (use for administrative queries, etc.)
-     * $query = Sql::of("SET time_zone = :tz", ['tz' => 'UTC']);
-     * ```
-     *
-     * @param  string   $sql         The SQL query string with named parameter placeholders
-     * @param  array    $params      Associative array of parameter values
-     * @param  string[] $cacheTables Tables this query operates on for cache invalidation
-     * @return self     New immutable Sql instance
+     * @return self
      */
     public static function of(string $sql, array $params = [], array $cacheTables = [], array $returningColumns = [], ?string $insertTable = null, array $insertColumns = [], array $valuePlaceholders = [], array $metadata = []): self
     {
@@ -152,31 +125,30 @@ class Sql
     }
 
     /**
-     * Returns tables this query operates on for cache invalidation purposes.
+     * Tables used for cache attribution / invalidation metadata.
      *
-     * The cache system uses this information to track when tables are modified.
-     * When a table's modification timestamp changes, all cache entries that
-     * involve that table (according to their `getCacheTables()` return value)
-     * are considered stale and will be refetched on next access.
-     *
-     * For SELECT queries involving joins, return all tables:
-     * ```php
-     * // Query: SELECT * FROM users u JOIN orders o ON u.id = o.user_id
-     * return ['users', 'orders'];
-     * ```
-     *
-     * @return string[] Array of table names this query reads from or writes to
+     * @return string[]
      */
     public function getCacheTables(): array
     {
         return $this->cacheTables;
     }
 
+    /**
+     * Return returning columns.
+     *
+     * @return array Result array.
+     */
     public function getReturningColumns(): array
     {
         return $this->returningColumns;
     }
 
+    /**
+     * Return insert table.
+     *
+     * @return ?string String result, or null when absent.
+     */
     public function getInsertTable(): ?string
     {
         return $this->insertTable;
@@ -198,31 +170,56 @@ class Sql
         return $this->valuePlaceholders;
     }
 
+    /**
+     * Return statement type.
+     *
+     * @return string String result.
+     */
     public function getStatementType(): string
     {
         return $this->statementType;
     }
 
+    /**
+     * Report whether has where clause.
+     *
+     * @return bool Boolean result.
+     */
     public function hasWhereClause(): bool
     {
         return $this->hasWhereClause;
     }
 
+    /**
+     * Report whether has limit clause.
+     *
+     * @return bool Boolean result.
+     */
     public function hasLimitClause(): bool
     {
         return $this->hasLimitClause;
     }
 
+    /**
+     * Report whether is unsafe.
+     *
+     * @return bool Boolean result.
+     */
     public function isUnsafe(): bool
     {
         return $this->unsafe;
     }
 
-    public function getRetryAllowed(): ?bool
-    {
-        return $this->retryAllowed;
-    }
-
+    /**
+     * Return a copy of this instance with different guardrail metadata.
+     *
+     * @param string $statementType   Statement type.
+     * @param bool   $hasWhereClause  Whether the SQL contains a WHERE clause.
+     * @param bool   $hasLimitClause  Whether the SQL contains a LIMIT/OFFSET clause.
+     * @param bool   $unsafe          Whether guardrails were bypassed.
+     *
+     * @return self Configured instance.
+     */
     public function withGuardrailMetadata(string $statementType, bool $hasWhereClause, bool $hasLimitClause, bool $unsafe): self
     {
         return new self(
@@ -233,33 +230,9 @@ class Sql
             $this->insertTable,
             $this->insertColumns,
             $this->valuePlaceholders,
-            GuardrailMetadata::package($statementType, $hasWhereClause, $hasLimitClause, $unsafe),
-            $this->retryAllowed
+            GuardrailMetadata::package($statementType, $hasWhereClause, $hasLimitClause, $unsafe)
         );
     }
 
-    public function withRetryAllowed(?bool $allowed): self
-    {
-        return new self(
-            $this->sql,
-            $this->params,
-            $this->cacheTables,
-            $this->returningColumns,
-            $this->insertTable,
-            $this->insertColumns,
-            $this->valuePlaceholders,
-            GuardrailMetadata::package($this->statementType, $this->hasWhereClause, $this->hasLimitClause, $this->unsafe),
-            $allowed
-        );
-    }
-
-    public function allowRetry(): self
-    {
-        return $this->withRetryAllowed(true);
-    }
-
-    public function noRetry(): self
-    {
-        return $this->withRetryAllowed(false);
-    }
 }
+
