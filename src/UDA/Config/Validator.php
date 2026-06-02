@@ -129,6 +129,13 @@ final class Validator
                 continue;
             }
 
+            if (isset($connection['cache']) && is_array($connection['cache'])) {
+                $requireHints = $connection['cache']['require_table_hints'] ?? null;
+                if ($requireHints !== null && !is_bool($requireHints)) {
+                    $this->errors[] = "Connection '$name' cache.require_table_hints must be boolean";
+                }
+            }
+
             $validated[$name] = $connection;
         }
 

@@ -1012,7 +1012,7 @@ final class Driver
 
                 $prefix = $stmt === null ? 'Failed to prepare statement' : 'Query execution failed';
 
-                throw new QueryException($prefix . ': ' . $ex->getMessage(), 0, $ex);
+                throw QueryException::fromPdo($prefix, $ex);
             }
         }
     }
@@ -1041,7 +1041,7 @@ final class Driver
         }
 
         if (strpos($query, '?') !== false) {
-            throw new QueryException('Positional parameters are forbidden in public API');
+            throw QueryException::guardrail('Positional parameters are forbidden in public API');
         }
 
         return [$query, $params];

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Structured `QueryException`: `category()`, `sqlState()`, `driverCode()`; factories `guardrail()`, `fromPdo()`, `unsupported()` (`docs/public-api.md` §7).
+- Connection cache option `require_table_hints` — fail loud on hintless raw SQL reads when cache is enabled (`docs/configuration.md`, `docs/caching.md`).
+- `tools/check-license.php` guardrail (MIT-only `@license` in `src/`).
+- `docs/production-readiness.md` — engine certification matrix, deployment scenarios, v1 migration checklist, P0–P2 backlog with acceptance criteria (hostile review follow-up).
 - `skills/` agent skill pack for application DAL on UDA (`uda-dal-layer`, `uda-sql-and-cache`, `uda-config-deploy`, `uda-change-gates`); see `skills/README.md`.
 - `UDA\Cache::flush($connectionName)` and `Database::flushCache()` for ops-only cache purge (per-connection namespace scope).
 - `.gitlab/` MR + issue templates; `CONTRIBUTING.md`; `SECURITY.md`; `docs/releases.md`.
@@ -19,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- All `src/` PHPDoc `@license` headers aligned to MIT (matches `composer.json` / `LICENSE.md`).
+- PDO failures map through `QueryException::fromPdo()` with SQLSTATE extraction.
 - `UDA\Driver::engineKey()` centralizes engine alias normalization; `Database::queryDialect()` selects dialects using canonical keys only (Driver cannot import Query).
 - Config ingestion normalizes each connection to **`engine`** + **`transport`**; per-engine classes under `UDA\Driver\` build DSN strings; **`UDA\Driver` always owns `new PDO()`**. DSN routing is by engine (transport only selects `sqlsrv` vs `dblib` for SQL Server).
 - `UDA\Driver::transportName()` and `Config::transport()` expose the normalized PDO transport prefix.

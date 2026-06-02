@@ -57,7 +57,13 @@ $rows = $db->rows(
 
 Builders carry their own table metadata when they compile SQL.
 
-## Metadata-First Rule
+### Fail loud (optional)
+
+Set `require_table_hints: true` on the connection cache block to reject hintless
+raw SQL reads when the cache store is enabled. Use in production when every
+cached read must participate in table-mtime invalidation. Builders are unaffected.
+
+---
 
 Cache reads must inspect metadata before reading payload:
 

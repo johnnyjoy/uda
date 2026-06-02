@@ -15,6 +15,7 @@ execution through one application-facing handle: `UDA\Database`.
 * **configuration** — JSON schema, connections, cache stores.
 * **caching** — Transparent cache behaviour and table hints in depth.
 * **contract** — Hard rules that should match what you infer from code review.
+* **production-readiness** — Honest engine cert matrix, deployment scenarios, P0–P2 backlog with acceptance criteria.
 
 **Agent skills (build a DAL on UDA):** `skills/README.md` — checklists for Cursor, Claude, OpenCode, etc.
 
@@ -28,9 +29,17 @@ execution through one application-facing handle: `UDA\Database`.
 Do not edit `docs/query-cookbook.md` without explicit approval; it is treated as
 a guide.
 
+## Production readiness
+
+UDA is **pre–v1 tag**. CI certifies **SQLite and PostgreSQL** only; other engines
+are implemented but not production-certified in CI. Before org-wide adoption, read
+**`docs/production-readiness.md`** — engine matrix, worker/concurrency notes,
+migration checklist, and prioritized backlog (P0–P2) with GitHub-issue-ready
+acceptance criteria.
+
 ## Contributing, security, releases
 
-- **Contributing:** `CONTRIBUTING.md` (GitLab MR flow, local validation, CI truth).
+- **Contributing:** `CONTRIBUTING.md` (GitHub Actions CI, local validation).
 - **Security:** `SECURITY.md`
 - **Changelog:** `CHANGELOG.md`
 - **Versioning / tags:** `docs/releases.md`

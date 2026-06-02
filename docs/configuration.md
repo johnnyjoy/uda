@@ -139,6 +139,7 @@ purge after deploy or incidents, use `Database::flushCache()` (see `docs/caching
 | ------------- | -------- | ---------------------------------------- |
 | **store**     | yes      | Cache backend config for this connection |
 | **namespace** | no       | Cache namespace prefix                   |
+| **require_table_hints** | no | When `true` and cache store is enabled, raw SQL reads (`rows()`, `row()`, …) must pass table hints or throw `QueryException` (category `guardrail`). Default `false`. |
 | **tables**    | no       | Per-table cache rules                    |
 
 ---

@@ -411,7 +411,29 @@ Repository code remains identical whether cache is enabled or not.
 | --------------------- | ------------------------------------------------------------------------------------- |
 | `ConfigException`     | Missing/invalid config, missing `UDA_CONFIG`, missing connection definition.          |
 | `ConnectionException` | Cannot connect.                                                                       |
-| `QueryException`      | Execution failure; includes SQLSTATE and a sanitized snippet; never includes secrets. |
+| `QueryException`      | Execution failure, guardrail violation, or unsupported capability.                    |
+
+### `QueryException` fields (API mapping)
+
+| Method / field | Use |
+| -------------- | --- |
+| `category()`   | Stable bucket: `guardrail`, `connection`, `constraint`, `syntax`, `unsupported`, `execution`, `binding` |
+| `sqlState()`   | SQLSTATE when the driver reported one (often via chained `PDOException`) |
+| `driverCode()` | Driver-specific code when available |
+| `getPrevious()` | Underlying `PDOException` for driver detail in logs |
+
+**Typical HTTP mapping (application layer):**
+
+| Category | Suggested status |
+| -------- | ---------------- |
+| `guardrail` | 400 — caller fix (positional `?`, missing table hints, invalid shape) |
+| `constraint` | 409 — unique/FK violation |
+| `connection` | 503 — retry or fail over |
+| `syntax` | 500 — log and alert (usually dev error) |
+| `unsupported` | 501 or 400 — engine capability |
+| `execution` | 500 — inspect logs; use `sqlState()` when present |
+
+Messages never include secrets. Prefer `category()` + `sqlState()` over parsing message text.
 
 ---
 

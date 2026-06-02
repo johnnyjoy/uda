@@ -32,6 +32,7 @@ unless cross-checked against code.
 
 - docs/getting-started.md
 - docs/public-api.md
+- docs/production-readiness.md — engine cert matrix, deployment scenarios, P0–P2 backlog
 
 ## Releases (normative)
 

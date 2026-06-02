@@ -131,6 +131,7 @@ final class Database
      */
     public function rows(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tableHints = null): array
     {
+        $this->assertReadTableHints($sql, $tableHints);
         $message = $this->normalizeSqlMessage($sql, $params, $tableHints);
 
         if ($this->hasReturningMetadata($message)) {
@@ -151,6 +152,7 @@ final class Database
      */
     public function row(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tableHints = null): ?array
     {
+        $this->assertReadTableHints($sql, $tableHints);
         $message = $this->normalizeSqlMessage($sql, $params, $tableHints);
 
         if ($this->hasReturningMetadata($message)) {
@@ -175,6 +177,7 @@ final class Database
      */
     public function value(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tableHints = null)
     {
+        $this->assertReadTableHints($sql, $tableHints);
         $message = $this->normalizeSqlMessage($sql, $params, $tableHints);
 
         if ($this->hasReturningMetadata($message)) {
@@ -186,7 +189,7 @@ final class Database
             }
 
             if (count($row) !== 1) {
-                throw new QueryException('value() requires a single column result');
+                throw QueryException::guardrail('value() requires a single column result');
             }
 
             return array_values($row)[0];
@@ -206,6 +209,7 @@ final class Database
      */
     public function values(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tableHints = null): array
     {
+        $this->assertReadTableHints($sql, $tableHints);
         $message = $this->normalizeSqlMessage($sql, $params, $tableHints);
 
         if ($this->hasReturningMetadata($message)) {
@@ -233,6 +237,7 @@ final class Database
      */
     public function list(string|SqlMessage|BuilderSql $sql, array $params = [], ?array $tableHints = null): ?array
     {
+        $this->assertReadTableHints($sql, $tableHints);
         $message = $this->normalizeSqlMessage($sql, $params, $tableHints);
 
         if ($this->hasReturningMetadata($message)) {
@@ -261,20 +266,21 @@ final class Database
     {
         if ($fn === null) {
             if (!is_callable($params)) {
-                throw new QueryException('each() requires a callback');
+                throw QueryException::guardrail('each() requires a callback');
             }
 
             $callback = $params;
             $paramList = [];
         } else {
             if (!is_array($params)) {
-                throw new QueryException('each() parameters must be provided as an array when callback is supplied');
+                throw QueryException::guardrail('each() parameters must be provided as an array when callback is supplied');
             }
 
             $callback = $fn;
             $paramList = $params;
         }
 
+        $this->assertReadTableHints($sql, $tableHints);
         $message = $this->normalizeSqlMessage($sql, $paramList, $tableHints);
 
         return $this->driver->each($message, [], $callback, $message->getCacheTables());
@@ -574,6 +580,40 @@ final class Database
     }
 
     /**
+     * Require table hints on raw SQL reads when configured for this connection.
+     *
+     * @param string|SqlMessage|BuilderSql $sql         SQL input.
+     * @param ?array                       $tableHints  Optional table hints.
+     *
+     * @return void No return value.
+     *
+     * @throws QueryException When hints are required but missing.
+     */
+    private function assertReadTableHints(string|SqlMessage|BuilderSql $sql, ?array $tableHints): void
+    {
+        if (!is_string($sql)) {
+            return;
+        }
+
+        if ($tableHints !== null && $tableHints !== []) {
+            return;
+        }
+
+        if (Config::cacheStore($this->connectionName) === 'off') {
+            return;
+        }
+
+        if (!Config::cacheRequireTableHints($this->connectionName)) {
+            return;
+        }
+
+        throw QueryException::guardrail(
+            'Raw SQL read requires table hints when cache.require_table_hints is enabled for connection '
+            . $this->connectionName
+        );
+    }
+
+    /**
      * Normalize sql message.
      *
      * @param string|SqlMessage|BuilderSql $sqlInput    SQL input before normalization.
@@ -617,7 +657,7 @@ final class Database
         $callback = $args[0] ?? null;
 
         if (!is_callable($callback)) {
-            throw new QueryException('each() requires a callback');
+            throw QueryException::guardrail('each() requires a callback');
         }
 
         return $this->driver->each($message, [], $callback, $message->getCacheTables());

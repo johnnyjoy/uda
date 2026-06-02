@@ -19,6 +19,7 @@ $connections = [
     'alpha' => $baseDir . '/alpha.sqlite',
     'beta' => $baseDir . '/beta.sqlite',
     'cached' => $baseDir . '/cached.sqlite',
+    'cached_strict' => $baseDir . '/cached_strict.sqlite',
 ];
 
 $config = [
@@ -49,6 +50,18 @@ $config = [
             'cache' => [
                 'namespace' => 'UDA_TEST',
                 'store' => ['type' => 'array'],
+            ],
+        ],
+        'cached_strict' => [
+            'driver' => 'sqlite',
+            'params' => ['path' => $connections['cached_strict']],
+            'init_sql' => [
+                'CREATE TABLE IF NOT EXISTS cache_items (id INTEGER PRIMARY KEY, name TEXT NOT NULL)',
+            ],
+            'cache' => [
+                'namespace' => 'UDA_TEST_STRICT',
+                'store' => ['type' => 'array'],
+                'require_table_hints' => true,
             ],
         ],
     ],

@@ -283,6 +283,22 @@ final class Config
     }
 
     /**
+     * Whether raw SQL reads must include explicit table hints when cache is enabled.
+     *
+     * @param string|null $name  Connection name, or null/empty to use default.
+     *
+     * @return bool True when hintless raw SQL reads must fail loud.
+     *
+     * @throws ConfigException If configuration is not initialized.
+     */
+    public static function cacheRequireTableHints(?string $name = null): bool
+    {
+        $cache = self::cacheConfig($name);
+
+        return !empty($cache['require_table_hints']);
+    }
+
+    /**
      * Get the username for a connection.
      *                         initialized from env; if the requested connection is not found.
      *
