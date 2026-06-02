@@ -74,7 +74,13 @@ $generated = Database::connect('tenant_001', '/tmp/generated-uda.json');
 3. **Long-running workers and dropped connections** — There is no per-query
    ping. A dropped TCP connection surfaces as a `PDOException`; `Driver`
    reconnects once and retries the same operation. Mid-transaction loss still
-   fails the transaction (expected). See `docs/architecture.md`.
+   fails the transaction (expected). See `docs/architecture.md` (Connection Pool).
+
+4. **Octane / RoadRunner / Swoole concurrency** — `Database::connect('app')`
+   returns one shared handle per worker process, not per request. Do not run
+   concurrent coroutines on the same connection name without locking; do not use
+   `lastSql()` / `lastParams()` as request-scoped debug in production workers.
+   See `docs/architecture.md` § Concurrency in long-running workers.
 
 ## Read
 

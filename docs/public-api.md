@@ -73,7 +73,9 @@ on the happy path.
 
 In PHP-FPM the pool resets per request, so there is nothing to configure. In
 long-running processes (Swoole, RoadRunner, Octane) the pool persists across
-requests and transparent reconnect covers dropped server connections.
+requests and transparent reconnect covers dropped server connections. **Concurrency
+rules** (shared handles, transactions, `lastSql()` / `lastParams()`) are documented
+in `docs/architecture.md` § Concurrency in long-running workers.
 
 ---
 
@@ -383,9 +385,14 @@ Empty list becomes a deterministic `WHERE 1=0` behavior, not invalid SQL.
 
 ## 5. Debug / inspection
 
-* `lastSql(): ?string` — last executed SQL string
-* `lastParams(): array` — last bound parameters
+* `lastSql(): ?string` — last executed SQL string on **this pooled handle**
+* `lastParams(): array` — last bound parameters on **this pooled handle**
 * `$query->toSql()` — view SQL+params before execution (debug only)
+
+In PHP-FPM, one request owns the process so these usually match "this request."
+In long-running workers (Octane, RoadRunner, Swoole), the same handle serves many
+concurrent or sequential requests — **do not treat `lastSql()` / `lastParams()` as
+request-scoped.** See `docs/architecture.md` § Concurrency in long-running workers.
 
 ---
 

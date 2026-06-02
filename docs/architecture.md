@@ -373,7 +373,56 @@ check — no syscalls, no Config reads, no pool lookups.
 | Process model | Pool behaviour |
 |---|---|
 | PHP-FPM (one process per request) | Pool resets between requests. One PDO per named connection per request. |
-| Long-running (Swoole, RoadRunner, Octane) | Pool persists across requests. Dropped connections are detected when a statement fails, then transparent reconnect + single retry. |
+| Long-running (Swoole, RoadRunner, Octane) | Pool persists across requests. Dropped connections are detected when a statement fails, then transparent reconnect + single retry. See [Concurrency in long-running workers](#concurrency-in-long-running-workers). |
+
+## Concurrency in long-running workers
+
+PHP-FPM gives each request a fresh process, so UDA's pool, transaction state, and
+debug fields behave like request-scoped resources. **Long-running workers do not.**
+
+In Swoole, RoadRunner, Laravel Octane, and similar runtimes, `Database::connect()`
+returns the **same** `Database` instance (and the same underlying `PDO`) for a
+given connection name for the lifetime of that worker process. That is intentional
+for performance; it is **not** safe to treat the handle as request-isolated when
+multiple requests or coroutines can run concurrently in one process.
+
+### Rules
+
+1. **One in-flight transaction per pooled handle.** `Database::transaction()` and
+   nested savepoints assume sequential use of one `Driver` / `PDO`. Do not start
+   or interleave transactions on the same connection name from concurrent
+   coroutines, async tasks, or parallel fibers without your own locking.
+
+2. **Do not share a connection name across concurrent work without serialization.**
+   If two coroutines call `Database::connect('app')` at the same time, they receive
+   the **same** object. Concurrent `prepare()` / `execute()` on one PDO is undefined
+   at the application layer and can corrupt transaction state. Use separate worker
+   processes, separate connection names per isolation boundary, or an explicit
+   mutex around all use of that handle.
+
+3. **`Link` uses the same pool.** A class with `use Link` memoizes one `Database`
+   handle per class (static). All instances share that handle — same concurrency
+   rules as `Database::connect()`.
+
+4. **`lastSql()` and `lastParams()` are not request-safe under concurrency.**
+   They record the **last operation on that pooled handle**, not "the current
+   HTTP request." In Octane/RoadRunner, logging them from middleware after the
+   response can show another request's SQL.    Use only for single-threaded debugging, or add application-level query instrumentation.
+
+5. **Reconnect does not fix concurrent misuse.** Transparent reconnect replaces a
+   dropped `PDO` and retries **one** failed operation. It does not merge or isolate
+   overlapping callers on the same handle.
+
+### Operational checklist (workers)
+
+- Prefer **one logical flow at a time** per connection name inside a worker, or
+  isolate with locks / separate connection names.
+- Keep transactions **short**; mid-transaction connection loss still fails the
+  transaction (expected).
+- Do not rely on `lastSql()` / `lastParams()` for production request tracing in
+  pooled workers.
+- For high concurrency across many clients, use an external pooler (PgBouncer,
+  ProxySQL) **in addition to** UDA's process-level pool — see below.
 
 ## PDO error mode
 

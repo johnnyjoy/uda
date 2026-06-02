@@ -58,6 +58,7 @@ tasks/
 
 # Internal design/plan drafts (not public-ready)
 docs/plans/
+docs/production-readiness.md
 
 # Local MCP / editor config (machine-specific)
 .mcp.json

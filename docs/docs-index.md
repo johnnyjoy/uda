@@ -7,9 +7,9 @@ getting started, configuration, caching doctrine, security.
 **Operational / patterns:** driver reference, caching operations, repository
 patterns cookbook, certification docs, **`skills/`** (agent checklists for application DAL on UDA).
 
-**Historical / design archive:** `docs/plans/**` — local drafts (gitignored until
-public-suitable); context only when present; do not treat as current behaviour
-unless cross-checked against code.
+**Historical / design archive:** `docs/plans/**`, `docs/production-readiness.md` —
+local drafts (gitignored until public-suitable); context only when present; do not
+treat as current behaviour unless cross-checked against code.
 
 ---
 
@@ -32,7 +32,6 @@ unless cross-checked against code.
 
 - docs/getting-started.md
 - docs/public-api.md
-- docs/production-readiness.md — engine cert matrix, deployment scenarios, P0–P2 backlog
 
 ## Releases (normative)
 
