@@ -4,33 +4,34 @@ declare(strict_types=1);
 
 /**
  * @package UDA
- * @subpackage Query
  * @license MIT
  * @link https://github.com/johnnyjoy/uda/blob/master/docs/public-api.md
  * @since 1.0.0
  */
 
 /*
- * Purpose: Base query builder providing shared infrastructure for all concrete query builders.
+ * Purpose: Abstract base for fluent query builders (`Select`, `Insert`, …).
  *
- * Application code uses `Database::select()` / `insert()` / … — not this type directly.
- * See `docs/public-api.md` §3.1.
+ * FQCN `UDA\Query` (this class) coexists with namespace `UDA\Query\` (concrete
+ * builders). Subclasses use `extends \UDA\Query`. Application code uses
+ * `Database::select()` / `insert()` / … — not this type directly.
  */
 
-namespace UDA\Query;
+namespace UDA;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Dialect\Dialect;
+use UDA\Query\Sql;
+use UDA\SQL\GuardrailMetadata;
 use UDA\SQL\Identifier;
 use UDA\SQL\ParamBag;
-use UDA\SQL\GuardrailMetadata;
 use UDA\SQL\SqlMessage;
 use UDA\SQL\Value;
 
 /**
  * Abstract base class for fluent SQL query builders.
  */
-abstract class Builder
+abstract class Query
 {
     /**
      * Materialize this builder as an immutable `Sql` value for execution or inspection.
@@ -48,8 +49,8 @@ abstract class Builder
      */
     public string $engine = '';
 
-    /** @var ?\UDA\Database Originating Database instance for execution delegation */
-    private ?\UDA\Database $databaseInstance = null;
+    /** @var ?Database Originating Database instance for execution delegation */
+    private ?Database $databaseInstance = null;
 
     /** @var ?Dialect Dialect assigned to this builder */
     private ?Dialect $dialect = null;
@@ -184,11 +185,11 @@ abstract class Builder
      *
      * @internal Called exclusively by Database::bindBuilder(). Do not call from application code.
      *
-     * @param \UDA\Database $database  Database handle used for builder execution.
+     * @param Database $database  Database handle used for builder execution.
      *
      * @return void No return value.
      */
-    public function bindDatabase(\UDA\Database $database): void
+    public function bindDatabase(Database $database): void
     {
         $this->databaseInstance = $database;
     }

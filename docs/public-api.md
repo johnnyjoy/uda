@@ -240,17 +240,18 @@ $db->delete()
 
 `toSql()` exists for debugging/logging; it does not execute.
 
-### 3.1 What is `UDA\Query\Builder`?
+### 3.1 What is `UDA\Query` (the abstract base)?
 
-**`Builder` is the shared chassis for fluent query builders** — not a type you use or extend in application code.
+**`UDA\Query` is the shared chassis for fluent query builders** — not a type you use or extend in application code.
 
 | | |
 | --- | --- |
-| **Full name** | `UDA\Query\Builder` |
-| **Extends** | Nothing public — five `final` builders extend it internally: `Select`, `Insert`, `Update`, `Delete`, `Upsert` |
+| **Full name** | `UDA\Query` (class in namespace `UDA`, file `src/UDA/Query.php`) |
+| **Coexists with** | Namespace `UDA\Query\` — `Select`, `Insert`, `Sql`, dialects, … |
+| **Extends** | Nothing public — five `final` builders extend it via `extends \UDA\Query` |
 | **You obtain builders via** | `$db->select()`, `$db->insert()`, … — never `new Select()` |
 
-**What `Builder` owns (shared infrastructure):**
+**What `UDA\Query` owns (shared infrastructure):**
 
 | Concern | Role |
 | ------- | ---- |
@@ -262,14 +263,15 @@ $db->delete()
 | **`toSql()`** | Abstract: each concrete builder compiles itself to immutable `Query\Sql`. |
 | **Terminators** | `row()`, `exec()`, etc. live on concrete builders; they call `delegateThroughDatabase()` → same `Database → Driver → PDO` path as raw SQL. |
 
-**What `Builder` is not:**
+**What `UDA\Query` is not:**
 
 | Confusable | Difference |
 | ---------- | ---------- |
-| **`UDA\Driver`** | Executes SQL. `Builder` only *builds* SQL and hands off to `Database`. |
-| **`Query\Dialect\SQLite`** (etc.) | Renders engine-specific SQL *text* for the builder. `Builder` holds the dialect reference; concrete builders call into it. |
-| **`Query\Sql` vs `SQL\SqlMessage`** | `Query\Sql` = builder output (immutable value). `SQL\SqlMessage` = execution envelope with params + guardrail metadata — built inside `Builder::buildSql()`. |
-| **Public API** | Application code never type-hints `Builder`. Use `Select`, `Insert`, … returned from `Database`, or don’t name the type at all. |
+| **Static facade (removed)** | Old `UDA\Query::…` ingress was deleted; execution ingress is `Database` only. This class is the abstract builder base, not a static entry point. |
+| **`UDA\Driver`** | Executes SQL. `UDA\Query` only *builds* SQL and hands off to `Database`. |
+| **`Query\Dialect\SQLite`** (etc.) | Renders engine-specific SQL *text* for the builder. `UDA\Query` holds the dialect reference; concrete builders call into it. |
+| **`Query\Sql` vs `SQL\SqlMessage`** | `Query\Sql` = builder output (immutable value). `SQL\SqlMessage` = execution envelope with params + guardrail metadata — built inside `UDA\Query::buildSql()`. |
+| **Public API** | Application code never type-hints `UDA\Query`. Use `Select`, `Insert`, … returned from `Database`, or don’t name the type at all. |
 
 **Lifecycle (one connection, one builder):**
 
@@ -281,11 +283,11 @@ $db->select()
        → bindDialect(queryDialect())
   → ->from('users')->where('id', 1)->row()
        → Select::toSql()  // uses dialect + quote()
-       → Builder::delegateThroughDatabase('row', ...)
+       → UDA\Query::delegateThroughDatabase('row', ...)
        → Database::executeBuilder(...) → Driver → PDO
 ```
 
-The class lives in `UDA\Query`, so the symbol is **`Builder`** (not `QueryBuilder`). **Do not extend.**
+Concrete builders live in namespace `UDA\Query\` and **must** extend `\UDA\Query` (leading `\`) so PHP does not resolve the parent as `UDA\Query\Query`. **Do not extend.**
 
 ### 3.2 Compiled `Query\Sql` and connection deferral
 
@@ -480,7 +482,7 @@ after confirming the intent is correct. It has no effect on SELECT builders.
 
 | Symbol / name | What it is |
 | ------------- | ----------- |
-| `UDA\Query\Builder` | **Builder chassis** — abstract base shared by `Select`/`Insert`/…; param bag, `$engine`, quoting, guardrails, execution delegation. **Do not extend.** See §3.1. |
+| `UDA\Query` | **Builder chassis** — abstract base at `src/UDA/Query.php`; `Select`/`Insert`/… extend `\UDA\Query`. Param bag, `$engine`, quoting, guardrails. **Do not extend.** See §3.1. |
 | `UDA\Query\Sql` | Immutable SQL **value** produced by builders before `Database` turns it into a `SqlMessage` for execution. Not the same as `UDA\SQL\SqlMessage`. Same-engine deferral: §3.2. |
 | `UDA\SQL\SqlMessage` | Executable SQL + metadata envelope used on the `Database` → `Driver` boundary. |
 | `UDA\Driver` | **The driver** — runtime for one connection; owns PDO and executes SQL. (Car: person at the wheel.) |
@@ -489,7 +491,7 @@ after confirming the intent is correct. It has no effect on SELECT builders.
 | `UDA\Driver\SQLite` | **Engine manual** for SQLite — static DSN/quoting rules; does not own PDO. |
 | `UDA\Query\Dialect\SQLite` | **Query-builder renderer** for SQLite SQL text. Same word “SQLite”, different package role. |
 
-> **Removed:** `UDA\Query` (root static facade) — was redundant with `Database::connect()`; deleted to preserve the one-handle rule. The `UDA\Query\` namespace (builders, `Sql`, dialects) remains.
+> **Removed:** `UDA\Query` **static facade** — redundant ingress; deleted. **`UDA\Query` abstract base** (`src/UDA/Query.php`) and the **`UDA\Query\`** namespace (builders, `Sql`, dialects) remain.
 
 ---
 
@@ -497,7 +499,7 @@ after confirming the intent is correct. It has no effect on SELECT builders.
 
 | Issue | Disposition |
 | ----- | ----------- |
-| `Builder` class name | **Done** — renamed from `Abs`; lives in `UDA\Query` so symbol is `Builder`, not `QueryBuilder`. |
+| `UDA\Query` (abstract base) | **Done** — `src/UDA/Query.php`; coexists with namespace `UDA\Query\`; subclasses use `extends \UDA\Query`. Not the removed static facade. |
 | `Sql` vs `SqlMessage` | **Keep**; glossary + table above. |
 | Two `SQLite` classes | **Keep**; glossary + driver-vs-dialect note. |
 

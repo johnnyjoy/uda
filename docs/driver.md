@@ -24,7 +24,7 @@ Driver sits in: UDA\Driver                         ← new PDO(), then execute e
 Database calls: $driver->prepare(), ->begin(), …
 ```
 
-**The naming mess:** config JSON still uses the key `"driver"` for what we now call **engine** — as if the car’s title said “driver: V8” when it meant “engine: V8.” That collided with **`UDA\Driver`** (the actual driver) and with **PDO driver** (PHP extension jargon: `pdo_pgsql`, `pdo_sqlsrv`). Hence **`Config::engine()`** in PHP and **`Builder::$engine`** on builders; config key stays `"driver"` so existing deployments do not break.
+**The naming mess:** config JSON still uses the key `"driver"` for what we now call **engine** — as if the car’s title said “driver: V8” when it meant “engine: V8.” That collided with **`UDA\Driver`** (the actual driver) and with **PDO driver** (PHP extension jargon: `pdo_pgsql`, `pdo_sqlsrv`). Hence **`Config::engine()`** in PHP and **`UDA\Query::$engine`** on builders; config key stays `"driver"` so existing deployments do not break.
 
 | Term | Location | Role |
 | ---- | -------- | ---- |
@@ -33,7 +33,7 @@ Database calls: $driver->prepare(), ->begin(), …
 | **Config `driver`** | JSON | **Engine identity** (JSON key name; value is the engine). Read via `Config::engine()`. |
 | **`Config::engine()`** | PHP API | Canonical engine key from snapshot. |
 | **`Config::driver()`** | PHP API | Deprecated alias for `engine()`. |
-| **`Builder::$engine`** | Query builders | Engine key bound for identifier quoting. |
+| **`UDA\Query::$engine`** | Query builders | Engine key bound for identifier quoting. |
 | **Config `transport`** | JSON (optional) | PDO prefix when one engine has multiple adapters. |
 
 **Rule of thumb:** *engine* = what SQL family; *`UDA\Driver`* = who runs the connection; never say “driver” alone when you mean database type.

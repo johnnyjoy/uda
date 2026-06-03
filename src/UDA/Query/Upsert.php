@@ -22,7 +22,7 @@ use UDA\Query\Dialect\UpsertState;
 /**
  * UPSERT query builder that produces Sql objects for execution
  */
-final class Upsert extends Builder
+final class Upsert extends \UDA\Query
 {
     /** @var ?string Table to upsert into */
     private ?string $table = null;

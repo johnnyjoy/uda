@@ -7,7 +7,7 @@ namespace UDA;
 use UDA\Exception\ConfigException;
 use UDA\Exception\ConnectionException;
 use UDA\Exception\QueryException;
-use UDA\Query\Builder;
+use UDA\Query;
 use UDA\Query\Delete;
 use UDA\Query\Dialect\Dialect;
 use UDA\Query\Dialect\MariaDb;
@@ -496,7 +496,7 @@ final class Database
      *
      * @internal
      *
-     * @param Builder $builder  Query builder instance.
+     * @param Query $builder  Query builder instance.
      * @param string       $method   Terminator method name.
      * @param mixed        ...$args  Additional terminator arguments.
      *
@@ -504,7 +504,7 @@ final class Database
      *
      * @throws QueryException If the operation fails.
      */
-    public function executeBuilder(Builder $builder, string $method, mixed ...$args): mixed
+    public function executeBuilder(Query $builder, string $method, mixed ...$args): mixed
     {
         $message = $this->toSqlMessage($builder->toSql());
 
@@ -526,11 +526,11 @@ final class Database
      *
      * @internal
      *
-     * @param Builder $builder  Query builder instance.
+     * @param Query $builder  Query builder instance.
      *
      * @return array Result array.
      */
-    public function executeBuilderReturning(Builder $builder): array
+    public function executeBuilderReturning(Query $builder): array
     {
         $message = $this->toSqlMessage($builder->toSql());
 
@@ -588,13 +588,13 @@ final class Database
     /**
      * Bind a query builder to this Database coordinator.
      *
-     * @template T of Builder
+     * @template T of Query
      *
      * @param T $builder  Query builder instance.
      *
      * @return T Bound query builder.
      */
-    private function bindBuilder(Builder $builder): Builder
+    private function bindBuilder(Query $builder): Query
     {
         $builder->bindDatabase($this);
         $builder->engine = $this->driver->engineName();

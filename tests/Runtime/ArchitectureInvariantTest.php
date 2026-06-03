@@ -103,7 +103,7 @@ final class ArchitectureInvariantTest extends TestCase
 
     public function test_query_builders_do_not_fallback_to_driver_execution(): void
     {
-        $source = file_get_contents(__DIR__ . '/../../src/UDA/Query/Builder.php') ?: '';
+        $source = file_get_contents(__DIR__ . '/../../src/UDA/Query.php') ?: '';
 
         self::assertStringNotContainsString('driverInstance', $source);
         self::assertDoesNotMatchRegularExpression('/->driverInstance|Driver::/', $source);

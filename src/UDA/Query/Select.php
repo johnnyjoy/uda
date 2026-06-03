@@ -23,7 +23,7 @@ use UDA\Query\Dialect\SelectState;
 /**
  * SELECT query builder that produces Sql objects for execution
  */
-final class Select extends Builder
+final class Select extends \UDA\Query
 {
     use ConsumesCtes;
     /** @var array Columns to select */

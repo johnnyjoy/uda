@@ -23,7 +23,7 @@ use UDA\Query\Dialect\UpdateState;
 /**
  * UPDATE query builder that produces Sql objects for execution
  */
-final class Update extends Builder
+final class Update extends \UDA\Query
 {
     use ConsumesCtes;
     /** @var ?string Table to update */

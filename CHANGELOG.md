@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Renamed `UDA\Query\Abs` → `UDA\Query\Builder` (abstract builder base; pre-v1, no alias).
+- Renamed abstract builder base to `UDA\Query` (`src/UDA/Query.php`); removed `UDA\Query\Builder`. Concrete builders use `extends \UDA\Query`.
 - Docs: engine certification matrix (`docs/certification/README.md`); config and README state CI certifies SQLite/PostgreSQL only.
 - Docs: Octane/RoadRunner/Swoole concurrency — shared pooled handles, transaction rules, `lastSql()`/`lastParams()` hazards (`docs/architecture.md`, `docs/getting-started.md`, `docs/public-api.md`).
 - All `src/` PHPDoc `@license` headers aligned to MIT (matches `composer.json` / `LICENSE.md`).
@@ -52,4 +52,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: certification status synced with CI; cache ops (`flush`/`clear`), optional cache extensions, and read-path vs ops-only cache API (`docs/caching.md`, `docs/configuration.md`, `docs/public-api.md`, certification/support docs).
 - **Breaking:** `UDA\Cache::clearForTests()` renamed to `UDA\Cache::clear()`; docblock now states scope (process-local statics only, not remote store purge).
 - Docs: where CI runs; contributor expectations before merge.
-- PHPDoc: shorter summaries on `Sql`, `Builder::param()`, `WhereBuilder::in()`/`build()`, and `toSql()` on concrete builders.
+- PHPDoc: shorter summaries on `Sql`, `UDA\Query::param()`, `WhereBuilder::in()`/`build()`, and `toSql()` on concrete builders.
