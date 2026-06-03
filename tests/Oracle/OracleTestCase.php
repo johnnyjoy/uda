@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Oracle;
 
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\TestCase;
 use UDA\Database;
 use UDA\Exception\ConfigException;
 use UDA\Exception\QueryException;
 
+#[PreserveGlobalState(false)]
 abstract class OracleTestCase extends TestCase
 {
     protected const CONNECTION_NAME = 'oracle';
