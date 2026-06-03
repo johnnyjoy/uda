@@ -2,18 +2,20 @@
 
 ## Status
 
+**Enforced in CI** on every push and pull request (`.github/workflows/db2-integration.yml`).
+
 **Connect path:** `driver: db2` with transport `db2` and the PHP **`pdo_ibm`** extension.
 
-**CI:** `.github/workflows/db2-integration.yml` runs on push, PR, and `workflow_dispatch`.
 The job uses IBM Db2 Community Edition (`LICENSE: accept`), downloads the IBM CLI
 driver tarball, and **compiles `pdo_ibm` from**
 [php/pecl-database-pdo_ibm](https://github.com/php/pecl-database-pdo_ibm) (`RELEASE_1_7_0`)
-— PECL does not publish a downloadable release for this extension. It is **`continue-on-error: true`** until three consecutive
-green runs on the default branch — then it can become merge-blocking.
+— PECL does not publish a downloadable release for this extension.
 
 Expect **~5–15 minutes** per run (container cold start + `pdo_ibm` compile). Flake
 mitigations: long `health-start-period`, log wait for `Setup has completed`, pinned
 image `icr.io/db2_community/db2:11.5.9.0`.
+
+**Branch protection:** add required check `db2-integration` with the other `*-integration` jobs.
 
 Full engine matrix: [README.md](README.md).
 
@@ -66,6 +68,14 @@ UDA emits `ibm:DSN=…` or `ibm:DATABASE=…;HOSTNAME=…;PORT=…;PROTOCOL=TCPI
 | Writable CTE | No |
 
 See `docs/spec.md` capability matrix.
+
+## Suite
+
+`tests/db2-bootstrap.php` loads config; PHPUnit runs `tests/Db2/`:
+
+| Class | Proves |
+| ----- | ------ |
+| `Db2IntegrationTest` | Connect + CRUD, transactions, MERGE upsert, pagination; RETURNING rejected before PDO |
 
 ## CI command
 

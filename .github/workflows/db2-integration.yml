@@ -5,12 +5,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Db2 Community Edition startup is slow and occasionally flaky; not merge-blocking
-# until three consecutive green runs on the default branch.
+# Merge-blocking integration: IBM Db2 Community Edition + compiled pdo_ibm.
+# Expect ~5–15 minutes (container startup + extension build). Add db2-integration
+# to branch protection required checks alongside other *-integration jobs.
 jobs:
   db2-integration:
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 45
 
     services:

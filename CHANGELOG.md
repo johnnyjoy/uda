@@ -28,7 +28,7 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
   scoped to a connection namespace (not a substitute for app cache invalidation).
 - SQL Server: optional `params.trust_server_certificate` for the `sqlsrv` transport
   (local/CI containers without full TLS trust chains).
-- GitHub Actions **integration** jobs for PostgreSQL, MariaDB, SQL Server, and Oracle
+- GitHub Actions **integration** jobs for PostgreSQL, MariaDB, SQL Server, Oracle, and DB2
   (SQLite already covered); matrix in `docs/integration/README.md`.
 - `tools/check-license.php` — MIT-only `@license` headers in `src/`.
 - Contributor docs: `CONTRIBUTING.md`, `SECURITY.md`, `docs/releases.md`; GitLab MR
@@ -58,8 +58,8 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
   on ASE (`supportsMerge` / `supportsUpsert` false).
 - **`db2` engine connectable** via `UDA\Driver\Db2` and `pdo_ibm` (MERGE upsert and
   pagination builders; `returning()` still unsupported per dialect).
-- Optional **`db2-integration`** GitHub Actions job (IBM community Db2 image; compiles
-  `pdo_ibm`; not merge-blocking until CI is stable).
+- **Breaking (maintainers):** add required check **`db2-integration`** in branch protection
+  alongside other `*-integration` jobs when upgrading from a release without DB2 CI.
 - PDO failures map through `QueryException::fromPdo()` with SQLSTATE extraction.
 - `Query\Expr` aliases quote via `SQL\Identifier` / `Driver::quoteIdentifier()` (same
   rules as column identifiers).

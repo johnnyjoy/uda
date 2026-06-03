@@ -21,7 +21,8 @@ composer test
 ```
 
 For cache or engine-heavy changes, also match the relevant
-`.github/workflows/*-integration.yml` jobs (see `docs/integration/`). Sybase is not on
+`.github/workflows/*-integration.yml` jobs (see `docs/integration/`), including
+`db2-integration` when touching DB2. Sybase is not on
 push/PR CI; optional `composer test:sybase-live` or manual `sybase-integration` if you
 have an ASE license (`docs/integration/sybase.md`).
 

@@ -19,7 +19,7 @@ integration matrix.
 
 | Engine | Public GHA without secrets | UDA code ready? | Practical CI path |
 | ------ | -------------------------- | --------------- | ----------------- |
-| **DB2** | **Yes** (IBM community image + `LICENSE: accept`) | **Connect yes** — `Driver/Db2.php` shipped | Service container + `pdo_ibm` build (Phase 2 CI) |
+| **DB2** | **Yes** (IBM community image + `LICENSE: accept`) | **Yes** | **`db2-integration`** merge-blocking on push/PR |
 | **Sybase ASE** | **No** on upstream push/PR | **Yes** — code + unit tests | **Manual** — `SYBASE_LICENSE_B64` or `UDA_SYBASE_LIVE=1` |
 
 ---
@@ -107,7 +107,7 @@ services:
 ### Recommendation for UDA
 
 1. **Sybase:** **Not on upstream PR CI** — licensees use manual workflow or `UDA_SYBASE_LIVE=1`.
-2. **DB2:** Treat as a **separate build task**: driver/connect first, then copy IBM community service pattern into `db2-integration.yml`; expect slow/flaky startup and budget CI time accordingly.
+2. **DB2:** **Done** — `db2-integration` gated on push/PR; see [db2.md](db2.md).
 
 ---
 
@@ -127,10 +127,7 @@ services:
 | Item | Status |
 | ---- | ------ |
 | Connect path | **Done** — `UDA\Driver\Db2`, `pdo_ibm`, see [db2.md](db2.md) |
-| GHA integration job | **Spike** — `db2-integration.yml`; `continue-on-error` until 3 green runs on default branch |
-
-**Phase 2 (optional):** `.github/workflows/db2-integration.yml`, `tests/Db2/`, bootstrap.
-See IBM community container pattern in § DB2 on GitHub Actions above.
+| GHA integration job | **Gated** — `db2-integration.yml` on push/PR (merge-blocking) |
 
 ---
 
