@@ -18,9 +18,9 @@ jobs:
         options: >-
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
-          --health-start-period 30s
-          --health-cmd "timeout 1 bash -c '</dev/tcp/127.0.0.1/1433' || exit 1'"
+          --health-retries 15
+          --health-start-period 60s
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Your_Str0ng!Passw0rd123' -Q 'SELECT 1' -b -o /dev/null"
 
     steps:
       - uses: actions/checkout@v4
