@@ -3,8 +3,8 @@
 ## Status
 
 **Upstream CI does not run Sybase** on push or pull request — this project has no SAP ASE
-license. Live tests and a **manual** workflow stay in the repo so **you** can run them if you
-have ASE and (for GHA) mount your own license.
+license. There is **no Sybase GitHub Actions workflow** in this repo; a CI job without a
+license would fail or mislead. Live tests remain for **local** runs when you have ASE.
 
 **Still supported in code:** `driver: sybase` with `transport: dblib` (FreeTDS /
 `pdo_dblib`), `UDA\Driver\Sybase`, and `Query\Dialect/Sybase`.
@@ -16,9 +16,9 @@ Unit tests (no ASE): `tests/Query/SybaseCapabilitiesTest.php` — included in `c
 | Context | Behavior |
 | ------- | -------- |
 | **Upstream push/PR** | No Sybase job — not merge-blocking |
+| **GitHub Actions** | **No Sybase workflow** — no license to run ASE on CI |
 | **Default `composer test`** | Excludes `tests/Sybase/`; live tests skipped without `UDA_SYBASE_LIVE=1` |
 | **You have ASE + license (local)** | `UDA_SYBASE_LIVE=1` + `composer test:sybase-live` |
-| **You have license (GitHub fork)** | `workflow_dispatch` on **Sybase Integration (manual)** + repo secret `SYBASE_LICENSE_B64` |
 
 ## Run live tests locally
 
@@ -33,20 +33,12 @@ SYBASE_PASSWORD='your_password' \
 composer test:sybase-live
 ```
 
-## Run live tests on GitHub Actions (your fork / your secrets)
-
-1. Obtain SAP ASE Developer `license.dat` (your responsibility).
-2. Base64-encode it and add repository secret **`SYBASE_LICENSE_B64`**.
-3. Actions → **Sybase Integration (manual)** → Run workflow.
-4. With the secret set, the job starts ASE, sets `UDA_SYBASE_LIVE=1`, and runs `tests/Sybase`.
-5. Without the secret, the same workflow runs only `SybaseCapabilitiesTest`.
-
 Do not commit license files to the repository.
 
-## When upstream might add push/PR Sybase CI
+## When upstream might add Sybase CI
 
 Only if ASE can run on public GHA **without** a maintainer license (today it cannot).
-Until then, optional manual workflow + local opt-in remain the supported paths.
+Until then, local opt-in is the supported path for licensees.
 
 ## Dialect notes
 

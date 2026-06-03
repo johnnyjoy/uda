@@ -24,7 +24,7 @@ The structure remains familiar so the project does not experience documentation 
 **Dependencies:** PDO only
 Optional: `redis`, `memcached`, `igbinary`
 
-**CI Enforcement:** `.github/workflows/sqlite-integration.yml` runs on every push + pull request, starting Redis/Memcached services and executing `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime`. Integration status is invalid if this workflow fails.
+**CI Enforcement:** `.github/workflows/ci.yml` plus merge-blocking `*-integration` workflows run on every push and pull request (see `docs/integration/README.md`). The SQLite job starts Redis/Memcached and executes `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime`. Integration status is invalid if any required workflow fails.
 
 ---
 

@@ -22,9 +22,8 @@ composer test
 
 For cache or engine-heavy changes, also match the relevant
 `.github/workflows/*-integration.yml` jobs (see `docs/integration/`), including
-`db2-integration` when touching DB2. Sybase is not on
-push/PR CI; optional `composer test:sybase-live` or manual `sybase-integration` if you
-have an ASE license (`docs/integration/sybase.md`).
+`db2-integration` when touching DB2. Sybase is not in CI; if you have ASE locally,
+see `composer test:sybase-live` in `docs/integration/sybase.md`.
 
 ## Pull requests (GitHub)
 

@@ -1,8 +1,9 @@
 # Deferred integration work (Phase C)
 
-Phases A and B of the integration expansion are **complete**. Five engines are
-merge-blocking in CI (SQLite, PostgreSQL, MariaDB, SQL Server, Oracle). **Sybase ASE** live tests and CI are **disabled** (retained in repo); config remains in
-code — see [sybase.md](sybase.md).
+Phases A and B of the integration expansion are **complete**. Six engines are
+merge-blocking in CI (SQLite, PostgreSQL, MariaDB, SQL Server, Oracle, DB2). **Sybase ASE**
+has no CI workflow (no upstream license); config and local opt-in tests remain — see
+[sybase.md](sybase.md).
 
 This page records **explicitly deferred** follow-ups. None are required for the
 current integration milestone.
@@ -20,7 +21,7 @@ integration matrix.
 | Engine | Public GHA without secrets | UDA code ready? | Practical CI path |
 | ------ | -------------------------- | --------------- | ----------------- |
 | **DB2** | **Yes** (IBM community image + `LICENSE: accept`) | **Yes** | **`db2-integration`** merge-blocking on push/PR |
-| **Sybase ASE** | **No** on upstream push/PR | **Yes** — code + unit tests | **Manual** — `SYBASE_LICENSE_B64` or `UDA_SYBASE_LIVE=1` |
+| **Sybase ASE** | **No** on upstream push/PR | **Yes** — code + unit tests | **Local only** — `UDA_SYBASE_LIVE=1` (no repo CI workflow) |
 
 ---
 
@@ -87,7 +88,7 @@ services:
 | -------- | ------------------------ | ----- |
 | [superbeeeeeee/docker-sybase](https://hub.docker.com/r/superbeeeeeee/docker-sybase) | **No** (unless volume mount) | UDA spike: ASE_CORE failure, grace expired — [sybase.md](sybase.md) |
 | Mount `license.dat` via volume | **Yes, maintainer-owned** | Paths: `/usr/local/flexlm/licenses` (this image) or `/opt/sybase/SYSAM-2_0/licenses` (older images) |
-| Repo secret `SYBASE_LICENSE_B64` | **Yes** | **Manual workflow** — not on upstream PR; fork/maintainer opt-in |
+| Repo secret + fork workflow | **Out of scope** | No upstream Sybase workflow — no license to run ASE on CI |
 | Build-from-SAP-tarball images ([cboudereau/docker-sybase](https://github.com/cboudereau/docker-sybase), [blieusong/ase-server](https://hub.docker.com/r/blieusong/ase-server)) | Same — mount license | Image build does not remove SySAM requirement |
 | SAP ASE Express in custom Dockerfile ([annagapuz/docker-sap-ase-express](https://github.com/annagapuz/docker-sap-ase-express)) | Express license from SAP download | Heavier build; still not “zero-config” on GHA |
 | [datagrip/sybase:16.0](https://github.com/DataGrip/docker-env) | Bundled dev image | Mac/Docker 20.x may need `-T11889` on `dataserver` (snap validation) |
@@ -106,7 +107,7 @@ services:
 
 ### Recommendation for UDA
 
-1. **Sybase:** **Not on upstream PR CI** — licensees use manual workflow or `UDA_SYBASE_LIVE=1`.
+1. **Sybase:** **No CI workflow** — upstream has no license; licensees test locally with `UDA_SYBASE_LIVE=1`.
 2. **DB2:** **Done** — `db2-integration` gated on push/PR; see [db2.md](db2.md).
 
 ---
@@ -116,8 +117,8 @@ services:
 | Item | Status |
 | ---- | ------ |
 | Required GHA on push/PR | **No** — upstream has no license |
-| Live tests in repo | Opt-in — `UDA_SYBASE_LIVE=1`; excluded from default `composer test` |
-| CI workflow | **Manual only** — `sybase-integration`; live steps if `SYBASE_LICENSE_B64` set |
+| CI workflow in repo | **No** — would fail or mislead without a license |
+| Live tests in repo | Opt-in locally — `UDA_SYBASE_LIVE=1`; excluded from default `composer test` |
 | MERGE / upsert in dialect | Stays **off** until live ASE is re-enabled and verified |
 
 ---

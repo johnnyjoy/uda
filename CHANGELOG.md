@@ -11,6 +11,8 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-03
+
 ### Added
 
 - Structured `QueryException`: `category()`, `sqlState()`, `driverCode()`; factories
@@ -36,14 +38,13 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ### Removed
 
-- **`UDA\Query` static facade** — use `Database::connect()` or `UDA\Link` instead.
-  See `memory-bank/creative/creative-query-ingress.md` (design note).
+- **`UDA\Query` static facade** — use `Database::connect()` or `UDA\Link` instead
+  (`docs/public-api.md` §1).
 
 ### Changed
 
 - Renamed abstract builder base to `UDA\Query` (`src/UDA/Query.php`); removed
   `UDA\Query\Builder`. Concrete builders use `extends \UDA\Query`.
-- GitHub required check names use `*-integration` (not `*-cert`).
 - `UDA\Cache::clearForTests()` renamed to `UDA\Cache::clear()` — same
   scope (process-local statics only; does not purge Memcached/Redis).
 - Config ingestion normalizes each connection to **`engine`** + **`transport`**; per-engine
@@ -63,9 +64,6 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 - Docs: engine integration matrix, Octane/RoadRunner/Swoole concurrency notes, cache
   ops (`flush`/`clear`) vs read-path caching (`docs/caching.md`, `docs/integration/`).
 - All `src/` PHPDoc `@license` headers aligned to MIT; `@link` targets point at GitHub docs.
-- Sybase ASE live integration opt-in only: excluded from default `composer test`;
-  `UDA_SYBASE_LIVE=1` for local runs; manual `sybase-integration` workflow (not on
-  push/PR) supports forks with `SYBASE_LICENSE_B64`. Upstream has no SAP license.
 
 ### Fixed
 

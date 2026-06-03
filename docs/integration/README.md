@@ -28,13 +28,13 @@ Legend:
 | **PostgreSQL** | Gated | Gated | Gated | Gated | Yes | [`postgres-integration.yml`](../.github/workflows/postgres-integration.yml) · [postgresql.md](postgresql.md) |
 | **MariaDB / MySQL** | Gated | Gated | Gated | N/A¹ | Yes | [`mariadb-integration.yml`](../.github/workflows/mariadb-integration.yml) · [mariadb.md](mariadb.md) |
 | **SQL Server** | Gated | Gated | Gated | Gated | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
-| **Sybase (ASE)** | Code | Code | Off² | Code | Manual³ | [sybase.md](sybase.md) · [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) |
+| **Sybase (ASE)** | Code | Code | Off² | Code | No³ | [sybase.md](sybase.md) |
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
 | **DB2** | Gated | Gated | Gated | N/A⁴ | Yes | [db2.md](db2.md) · [`db2-integration.yml`](../.github/workflows/db2-integration.yml) |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT.  
-³ Not on push/PR CI (no upstream license); manual workflow + `UDA_SYBASE_LIVE` for licensees.  
+³ No CI workflow — upstream has no ASE license; local `UDA_SYBASE_LIVE=1` only.  
 ⁴ Db2 dialect rejects `returning()` before PDO; requires `pdo_ibm` at connect time.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
@@ -54,8 +54,10 @@ for the exact test classes and methods.
 | MariaDB | See [mariadb.md](mariadb.md) | `mariadb-integration` |
 | SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-integration` |
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
-| Sybase (live, optional) | `UDA_SYBASE_LIVE=1 composer test:sybase-live` | `sybase-integration` (manual only; not on PR) |
 | DB2 | See [db2.md](db2.md) | `db2-integration` |
+
+Sybase has **no CI job**. Licensees with ASE run `UDA_SYBASE_LIVE=1 composer test:sybase-live`
+locally — see [sybase.md](sybase.md).
 
 Also run `composer check` before merge (architecture guardrails).
 
