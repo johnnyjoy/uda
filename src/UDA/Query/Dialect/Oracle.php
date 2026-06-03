@@ -74,17 +74,22 @@ final class Oracle extends Dialect
      */
     protected function compileSelectPagination(SelectState $state): string
     {
+        if ($state->limit === null && $state->offset === null) {
+            return '';
+        }
+
+        // LIMIT/OFFSET are validated ints. Avoid OFFSET 0 + bound row counts (pdo_oci ORA-03137).
+        if ($state->offset === null && $state->limit !== null) {
+            return sprintf(' FETCH FIRST %d ROWS ONLY', $state->limit);
+        }
+
         $fragment = '';
 
-        // LIMIT/OFFSET are validated ints; pdo_oci mishandles bound OFFSET/FETCH row counts.
         if ($state->offset !== null) {
             $fragment .= sprintf(' OFFSET %d ROWS', $state->offset);
         }
 
         if ($state->limit !== null) {
-            if ($fragment === '') {
-                $fragment = ' OFFSET 0 ROWS';
-            }
             $fragment .= sprintf(' FETCH NEXT %d ROWS ONLY', $state->limit);
         }
 

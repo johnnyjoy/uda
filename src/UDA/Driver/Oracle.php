@@ -64,6 +64,10 @@ final class Oracle
             throw new QueryException('LIMIT/OFFSET must be non-negative');
         }
 
+        if ($offset === 0) {
+            return sprintf('FETCH FIRST %d ROWS ONLY', $limit);
+        }
+
         return sprintf('OFFSET %d ROWS FETCH NEXT %d ROWS ONLY', $offset, $limit);
     }
 

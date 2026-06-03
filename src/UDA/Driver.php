@@ -541,10 +541,17 @@ final class Driver
             return true;
         }
 
-        if ($state === 'HY000') {
+        if ($state === 'HY000' || $state === '01002') {
             $msg = strtolower($exception->getMessage());
 
-            return str_contains($msg, 'gone away') || str_contains($msg, 'lost connection');
+            return str_contains($msg, 'gone away')
+                || str_contains($msg, 'lost connection')
+                || str_contains($msg, 'ora-03114')
+                || str_contains($msg, 'not connected to oracle');
+        }
+
+        if ($driverCode === 3114) {
+            return true;
         }
 
         return false;

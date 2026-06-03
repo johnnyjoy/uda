@@ -23,7 +23,7 @@ final class PaginationTest extends OracleTestCase
         $builder = $this->baseQuery()->limit(3);
 
         $sql = strtoupper($builder->toSql()->getQuery());
-        $this->assertStringContainsString('FETCH NEXT 3 ROWS ONLY', $sql);
+        $this->assertStringContainsString('FETCH FIRST 3 ROWS ONLY', $sql);
 
         $rows = $this->fetchIds($builder);
         $this->assertSame([1, 2, 3], $rows);
