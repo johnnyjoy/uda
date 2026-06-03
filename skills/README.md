@@ -6,15 +6,15 @@ executable checklists for agents and humans.
 
 ## Use with your agent
 
-**Canonical source:** this `skills/` tree in git. Do **not** rely on committing
-`.cursor/` (local IDE config only; listed in `.gitignore`).
+**Canonical source:** this `skills/` tree in git. Skills are **agent-agnostic** — load
+from here; nothing in this repo should assume a specific IDE or vendor.
 
-| Agent / tool | How to load |
-|--------------|-------------|
-| **Cursor** | `@skills/uda-dal-layer/SKILL.md` (or other skill path) in chat; optional local-only copy/symlink into `~/.cursor/skills/` or `.cursor/skills/` — never required in the repo |
-| **Claude Code** | Add to root `CLAUDE.md`: “For application DAL on UDA, read `skills/README.md` and apply the matching skill.” |
-| **OpenCode** | Mirror into `.opencode/skills/` or point tool config at `skills/` |
-| **Other** | Read each `SKILL.md` YAML `description` + body; follow checklists literally |
+| How to load | |
+|-------------|--|
+| **Direct path** | Open `skills/<name>/SKILL.md` (see index below). |
+| **Chat attach / @** | Reference or attach the skill file path your agent supports. |
+| **Project instructions** | Add to your agent bootstrap (e.g. `CLAUDE.md`, `AGENTS.md`): “For application DAL on UDA, read `skills/README.md` and apply the matching skill.” |
+| **Local copy** | Optional symlink or copy into your agent's skill directory — never required in git. |
 
 ## Skill index
 

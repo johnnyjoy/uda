@@ -156,11 +156,7 @@ final class Driver
             throw new ConnectionException('Failed to connect to database: ' . $e->getMessage(), 0, $e);
         }
 
-        if (self::engineKey($this->engine) === 'firebird') {
-            // pdo_firebird commit-retains on each DML while ATTR_AUTOCOMMIT is true (PHP #8735).
-            $this->pdo->setAttribute(PDO::ATTR_AUTOCOMMIT, false);
-        }
-
+        $this->configureEnginePdo($this->pdo);
         $this->runInitSql($this->pdo, $this->config);
     }
 
@@ -589,6 +585,7 @@ final class Driver
             throw new ConnectionException('Reconnection failed: ' . $e->getMessage(), 0, $e);
         }
 
+        $this->configureEnginePdo($pdo);
         $this->runInitSql($pdo, $this->config);
         $this->pdo = $pdo;
     }
@@ -1285,30 +1282,39 @@ final class Driver
         }
     }
 
-    private function firebirdAutocommit(): bool
+    private function configureEnginePdo(PDO $pdo): void
     {
-        return self::engineKey($this->engine) === 'firebird' && $this->transactionLevel === 0;
+        // pdo_firebird commit-retains per DML with autocommit on (PHP #8735).
+        if (self::engineKey($this->engine) === 'firebird') {
+            $pdo->setAttribute(PDO::ATTR_AUTOCOMMIT, false);
+        }
     }
 
     private function firebirdBegin(): void
     {
-        if ($this->firebirdAutocommit() && !$this->pdo->inTransaction()) {
-            $this->pdo->beginTransaction();
+        if (self::engineKey($this->engine) !== 'firebird' || $this->transactionLevel !== 0 || $this->pdo->inTransaction()) {
+            return;
         }
+
+        $this->pdo->beginTransaction();
     }
 
     private function firebirdCommit(): void
     {
-        if ($this->firebirdAutocommit() && $this->pdo->inTransaction()) {
-            $this->pdo->commit();
+        if (self::engineKey($this->engine) !== 'firebird' || $this->transactionLevel !== 0 || !$this->pdo->inTransaction()) {
+            return;
         }
+
+        $this->pdo->commit();
     }
 
     private function firebirdRollback(): void
     {
-        if ($this->firebirdAutocommit() && $this->pdo->inTransaction()) {
-            $this->pdo->rollBack();
+        if (self::engineKey($this->engine) !== 'firebird' || $this->transactionLevel !== 0 || !$this->pdo->inTransaction()) {
+            return;
         }
+
+        $this->pdo->rollBack();
     }
 
     /**

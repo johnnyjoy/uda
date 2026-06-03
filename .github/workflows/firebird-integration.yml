@@ -62,6 +62,3 @@ jobs:
           FIREBIRD_USER: uda_test
           FIREBIRD_PASSWORD: UDA_Fb_CI1
         run: vendor/bin/phpunit --bootstrap tests/firebird-bootstrap.php tests/Firebird
-
-      - name: Reference Firebird integration docs
-        run: echo "See docs/integration/firebird.md for details"

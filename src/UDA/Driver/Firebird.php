@@ -24,14 +24,7 @@ use UDA\Exception\QueryException;
 final class Firebird
 {
     /**
-     * Build a PDO Firebird DSN from normalized connection params.
-     *
-     * Accepts a full DSN in `params['dsn']` or builds
-     * `firebird:dbname={host}/{port}:{database}` (path or alias).
-     *
-     * For TCP connections, `{database}` must be the path **on the Firebird server**
-     * (e.g. `/var/lib/firebird/data/app.fdb` in the official Docker image), not a
-     * bare filename on the PHP client host.
+     * Build `firebird:dbname=host/port:database` (or pass through `params['dsn']`).
      *
      * @param array<string,mixed> $params
      */

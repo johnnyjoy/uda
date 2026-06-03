@@ -9,19 +9,17 @@ declare(strict_types=1);
  */
 
 /*
- * Purpose: Compiles query builders into Firebird-specific SQL.
- *
- * Handles Firebird pagination, RETURNING, and MERGE-style upserts in the Query domain.
- * Requires UDA\Driver\Firebird and pdo_firebird at connect time.
+ * Purpose: Firebird query dialect — pagination, MERGE upsert, RETURNING.
  */
 
 namespace UDA\Query\Dialect;
 
+use UDA\Driver\Firebird as FirebirdRules;
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
 
 /**
- * Firebird dialect implementation (Firebird 5+ MERGE and RETURNING).
+ * Firebird 5+ dialect.
  */
 final class Firebird extends Dialect
 {
@@ -60,21 +58,11 @@ final class Firebird extends Dialect
             throw new QueryException('Firebird requires ORDER BY when using pagination');
         }
 
-        if ($state->offset === null && $state->limit !== null) {
-            return sprintf(' FETCH FIRST %d ROWS ONLY', $state->limit);
-        }
-
-        $fragment = '';
-
-        if ($state->offset !== null) {
-            $fragment .= sprintf(' OFFSET %d ROWS', $state->offset);
-        }
-
         if ($state->limit !== null) {
-            $fragment .= sprintf(' FETCH NEXT %d ROWS ONLY', $state->limit);
+            return ' ' . FirebirdRules::limitOffset($state->limit, $state->offset ?? 0);
         }
 
-        return $fragment;
+        return sprintf(' OFFSET %d ROWS', $state->offset);
     }
 
     public function compileUpsert(UpsertState $state): Sql
@@ -106,7 +94,7 @@ final class Firebird extends Dialect
             foreach ($columns as $column) {
                 $value = $row[$column] ?? null;
                 $param = $state->param($value);
-                $valueExprs[] = self::mergeSourceCast($value, $param) . ' AS ' . $state->quote($column);
+                $valueExprs[] = self::mergeCast($value, $param) . ' AS ' . $state->quote($column);
             }
             $selectParts[] = 'SELECT ' . implode(', ', $valueExprs) . ' FROM RDB$DATABASE';
         }
@@ -139,7 +127,7 @@ final class Firebird extends Dialect
         return new Sql($sql, $state->getParams(), $state->tables);
     }
 
-    private static function mergeSourceCast(mixed $value, string $paramSql): string
+    private static function mergeCast(mixed $value, string $paramSql): string
     {
         if (is_int($value)) {
             return 'CAST(' . $paramSql . ' AS INTEGER)';

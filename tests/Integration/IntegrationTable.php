@@ -88,7 +88,6 @@ trait IntegrationTable
             try {
                 $db->exec('DROP TABLE UDA_FB_IG');
             } catch (\Throwable) {
-                // Table may not exist on first run.
             }
 
             $db->exec(

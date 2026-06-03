@@ -18,7 +18,7 @@ and transparent read cache. Application classes build their domain data layer on
 * **caching** — Transparent cache behaviour and table hints in depth.
 * **contract** — Hard rules that should match what you infer from code review.
 
-**Agent skills (build a DAL on UDA):** `skills/README.md` — checklists for Cursor, Claude, OpenCode, etc.
+**Agent skills (build a DAL on UDA):** `skills/README.md` — agent-agnostic checklists for humans and AI assistants.
 
 * Install: `composer require universal-data-abstractor/universal-data-abstractor`
 * Getting started: `docs/getting-started.md`

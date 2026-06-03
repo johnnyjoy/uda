@@ -58,16 +58,23 @@ Additionally:
 - Update `CHANGELOG.md` `[Unreleased]` for caller-visible changes
 - Do not edit `docs/query-cookbook.md` without explicit approval
 
-## Certification (optional, cache/Postgres)
+## Integration (optional, per engine)
 
 ```bash
-# SQLite + cache + runtime invariants
-vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime
+# SQLite + cache + runtime invariants (default composer test)
+composer test
 
-# Postgres (service + pdo_pgsql)
+# Postgres
 PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=testdb PGUSER=postgres PGPASSWORD=postgres \
   vendor/bin/phpunit --bootstrap tests/postgres-bootstrap.php tests/Postgres
+
+# Firebird (see docs/integration/firebird.md)
+FIREBIRD_HOST=127.0.0.1 FIREBIRD_DATABASE=/var/lib/firebird/data/uda_test.fdb \
+  vendor/bin/phpunit --bootstrap tests/firebird-bootstrap.php tests/Firebird
 ```
+
+CI runs merge-blocking `*-integration` workflows for SQLite, PostgreSQL, MariaDB, SQL Server,
+Oracle, DB2, and Firebird on every push/PR.
 
 ## Checklist (before merge)
 
