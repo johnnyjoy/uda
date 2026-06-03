@@ -5,7 +5,7 @@ product contract, spec, contract, architecture, style guide, public API,
 getting started, configuration, caching doctrine, security.
 
 **Operational / patterns:** driver reference, caching operations, repository
-patterns cookbook, certification docs, **`skills/`** (agent checklists for application DAL on UDA).
+patterns cookbook, integration docs, **`skills/`** (agent checklists for application DAL on UDA).
 
 **Historical / design archive:** `docs/plans/**`, `docs/production-readiness.md` —
 local drafts (gitignored until public-suitable); context only when present; do not
@@ -54,11 +54,14 @@ treat as current behaviour unless cross-checked against code.
 - docs/configuration.md
 - docs/security.md
 
-## Engine certification
+## Engine integration (CI)
 
-- docs/certification/README.md — matrix (CI vs code-only engines)
-- docs/certification/sqlite.md
-- docs/certification/postgresql.md
+- docs/integration/README.md — matrix (CI-gated vs code-only engines)
+- docs/integration/sqlite.md
+- docs/integration/postgresql.md
+- docs/integration/mariadb.md
+- docs/integration/sqlserver.md
+- docs/integration/oracle.md
 
 ## Required invariants to verify in code
 1) Database is primary ingress for app code.

@@ -28,15 +28,16 @@ execution through one application-facing handle: `UDA\Database`.
 Do not edit `docs/query-cookbook.md` without explicit approval; it is treated as
 a guide.
 
-## Engine certification
+## Engine integration (CI)
 
-**Normative matrix:** [`docs/certification/README.md`](docs/certification/README.md).
+**Normative matrix:** [`docs/integration/README.md`](docs/integration/README.md).
 
-CI certifies **SQLite**, **PostgreSQL**, and **SQL Server** (`sqlserver` engine over
-**`dblib`** on Linux CI; `sqlsrv` also supported in library). Workflows:
-`sqlite-cert.yml`, `postgres-cert.yml`, `sqlserver-cert.yml`. Other engines in
-in `config/example-config.json` illustrate config
-shape — they are **not** CI-certified. Worker/concurrency rules: `docs/architecture.md`.
+CI integration-gates **SQLite**, **PostgreSQL**, **MariaDB**, **SQL Server**
+(`sqlserver` + **`dblib`** on Linux CI), and **Oracle**. Workflows:
+`sqlite-integration.yml`, `postgres-integration.yml`, `mariadb-integration.yml`,
+`sqlserver-integration.yml`, `oracle-integration.yml`. Engines in
+`config/example-config.json` illustrate config shape — **Sybase** is not CI-gated.
+Worker/concurrency rules: `docs/architecture.md`.
 
 ## Contributing, security, releases
 
@@ -49,7 +50,7 @@ shape — they are **not** CI-certified. Worker/concurrency rules: `docs/archite
 ## Where CI runs
 
 GitHub Actions on the canonical repo: `.github/workflows/` (default job + engine
-certification jobs). See `CONTRIBUTING.md` for the PR workflow and local gates.
+integration jobs). See `CONTRIBUTING.md` for the PR workflow and local gates.
 
 ## Local validation
 

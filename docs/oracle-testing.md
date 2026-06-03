@@ -1,7 +1,8 @@
 # Oracle Testing Guide
 
-> **Not CI-certified.** Oracle is implemented in code; this guide covers manual smoke
-> testing only. See `docs/certification/README.md` for the engine matrix.
+> **CI smoke:** `docs/integration/oracle.md` and `oracle-integration.yml` (connect +
+> read/write). This guide covers **deeper manual suites** (RETURNING, MERGE, pagination).
+> Engine matrix: `docs/integration/README.md`.
 
 The Oracle smoke tests exercise UDA end-to-end through PDO OCI. Use this guide to spin up the database, configure connections, and run the test suite.
 

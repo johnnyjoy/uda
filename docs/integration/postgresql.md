@@ -1,8 +1,8 @@
-# PostgreSQL Certification
+# PostgreSQL Integration
 
 ## Status
 
-**Enforced in CI** on every push and pull request (`.github/workflows/postgres-cert.yml`).
+**Enforced in CI** on every push and pull request (`.github/workflows/postgres-integration.yml`).
 
 Full engine matrix: [README.md](README.md).
 
@@ -12,7 +12,7 @@ require PHP 8.2+, `ext-pdo_pgsql`, and matching env vars (see Command). Tests sk
 
 ## Suite
 
-The v1 certification test lives in `tests/Postgres` and is run with
+The v1 integration test lives in `tests/Postgres` and is run with
 `tests/postgres-bootstrap.php` so it can use a PostgreSQL-specific config
 without conflicting with the default SQLite test bootstrap.
 
@@ -21,7 +21,7 @@ It proves:
 * `Database::connect()` can select a PostgreSQL connection from JSON config
 * named-parameter writes execute through UDA
 * named-parameter reads return expected values
-* CI can certify a real PostgreSQL service separately from the default test suite
+* CI can gate a real PostgreSQL service separately from the default test suite
 
 ## Command
 
@@ -36,9 +36,9 @@ vendor/bin/phpunit --bootstrap tests/postgres-bootstrap.php tests/Postgres
 
 ## CI Enforcement
 
-GitHub Actions workflow: `.github/workflows/postgres-cert.yml`
+GitHub Actions workflow: `.github/workflows/postgres-integration.yml`
 
-The `postgres-cert` job:
+The `postgres-integration` job:
 
 1. Starts PostgreSQL 16, Redis, and Memcached services.
 2. Installs PHP 8.2 with `pdo_pgsql`, `redis`, and `memcached`.

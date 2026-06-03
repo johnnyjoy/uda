@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Purpose: Compiles query builders for Sybase ASE.
  *
  * Shares T-SQL pagination and OUTPUT returning with SQL Server where verified
- * compatible. MERGE-based UPSERT is disabled until ASE MERGE is certified.
+ * compatible. MERGE-based UPSERT is disabled until ASE MERGE is integration-gated.
  */
 
 namespace UDA\Query\Dialect;
@@ -44,7 +44,7 @@ final class Sybase extends SqlServer
     }
 
     /**
-     * MERGE UPSERT is not advertised for Sybase until certified against ASE.
+     * MERGE UPSERT is not advertised for Sybase until gated against ASE in CI.
      *
      * @return bool Boolean result.
      */

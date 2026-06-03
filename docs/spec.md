@@ -24,7 +24,7 @@ The structure remains familiar so the project does not experience documentation 
 **Dependencies:** PDO only
 Optional: `redis`, `memcached`, `igbinary`
 
-**CI Enforcement:** `.github/workflows/sqlite-cert.yml` runs on every push + pull request, starting Redis/Memcached services and executing `vendor/bin/phpunit tests/SQLite tests/Cache`. Certification status is invalid if this workflow fails.
+**CI Enforcement:** `.github/workflows/sqlite-integration.yml` runs on every push + pull request, starting Redis/Memcached services and executing `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime`. Integration status is invalid if this workflow fails.
 
 ---
 
@@ -246,7 +246,7 @@ Builders now consult the dialect’s declared capabilities before emitting SQL. 
 | EXPLAIN ANALYZE   |     ✔️     |   ✔️   |     ✔️     |   ✖️   |   ✖️   |    ✔️   |  ✖️  |
 
 * PostgreSQL/SQLite use `INSERT ... ON CONFLICT` and therefore do not require MERGE support.
-* SQL Server/Oracle/DB2 compile UPSERT through MERGE when supported; Sybase UPSERT builders are disabled until ASE MERGE is certified; MariaDB uses `ON DUPLICATE KEY`.
+* SQL Server/Oracle/DB2 compile UPSERT through MERGE when supported; Sybase UPSERT builders are disabled until ASE MERGE is integration-gated; MariaDB uses `ON DUPLICATE KEY`.
 * **DB2:** `Query/Dialect/Db2.php` compiles MERGE/pagination for future use; engine `db2` is not connectable and is excluded from `Database::queryDialect()` until `Driver/Db2.php` lands.
 * Dialect capability flags are validated by `tests/Query/SybaseCapabilitiesTest.php` and related runtime tests, covering returning enforcement, recursive CTE gating, materialization hint exposure, window-function guards, and the per-dialect matrix above.
 - Window helpers (`Expr::rowNumber()`, `Expr::sum(...)->over()` etc.) live entirely within `Expr`. They expose `over()`, `partitionBy()`, `orderBy()`, and frame helpers, remain immutable, merge their parameters into the parent builder deterministically, and let dialects render `OVER (...)` clauses without modifying the core builder grammar.

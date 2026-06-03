@@ -1,8 +1,8 @@
-# SQLite Certification
+# SQLite Integration
 
 ## Status
 
-**Enforced in CI** on every push and pull request (`.github/workflows/sqlite-cert.yml`).
+**Enforced in CI** on every push and pull request (`.github/workflows/sqlite-integration.yml`).
 
 Full engine matrix: [README.md](README.md).
 
@@ -12,7 +12,7 @@ reachable backends when those tests are included.
 
 ## Suite
 
-The v1 certification suite lives in:
+The v1 integration suite lives in:
 
 * `tests/SQLite`
 * `tests/Cache`
@@ -38,13 +38,13 @@ vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime
 
 ## CI Enforcement
 
-GitHub Actions workflow: `.github/workflows/sqlite-cert.yml`
+GitHub Actions workflow: `.github/workflows/sqlite-integration.yml`
 
-The `sqlite-cert` job runs on every push and pull request. Steps:
+The `sqlite-integration` job runs on every push and pull request. Steps:
 
 1. Spin up Redis (`redis:7`) and Memcached (`memcached:1.6`) services (TCP health checks; official image has no `memcached-tool`).
 2. Install PHP 8.2 with `redis`/`memcached` extensions and Composer dependencies.
 3. Run architecture guardrails with `composer check`.
 4. Run `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime`.
 
-Outcome: build fails immediately if core/cache certification regresses.
+Outcome: build fails immediately if core/cache integration regresses.

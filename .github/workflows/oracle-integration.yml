@@ -1,0 +1,52 @@
+name: Oracle Integration
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  oracle-integration:
+    runs-on: ubuntu-latest
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: Oracle_UDA_CI1
+          APP_USER: uda_test
+          APP_USER_PASSWORD: uda_test_pw
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+          --health-start-period 90s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: oci8, pdo_oci
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run Oracle integration suites
+        env:
+          UDA_ORACLE_HOST: 127.0.0.1
+          UDA_ORACLE_PORT: 1521
+          UDA_ORACLE_SERVICE: FREEPDB1
+          UDA_ORACLE_USER: uda_test
+          UDA_ORACLE_PASSWORD: uda_test_pw
+        run: vendor/bin/phpunit --bootstrap tests/oracle-bootstrap.php tests/Oracle
+
+      - name: Reference Oracle integration docs
+        run: echo "See docs/integration/oracle.md for details"

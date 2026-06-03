@@ -7,16 +7,16 @@ namespace Tests\SqlServer;
 use PHPUnit\Framework\TestCase;
 use UDA\Database;
 
-final class SqlServerCertTest extends TestCase
+final class SqlServerIntegrationTest extends TestCase
 {
     protected function setUp(): void
     {
         if (!extension_loaded('pdo_dblib')) {
-            self::markTestSkipped('pdo_dblib extension is required for SQL Server certification.');
+            self::markTestSkipped('pdo_dblib extension is required for SQL Server integration.');
         }
 
         if (!defined('UDA_SQLSERVER_TEST_CONFIG')) {
-            self::markTestSkipped('SQL Server certification bootstrap was not loaded.');
+            self::markTestSkipped('SQL Server integration bootstrap was not loaded.');
         }
     }
 

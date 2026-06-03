@@ -1,12 +1,12 @@
-# SQL Server Certification
+# SQL Server Integration
 
 ## Status
 
-**Enforced in CI** on every push and pull request (`.github/workflows/sqlserver-cert.yml`).
+**Enforced in CI** on every push and pull request (`.github/workflows/sqlserver-integration.yml`).
 
 Full engine matrix: [README.md](README.md).
 
-Certifies **`driver: sqlserver`** with transport **`dblib`** (FreeTDS / `pdo_dblib`) on Linux CI —
+Gates **`driver: sqlserver`** with transport **`dblib`** (FreeTDS / `pdo_dblib`) on Linux CI —
 the usual production path on Linux. The library also supports **`transport: sqlsrv`**
 (Microsoft ODBC + `pdo_sqlsrv`); that stack is **not** exercised in this job.
 
@@ -18,7 +18,7 @@ extension or bootstrap is missing.
 
 ## Suite
 
-`tests/SqlServer/SqlServerCertTest.php` runs with `tests/sqlserver-bootstrap.php`.
+`tests/SqlServer/SqlServerIntegrationTest.php` runs with `tests/sqlserver-bootstrap.php`.
 
 It proves:
 
@@ -45,9 +45,9 @@ instead, set `"transport": "sqlsrv"` and add `trust_server_certificate: true` un
 
 ## CI Enforcement
 
-GitHub Actions: `.github/workflows/sqlserver-cert.yml`
+GitHub Actions: `.github/workflows/sqlserver-integration.yml`
 
-The `sqlserver-cert` job:
+The `sqlserver-integration` job:
 
 1. Starts `mcr.microsoft.com/mssql/server:2022-latest`.
 2. Installs FreeTDS (`freetds-dev`) on the runner.

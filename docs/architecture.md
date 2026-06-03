@@ -13,7 +13,7 @@ UDA executes SQL deterministically.
 
 ## CI Enforcement
 
-SQLite certification is continuously validated by `.github/workflows/sqlite-cert.yml`. The `sqlite-cert` job runs on every push and pull request, starts Redis and Memcached service containers, installs PHP 8.2 with `redis`/`memcached` extensions, and executes `SQLITE_REDIS_HOST=127.0.0.1 SQLITE_MEMCACHED_HOST=127.0.0.1 vendor/bin/phpunit tests/SQLite tests/Cache`. Any certification regression fails the build immediately.
+SQLite integration is continuously validated by `.github/workflows/sqlite-integration.yml`. The `sqlite-integration` job runs on every push and pull request, starts Redis and Memcached service containers, installs PHP 8.2 with `redis`/`memcached` extensions, and executes `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime`. Any integration regression fails the build immediately.
 
 ---
 

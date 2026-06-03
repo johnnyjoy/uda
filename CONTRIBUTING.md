@@ -20,8 +20,8 @@ composer stan
 composer test
 ```
 
-For cache or PostgreSQL-heavy changes, also match `.github/workflows/sqlite-cert.yml`,
-`postgres-cert.yml`, and `sqlserver-cert.yml` where relevant (see `docs/certification/`).
+For cache or engine-heavy changes, also match the relevant
+`.github/workflows/*-integration.yml` jobs (see `docs/integration/`).
 
 ## Pull requests (GitHub)
 

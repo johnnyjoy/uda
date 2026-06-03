@@ -265,10 +265,10 @@ If a behavior change requires an engine conditional, it belongs in the per-engin
 
 ---
 
-## Engine certification
+## Engine integration (CI)
 
-Config may list any supported engine; **CI certification** applies to SQLite and
-PostgreSQL only. Do not document or imply production certification for other engines
-without naming a GitHub Actions workflow.
+Config may list any supported engine; **CI integration** applies to engines with a
+`*-integration.yml` workflow in the matrix. Do not imply production readiness for
+other engines without naming that workflow.
 
-**Matrix:** `docs/certification/README.md`
+**Matrix:** `docs/integration/README.md`

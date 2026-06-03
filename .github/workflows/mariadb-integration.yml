@@ -1,0 +1,51 @@
+name: MariaDB Integration
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mariadb-integration:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run MariaDB integration suites
+        env:
+          MARIADB_HOST: 127.0.0.1
+          MARIADB_PORT: 3306
+          MARIADB_DATABASE: testdb
+          MARIADB_USER: root
+          MARIADB_PASSWORD: root
+        run: vendor/bin/phpunit --bootstrap tests/mariadb-bootstrap.php tests/MariaDb
+
+      - name: Reference MariaDB integration docs
+        run: echo "See docs/integration/mariadb.md for details"

@@ -1,11 +1,11 @@
-name: SQL Server Certification
+name: SQL Server Integration
 
 on:
   push:
   pull_request:
 
 jobs:
-  sqlserver-cert:
+  sqlserver-integration:
     runs-on: ubuntu-latest
     services:
       mssql:
@@ -41,7 +41,7 @@ jobs:
       - name: Run architecture guardrails
         run: composer check
 
-      - name: Run SQL Server certification suites
+      - name: Run SQL Server integration suites
         env:
           TDSVER: "7.4"
           MSSQL_HOST: 127.0.0.1
@@ -51,5 +51,5 @@ jobs:
           MSSQL_PASSWORD: Your_Str0ng!Passw0rd123
         run: vendor/bin/phpunit --bootstrap tests/sqlserver-bootstrap.php tests/SqlServer
 
-      - name: Reference SQL Server certification docs
-        run: echo "See docs/certification/sqlserver.md for details"
+      - name: Reference SQL Server integration docs
+        run: echo "See docs/integration/sqlserver.md for details"

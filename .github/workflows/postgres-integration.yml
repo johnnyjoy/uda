@@ -1,11 +1,11 @@
-name: PostgreSQL Certification
+name: PostgreSQL Integration
 
 on:
   push:
   pull_request:
 
 jobs:
-  postgres-cert:
+  postgres-integration:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -54,8 +54,8 @@ jobs:
         run: composer install --no-interaction --prefer-dist
       - name: Run architecture guardrails
         run: composer check
-        
-      - name: Run PostgreSQL certification suites
+
+      - name: Run PostgreSQL integration suites
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
@@ -65,6 +65,6 @@ jobs:
           POSTGRES_REDIS_HOST: 127.0.0.1
           POSTGRES_MEMCACHED_HOST: 127.0.0.1
         run: vendor/bin/phpunit --bootstrap tests/postgres-bootstrap.php tests/Postgres
-        
-      - name: Reference Postgres certification docs
-        run: echo "See docs/certification/postgresql.md for details"
+
+      - name: Reference PostgreSQL integration docs
+        run: echo "See docs/integration/postgresql.md for details"

@@ -111,6 +111,6 @@ UDA v1 is finished only when:
 * one prepare/bind/execute implementation exists
 * cache is transparent and metadata-first
 * external class usage is proven with `use UDA\Database;`
-* Composer autoload, PHPStan, PHPUnit, architecture checks, and CI certification
+* Composer autoload, PHPStan, PHPUnit, architecture checks, and CI engine integration
   are reproducible under PHP 8.2+
 

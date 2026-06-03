@@ -102,7 +102,7 @@ composer stan
 composer test
 ```
 
-Cert workflows: `.github/workflows/sqlite-cert.yml`, `postgres-cert.yml` — see `docs/certification/`.
+Integration workflows: `.github/workflows/*-integration.yml` — see `docs/integration/`.
 
 ## Checklist (new environment)
 
@@ -115,4 +115,4 @@ Cert workflows: `.github/workflows/sqlite-cert.yml`, `postgres-cert.yml` — see
 
 ## Authority
 
-`docs/configuration.md`, `docs/caching.md`, `docs/metrics.md`, `docs/certification/sqlite.md`, `docs/certification/postgresql.md`.
+`docs/configuration.md`, `docs/caching.md`, `docs/metrics.md`, `docs/integration/README.md`.

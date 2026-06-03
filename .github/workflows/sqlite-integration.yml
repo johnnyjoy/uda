@@ -1,11 +1,11 @@
-name: SQLite Certification
+name: SQLite Integration
 
 on:
   push:
   pull_request:
 
 jobs:
-  sqlite-cert:
+  sqlite-integration:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -38,10 +38,10 @@ jobs:
         run: composer install --no-interaction --prefer-dist
       - name: Run architecture guardrails
         run: composer check
-      - name: Run SQLite certification suites
+      - name: Run SQLite integration suites
         env:
           SQLITE_REDIS_HOST: 127.0.0.1
           SQLITE_MEMCACHED_HOST: 127.0.0.1
         run: vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime
-      - name: Reference SQLite certification docs
-        run: echo "See docs/certification/sqlite.md for details"
+      - name: Reference SQLite integration docs
+        run: echo "See docs/integration/sqlite.md for details"

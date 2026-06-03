@@ -19,7 +19,7 @@ Root **`CHANGELOG.md`**. Update `[Unreleased]` per MR; on release rename to
 ## CI (source of truth)
 
 GitHub Actions: `.github/workflows/` — `ci.yml` (guardrails, PHPStan, PHPUnit);
-certification workflows for SQLite / PostgreSQL.
+integration workflows for supported engines (see `docs/integration/README.md`).
 
 GitLab-only mirrors: run the same Composer targets locally or in **your** CI
 before merge:
