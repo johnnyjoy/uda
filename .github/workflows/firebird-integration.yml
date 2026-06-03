@@ -20,7 +20,8 @@ jobs:
           FIREBIRD_ROOT_PASSWORD: UDA_Fb_Root1
           FIREBIRD_USER: uda_test
           FIREBIRD_PASSWORD: UDA_Fb_CI1
-          FIREBIRD_DATABASE: uda_test.fdb
+          # Server-side path inside firebirdsql/firebird (see image docs).
+          FIREBIRD_DATABASE: /var/lib/firebird/data/uda_test.fdb
           FIREBIRD_DATABASE_DEFAULT_CHARSET: UTF8
         ports:
           - 3050:3050
@@ -57,7 +58,7 @@ jobs:
         env:
           FIREBIRD_HOST: 127.0.0.1
           FIREBIRD_PORT: 3050
-          FIREBIRD_DATABASE: uda_test.fdb
+          FIREBIRD_DATABASE: /var/lib/firebird/data/uda_test.fdb
           FIREBIRD_USER: uda_test
           FIREBIRD_PASSWORD: UDA_Fb_CI1
         run: vendor/bin/phpunit --bootstrap tests/firebird-bootstrap.php tests/Firebird

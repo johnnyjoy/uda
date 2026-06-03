@@ -29,6 +29,10 @@ final class Firebird
      * Accepts a full DSN in `params['dsn']` or builds
      * `firebird:dbname={host}/{port}:{database}` (path or alias).
      *
+     * For TCP connections, `{database}` must be the path **on the Firebird server**
+     * (e.g. `/var/lib/firebird/data/app.fdb` in the official Docker image), not a
+     * bare filename on the PHP client host.
+     *
      * @param array<string,mixed> $params
      */
     public static function dsn(array $params): string

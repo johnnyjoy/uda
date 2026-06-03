@@ -29,7 +29,7 @@ Full engine matrix: [README.md](README.md).
       "params": {
         "host": "127.0.0.1",
         "port": 3050,
-        "database": "app.fdb"
+        "database": "/var/lib/firebird/data/app.fdb"
       },
       "user": "app_user",
       "pass": "your-password"
@@ -40,6 +40,11 @@ Full engine matrix: [README.md](README.md).
 
 Alternatively set `params.dsn` to a full `firebird:dbname=host/port:path` fragment.
 
+When connecting over TCP (`host` + `port`), `database` must be the **absolute path on the
+Firebird server**. With the official Docker image, files live under
+`/var/lib/firebird/data/` (e.g. `/var/lib/firebird/data/app.fdb`). A bare filename such as
+`app.fdb` is resolved on the PHP client host and will fail in CI.
+
 ## Local integration tests
 
 With a running Firebird instance and `pdo_firebird`:
@@ -47,7 +52,7 @@ With a running Firebird instance and `pdo_firebird`:
 ```bash
 FIREBIRD_HOST=127.0.0.1 \
 FIREBIRD_PORT=3050 \
-FIREBIRD_DATABASE=uda_test.fdb \
+FIREBIRD_DATABASE=/var/lib/firebird/data/uda_test.fdb \
 FIREBIRD_USER=uda_test \
 FIREBIRD_PASSWORD=secret \
 vendor/bin/phpunit --bootstrap tests/firebird-bootstrap.php tests/Firebird
@@ -72,7 +77,7 @@ Default `composer test` excludes `tests/Firebird`.
 | -------- | ------------------- |
 | `FIREBIRD_HOST` | `127.0.0.1` |
 | `FIREBIRD_PORT` | `3050` |
-| `FIREBIRD_DATABASE` | `uda_test.fdb` |
+| `FIREBIRD_DATABASE` | `/var/lib/firebird/data/uda_test.fdb` (server-side path in Docker image) |
 | `FIREBIRD_USER` | `uda_test` |
 | `FIREBIRD_PASSWORD` | (set in workflow) |
 

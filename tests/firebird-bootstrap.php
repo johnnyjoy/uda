@@ -26,7 +26,7 @@ $config = [
             'params' => [
                 'host' => getenv('FIREBIRD_HOST') ?: '127.0.0.1',
                 'port' => (int) (getenv('FIREBIRD_PORT') ?: 3050),
-                'database' => getenv('FIREBIRD_DATABASE') ?: 'uda_test.fdb',
+                'database' => getenv('FIREBIRD_DATABASE') ?: '/var/lib/firebird/data/uda_test.fdb',
             ],
             'user' => getenv('FIREBIRD_USER') ?: 'uda_test',
             'pass' => getenv('FIREBIRD_PASSWORD') ?: '',
