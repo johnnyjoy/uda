@@ -16,6 +16,11 @@ behaviour change → at least **MINOR**; breaks → **MAJOR**.
 Root **`CHANGELOG.md`**. Update `[Unreleased]` per MR; on release rename to
 `x.y.z` + date.
 
+Write for **package consumers** (API, config, breaking renames), not for maintainers
+debugging CI. Internal integration spikes and workflow renames belong in
+`docs/integration/` unless they change a documented guarantee or required check name
+consumers configure in branch protection.
+
 ## CI (source of truth)
 
 GitHub Actions: `.github/workflows/` — `ci.yml` (guardrails, PHPStan, PHPUnit);

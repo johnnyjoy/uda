@@ -34,7 +34,7 @@ Legend:
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT until ASE is integration-gated.  
-³ Sybase job runs on push/PR with `continue-on-error` until stable; not merge-blocking yet.  
+³ Sybase: `workflow_dispatch` only; live ASE needs `SYBASE_LICENSE_B64`. Not merge-blocking.  
 ⁴ `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
@@ -79,8 +79,17 @@ Treat that as **integrator-owned validation**:
 
 ---
 
+## Deferred work (Phase C)
+
+Integration Phases A–B are complete. Follow-ups (DB2 connect, `sqlsrv` CI job,
+writable CTE tests, Sybase MERGE on licensed ASE, etc.) are documented in
+[deferred.md](deferred.md) — not merge-blocking.
+
+---
+
 ## Related
 
+- [deferred.md](deferred.md) — Phase C backlog
 - [configuration.md](../configuration.md) — `"driver"` (engine) and `transport`
 - [driver.md](../driver.md) — per-engine DSN and SQL rules
 - [oracle-testing.md](../oracle-testing.md) — Oracle troubleshooting and evidence notes

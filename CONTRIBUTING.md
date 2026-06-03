@@ -21,7 +21,7 @@ composer test
 ```
 
 For cache or engine-heavy changes, also match the relevant
-`.github/workflows/*-integration.yml` jobs (see `docs/integration/`).
+`.github/workflows/*-integration.yml` jobs (see `docs/integration/`). Sybase is manual-only; future engines are listed in `docs/integration/deferred.md`.
 
 ## Pull requests (GitHub)
 
@@ -30,7 +30,10 @@ For cache or engine-heavy changes, also match the relevant
 3. Run the local validation commands above.
 4. Open a PR against `master`. CI must pass on GitHub Actions.
 5. Do not edit `docs/query-cookbook.md` without explicit per-section approval.
-6. User-visible change → bullet under `CHANGELOG.md` `[Unreleased]`.
+6. Caller-visible change → bullet under `CHANGELOG.md` `[Unreleased]` in plain language
+   (what integrators gain or must change). Do not log CI job names, internal phase labels,
+   SAP/GHA spike outcomes, or driver-refactor milestones — those go in `docs/integration/`
+   or the PR body.
 
 Squash vs merge is maintainer choice; one logical change per PR is preferred.
 
