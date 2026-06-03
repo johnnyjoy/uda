@@ -5,8 +5,10 @@
 **Connect path:** `driver: db2` with transport `db2` and the PHP **`pdo_ibm`** extension.
 
 **CI:** `.github/workflows/db2-integration.yml` runs on push, PR, and `workflow_dispatch`.
-The job uses IBM Db2 Community Edition (`LICENSE: accept`) and compiles **`pdo_ibm`**
-against the IBM CLI driver. It is **`continue-on-error: true`** until three consecutive
+The job uses IBM Db2 Community Edition (`LICENSE: accept`), downloads the IBM CLI
+driver tarball, and **compiles `pdo_ibm` from**
+[php/pecl-database-pdo_ibm](https://github.com/php/pecl-database-pdo_ibm) (`RELEASE_1_7_0`)
+— PECL does not publish a downloadable release for this extension. It is **`continue-on-error: true`** until three consecutive
 green runs on the default branch — then it can become merge-blocking.
 
 Expect **~5–15 minutes** per run (container cold start + `pdo_ibm` compile). Flake

@@ -55,7 +55,6 @@ jobs:
           php-version: '8.2'
           extensions: pdo
           coverage: none
-          tools: pecl
 
       - name: Cache IBM CLI driver
         id: clidriver-cache
@@ -76,9 +75,10 @@ jobs:
           set -euxo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq libxml2-dev
-          pecl download pdo_ibm
-          tar xzf pdo_ibm-*.tgz
-          cd pdo_ibm-*/
+          # PECL has no downloadable release tarball; build from upstream source (same as php/pecl-database-pdo_ibm CI).
+          git clone --depth 1 --branch RELEASE_1_7_0 \
+            https://github.com/php/pecl-database-pdo_ibm.git /tmp/pdo_ibm
+          cd /tmp/pdo_ibm
           phpize
           ./configure --with-pdo-ibm="${{ github.workspace }}/clidriver"
           make -j"$(nproc)"
