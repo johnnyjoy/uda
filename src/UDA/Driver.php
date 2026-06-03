@@ -156,6 +156,11 @@ final class Driver
             throw new ConnectionException('Failed to connect to database: ' . $e->getMessage(), 0, $e);
         }
 
+        if (self::engineKey($this->engine) === 'firebird') {
+            // pdo_firebird commit-retains on each DML while ATTR_AUTOCOMMIT is true (PHP #8735).
+            $this->pdo->setAttribute(PDO::ATTR_AUTOCOMMIT, false);
+        }
+
         $this->runInitSql($this->pdo, $this->config);
     }
 
@@ -708,6 +713,8 @@ final class Driver
 
         $stmt->closeCursor();
 
+        $this->firebirdCommit();
+
         return $affected;
     }
 
@@ -745,6 +752,8 @@ final class Driver
 
         $stmt->closeCursor();
 
+        $this->firebirdCommit();
+
         return $rows;
     }
 
@@ -773,6 +782,7 @@ final class Driver
                 $stmt = $this->executeInternal($message, $normalized);
                 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 $stmt->closeCursor();
+                $this->firebirdCommit();
 
                 return $rows;
             }
@@ -828,11 +838,13 @@ final class Driver
 
                 if ($stmt->columnCount() !== 1) {
                     $stmt->closeCursor();
+                    $this->firebirdCommit();
                     throw new QueryException('value() requires a single column result');
                 }
 
                 $scalar = $stmt->fetchColumn(0);
                 $stmt->closeCursor();
+                $this->firebirdCommit();
 
                 return $scalar === false ? null : $scalar;
             }
@@ -861,6 +873,7 @@ final class Driver
                 $stmt = $this->executeInternal($message, $normalized);
                 $col = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
                 $stmt->closeCursor();
+                $this->firebirdCommit();
 
                 return $col;
             }
@@ -948,6 +961,7 @@ final class Driver
             }
         } finally {
             $stmt->closeCursor();
+            $this->firebirdCommit();
         }
     }
 
@@ -981,6 +995,8 @@ final class Driver
             $stmt = null;
 
             try {
+                $this->firebirdBegin();
+
                 $stmt = $this->prepared->get(
                     $query,
                     fn (string $q): PDOStatement => $this->pdo->prepare($q),
@@ -998,6 +1014,8 @@ final class Driver
 
                 return $stmt;
             } catch (PDOException $ex) {
+                $this->firebirdRollback();
+
                 if ($stmt !== null) {
                     $stmt->closeCursor();
                 }
@@ -1140,11 +1158,13 @@ final class Driver
 
         if ($row === false) {
             $stmt->closeCursor();
+            $this->firebirdCommit();
 
             return null;
         }
 
         $stmt->closeCursor();
+        $this->firebirdCommit();
 
         return $row;
     }
@@ -1262,6 +1282,32 @@ final class Driver
             }
 
             throw $e;
+        }
+    }
+
+    private function firebirdAutocommit(): bool
+    {
+        return self::engineKey($this->engine) === 'firebird' && $this->transactionLevel === 0;
+    }
+
+    private function firebirdBegin(): void
+    {
+        if ($this->firebirdAutocommit() && !$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+        }
+    }
+
+    private function firebirdCommit(): void
+    {
+        if ($this->firebirdAutocommit() && $this->pdo->inTransaction()) {
+            $this->pdo->commit();
+        }
+    }
+
+    private function firebirdRollback(): void
+    {
+        if ($this->firebirdAutocommit() && $this->pdo->inTransaction()) {
+            $this->pdo->rollBack();
         }
     }
 

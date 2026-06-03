@@ -104,14 +104,16 @@ final class Firebird extends Dialect
         foreach ($rows as $row) {
             $valueExprs = [];
             foreach ($columns as $column) {
-                $valueExprs[] = $state->param($row[$column] ?? null) . ' AS ' . $state->quote($column);
+                $value = $row[$column] ?? null;
+                $param = $state->param($value);
+                $valueExprs[] = self::mergeSourceCast($value, $param) . ' AS ' . $state->quote($column);
             }
             $selectParts[] = 'SELECT ' . implode(', ', $valueExprs) . ' FROM RDB$DATABASE';
         }
 
         $source = '(' . implode(' UNION ALL ', $selectParts) . ') src';
 
-        $sql = 'MERGE INTO ' . $state->quote($state->table) . ' AS target USING ' . $source . ' ON ';
+        $sql = 'MERGE INTO ' . $state->quote($state->table) . ' target USING ' . $source . ' ON ';
 
         $conditions = [];
         foreach ($state->conflictKeys as $key) {
@@ -135,5 +137,22 @@ final class Firebird extends Dialect
         $sql .= ')';
 
         return new Sql($sql, $state->getParams(), $state->tables);
+    }
+
+    private static function mergeSourceCast(mixed $value, string $paramSql): string
+    {
+        if (is_int($value)) {
+            return 'CAST(' . $paramSql . ' AS INTEGER)';
+        }
+
+        if (is_float($value)) {
+            return 'CAST(' . $paramSql . ' AS DOUBLE PRECISION)';
+        }
+
+        if (is_bool($value)) {
+            return 'CAST(' . $paramSql . ' AS SMALLINT)';
+        }
+
+        return 'CAST(' . $paramSql . ' AS VARCHAR(100))';
     }
 }

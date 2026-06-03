@@ -106,9 +106,9 @@ final class FirebirdConnectTest extends TestCase
         self::assertInstanceOf(Firebird::class, $dialect);
     }
 
-    public function test_firebird_quote_identifier_preserves_case(): void
+    public function test_firebird_quote_identifier_uppercases_unquoted_names(): void
     {
-        self::assertSame('"users"', \UDA\Driver::quoteIdentifier('firebird', 'users'));
-        self::assertSame('"col""name"', \UDA\Driver::quoteIdentifier('firebird', 'col"name'));
+        self::assertSame('"USERS"', \UDA\Driver::quoteIdentifier('firebird', 'users'));
+        self::assertSame('"COL""NAME"', \UDA\Driver::quoteIdentifier('firebird', 'col"name'));
     }
 }

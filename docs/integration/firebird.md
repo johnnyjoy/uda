@@ -71,6 +71,13 @@ Default `composer test` excludes `tests/Firebird`.
 | RETURNING | Insert `returning()` |
 | Writable CTE | No (dialect rejects) |
 
+## Transactions (`pdo_firebird`)
+
+UDA disables PDO autocommit on Firebird connect (`PDO::ATTR_AUTOCOMMIT = false`). The bundled
+`pdo_firebird` driver commit-retains each DML while autocommit is on, which makes
+`rollBack()` a no-op ([PHP #8735](https://github.com/php/php-src/issues/8735)). With autocommit
+off, `Database::transaction()` commit and rollback behave as on other engines.
+
 ## CI environment variables
 
 | Variable | Default in workflow |

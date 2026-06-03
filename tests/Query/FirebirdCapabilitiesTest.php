@@ -25,7 +25,7 @@ final class FirebirdCapabilitiesTest extends TestCase
 
     public function test_firebird_quote_identifier_uses_double_quotes(): void
     {
-        self::assertSame('"users"', Driver::quoteIdentifier('firebird', 'users'));
+        self::assertSame('"USERS"', Driver::quoteIdentifier('firebird', 'users'));
     }
 
     public function test_firebird_select_pagination_requires_order_by(): void

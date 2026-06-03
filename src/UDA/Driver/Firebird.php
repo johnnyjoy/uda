@@ -61,7 +61,7 @@ final class Firebird
 
     public static function quoteIdentifier(string $identifier): string
     {
-        $clean = trim($identifier);
+        $clean = strtoupper(trim($identifier));
         $escaped = str_replace('"', '""', $clean);
 
         return '"' . $escaped . '"';
