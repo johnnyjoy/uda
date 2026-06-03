@@ -23,12 +23,11 @@ $config = [
     'connections' => [
         'mssql' => [
             'driver' => 'sqlserver',
-            'transport' => 'sqlsrv',
+            'transport' => 'dblib',
             'params' => [
                 'host' => getenv('MSSQL_HOST') ?: '127.0.0.1',
                 'port' => (int) (getenv('MSSQL_PORT') ?: 1433),
                 'dbname' => getenv('MSSQL_DATABASE') ?: 'master',
-                'trust_server_certificate' => true,
             ],
             'user' => getenv('MSSQL_USER') ?: 'sa',
             'pass' => getenv('MSSQL_PASSWORD') ?: 'Your_Str0ng!Passw0rd123',

@@ -6,12 +6,15 @@
 
 Full engine matrix: [README.md](README.md).
 
-Certifies **`driver: sqlserver`** with default transport **`sqlsrv`** (Microsoft PDO).
-**Not** Sybase (`driver: dblib` alone) and **not** MSSQL-over-FreeTDS (`transport: dblib`) in this job.
+Certifies **`driver: sqlserver`** with transport **`dblib`** (FreeTDS / `pdo_dblib`) on Linux CI —
+the usual production path on Linux. The library also supports **`transport: sqlsrv`**
+(Microsoft ODBC + `pdo_sqlsrv`); that stack is **not** exercised in this job.
+
+**Not** Sybase (`driver: sybase` or shorthand `"driver": "dblib"` alone).
 
 The workflow starts SQL Server 2022 in a service container. Local runs need PHP 8.2+,
-`pdo_sqlsrv`, a reachable server, and the env vars below. Tests skip when the extension
-or bootstrap is missing.
+`pdo_dblib`, FreeTDS, a reachable server, and the env vars below. Tests skip when the
+extension or bootstrap is missing.
 
 ## Suite
 
@@ -27,6 +30,7 @@ It proves:
 ## Command
 
 ```bash
+TDSVER=7.4 \
 MSSQL_HOST=127.0.0.1 \
 MSSQL_PORT=1433 \
 MSSQL_DATABASE=master \
@@ -35,8 +39,9 @@ MSSQL_PASSWORD='Your_Str0ng!Passw0rd123' \
 vendor/bin/phpunit --bootstrap tests/sqlserver-bootstrap.php tests/SqlServer
 ```
 
-Bootstrap sets `trust_server_certificate: true` in connection params (appended to the
-`sqlsrv` DSN) for dev/CI TLS to local containers.
+Bootstrap uses `"driver": "sqlserver", "transport": "dblib"`. For local **sqlsrv**
+instead, set `"transport": "sqlsrv"` and add `trust_server_certificate: true` under
+`params` when connecting to dev/CI containers with self-signed TLS.
 
 ## CI Enforcement
 
@@ -45,6 +50,16 @@ GitHub Actions: `.github/workflows/sqlserver-cert.yml`
 The `sqlserver-cert` job:
 
 1. Starts `mcr.microsoft.com/mssql/server:2022-latest`.
-2. Installs PHP 8.2 with `pdo_sqlsrv` / `sqlsrv`.
-3. Runs `composer check`.
-4. Runs `vendor/bin/phpunit --bootstrap tests/sqlserver-bootstrap.php tests/SqlServer`.
+2. Installs FreeTDS (`freetds-dev`) on the runner.
+3. Installs PHP 8.2 with `pdo_dblib`.
+4. Runs `composer check`.
+5. Runs PHPUnit with `TDSVER=7.4` for SQL Server 2022 compatibility.
+
+## sqlsrv vs dblib
+
+| Transport | PDO | Typical host | CI |
+| --------- | --- | ------------ | -- |
+| **dblib** | `pdo_dblib` | Linux + FreeTDS | **Yes** |
+| **sqlsrv** | `pdo_sqlsrv` | Windows, or Linux + Microsoft ODBC Driver 18 | No (integrator-owned) |
+
+Same **sqlserver** engine rules and dialect either way; only the PDO wire adapter differs.

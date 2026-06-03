@@ -20,16 +20,19 @@ jobs:
           --health-timeout 5s
           --health-retries 10
           --health-start-period 30s
-          --health-cmd "timeout 1 bash -c '</dev/tcp/127.0.0.1/1433' || exit 1"
+          --health-cmd "timeout 1 bash -c '</dev/tcp/127.0.0.1/1433' || exit 1'"
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install FreeTDS
+        run: sudo apt-get update && sudo apt-get install -y freetds-common freetds-dev
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: pdo_sqlsrv, sqlsrv
+          extensions: pdo_dblib
           coverage: none
 
       - name: Install dependencies
@@ -40,6 +43,7 @@ jobs:
 
       - name: Run SQL Server certification suites
         env:
+          TDSVER: "7.4"
           MSSQL_HOST: 127.0.0.1
           MSSQL_PORT: 1433
           MSSQL_DATABASE: master

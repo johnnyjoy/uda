@@ -11,8 +11,8 @@ final class SqlServerCertTest extends TestCase
 {
     protected function setUp(): void
     {
-        if (!extension_loaded('pdo_sqlsrv')) {
-            self::markTestSkipped('pdo_sqlsrv extension is required for SQL Server certification.');
+        if (!extension_loaded('pdo_dblib')) {
+            self::markTestSkipped('pdo_dblib extension is required for SQL Server certification.');
         }
 
         if (!defined('UDA_SQLSERVER_TEST_CONFIG')) {

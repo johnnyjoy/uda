@@ -32,8 +32,9 @@ a guide.
 
 **Normative matrix:** [`docs/certification/README.md`](docs/certification/README.md).
 
-CI certifies **SQLite**, **PostgreSQL**, and **SQL Server** (`sqlsrv` transport;
-workflows `sqlite-cert.yml`, `postgres-cert.yml`, `sqlserver-cert.yml`). Other engines
+CI certifies **SQLite**, **PostgreSQL**, and **SQL Server** (`sqlserver` engine over
+**`dblib`** on Linux CI; `sqlsrv` also supported in library). Workflows:
+`sqlite-cert.yml`, `postgres-cert.yml`, `sqlserver-cert.yml`. Other engines in
 in `config/example-config.json` illustrate config
 shape — they are **not** CI-certified. Worker/concurrency rules: `docs/architecture.md`.
 
