@@ -19,7 +19,7 @@ must comply with Oracle’s Free license terms.
 | Class | Proves |
 | ----- | ------ |
 | `OracleIntegrationTest` | Connect + named CRUD smoke |
-| `PaginationTest` | `OFFSET … FETCH NEXT`, streaming, invalid limit, compiled SQL stability |
+| `PaginationTest` | `OFFSET … FETCH NEXT`, streaming, invalid limit |
 | `ReturningAndMergeTest` | RETURNING INTO (insert/update/delete), MERGE upsert, multi-row returning |
 
 Shared harness: `OracleTestCase` (identifier warning suppression, table fixtures).

@@ -118,7 +118,12 @@ class Identifier
             return false;
         }
 
-        if (preg_match('%[;\'"\\/*]%', $identifier)) {
+        // Do not use [/] beside [*] in one class — PHP treats that as an invalid range.
+        if (preg_match('/[;\'"\\\\]/', $identifier)) {
+            return false;
+        }
+
+        if (str_contains($identifier, '/') || str_contains($identifier, '*')) {
             return false;
         }
 

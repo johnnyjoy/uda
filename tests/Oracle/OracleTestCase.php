@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Oracle;
 
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\TestCase;
 use UDA\Database;
 use UDA\Exception\ConfigException;
@@ -27,14 +26,9 @@ abstract class OracleTestCase extends TestCase
 
     private static bool $usersTableInitialized = false;
 
-    private bool $errorHandlerActive = false;
-
     protected function setUp(): void
     {
         parent::setUp();
-
-        set_error_handler([$this, 'suppressIdentifierWarnings'], E_WARNING);
-        $this->errorHandlerActive = true;
 
         if (!extension_loaded('pdo_oci')) {
             self::markTestSkipped('pdo_oci extension is required for Oracle integration.');
@@ -61,16 +55,6 @@ abstract class OracleTestCase extends TestCase
         self::$numbersTableInitialized = false;
         self::$employeesTableInitialized = false;
         self::$usersTableInitialized = false;
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->errorHandlerActive) {
-            restore_error_handler();
-            $this->errorHandlerActive = false;
-        }
-
-        parent::tearDown();
     }
 
     protected function db(): Database
@@ -261,16 +245,5 @@ abstract class OracleTestCase extends TestCase
         file_put_contents($path, json_encode($config, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 
         return $path;
-    }
-
-    public function suppressIdentifierWarnings(int $severity, string $message): bool
-    {
-        if ($severity === E_WARNING
-            && str_contains($message, 'Identifier.php')
-            && str_contains($message, 'range out of order in character class')) {
-            return true;
-        }
-
-        return false;
     }
 }

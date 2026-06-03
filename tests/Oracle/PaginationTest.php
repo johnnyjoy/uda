@@ -24,6 +24,7 @@ final class PaginationTest extends OracleTestCase
 
         $sql = strtoupper($builder->toSql()->getQuery());
         $this->assertStringContainsString('FETCH FIRST 3 ROWS ONLY', $sql);
+        $this->assertSame($sql, strtoupper($builder->toSql()->getQuery()));
 
         $rows = $this->fetchIds($builder);
         $this->assertSame([1, 2, 3], $rows);
@@ -93,19 +94,6 @@ final class PaginationTest extends OracleTestCase
 
         $rows = $this->fetchIds($builder);
         $this->assertSame([5, 6], $rows);
-    }
-
-    public function testCompiledPaginationSqlIsStable(): void
-    {
-        $builder = $this->baseQuery()->limit(3);
-        $sql = strtoupper($builder->toSql()->getQuery());
-
-        $this->assertSame($sql, strtoupper($builder->toSql()->getQuery()));
-        $this->assertStringContainsString('FETCH FIRST 3 ROWS ONLY', $sql);
-
-        // One execution proves repeatable rows; avoid triple-fetch (pdo_oci GC segfault in CI).
-        $this->assertSame([1, 2, 3], $this->fetchIds($builder));
-        $this->assertSame([1, 2, 3], $this->fetchIds($builder));
     }
 
     public function testStreamingPagination(): void
