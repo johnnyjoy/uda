@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Driver runtime phase 1: `UDA\Driver\Transport`, `UDA\Driver\Oracle`, `UDA\Driver\Oracle\Returning` (`docs/architecture-driver-runtime.md`); no public API change.
 - Driver runtime phase 2: reconnect-on-failure (`isConnectionLost`, `reconnect`) stays on `UDA\Driver` (`docs/architecture-driver-runtime.md`); no public API change.
 - Driver runtime phase 3: `UDA\Driver\Prepared` (`docs/architecture-driver-runtime.md`); no public API change.
+- P1-6 driver decomposition **complete** (phase 4 transactions skipped); see `docs/architecture-driver-runtime.md`.
 - `tools/check-license.php` guardrail (MIT-only `@license` in `src/`).
 - `skills/` agent skill pack for application DAL on UDA (`uda-dal-layer`, `uda-sql-and-cache`, `uda-config-deploy`, `uda-change-gates`); see `skills/README.md`.
 - `UDA\Cache::flush($connectionName)` and `Database::flushCache()` for ops-only cache purge (per-connection namespace scope).
