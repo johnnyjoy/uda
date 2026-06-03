@@ -1,8 +1,8 @@
 # Oracle Testing Guide
 
-> **CI smoke:** `docs/integration/oracle.md` and `oracle-integration.yml` (connect +
-> read/write). This guide covers **deeper manual suites** (RETURNING, MERGE, pagination).
-> Engine matrix: `docs/integration/README.md`.
+> **CI:** `docs/integration/oracle.md` and `oracle-integration.yml` run the full
+> `tests/Oracle` suite (smoke, pagination, RETURNING/MERGE). This guide adds troubleshooting
+> and evidence notes. Engine matrix: `docs/integration/README.md`.
 
 The Oracle smoke tests exercise UDA end-to-end through PDO OCI. Use this guide to spin up the database, configure connections, and run the test suite.
 

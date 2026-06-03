@@ -18,7 +18,11 @@ The v1 integration suite lives in:
 * `tests/Cache`
 * `tests/Runtime`
 
-It proves the current v1 product contract:
+Together these cover the v1 product contract (named parameters, builder terminators,
+cache, PDO boundary). Live-engine **RETURNING**, **upsert**, and **pagination** are also
+gated on PostgreSQL, MariaDB, SQL Server, and Oracle integration jobs.
+
+It proves in particular:
 
 * external classes import only `UDA\Database`
 * raw SQL uses named parameters

@@ -6,8 +6,9 @@ value does not mean that engine is integration-gated in CI.
 
 **Normative matrix:** this document. Per-engine detail: linked pages below.
 
-Integration jobs are **live-database smoke tests**, not TLS certificate configuration
-and not vendor certification programs.
+Integration jobs exercise **connect, transactions, pagination, RETURNING/OUTPUT, and
+upsert** where the dialect advertises support — not TLS certificates and not vendor
+certification programs.
 
 ---
 
@@ -21,28 +22,29 @@ Legend:
 | **Code** | Implemented in `src/`; not gated in CI |
 | **N/A** | Not connectable via `Database::connect()` today |
 
-| Engine | Connect | Builders | Upsert | Read cache | CI | Workflow / doc |
-| ------ | ------- | -------- | ------ | ---------- | -- | -------------- |
+| Engine | Connect | Builders | Upsert | RETURNING | CI | Workflow / doc |
+| ------ | ------- | -------- | ------ | --------- | -- | -------------- |
 | **SQLite** | Gated | Gated | Gated | Gated | Yes | [`sqlite-integration.yml`](../.github/workflows/sqlite-integration.yml) · [sqlite.md](sqlite.md) |
 | **PostgreSQL** | Gated | Gated | Gated | Gated | Yes | [`postgres-integration.yml`](../.github/workflows/postgres-integration.yml) · [postgresql.md](postgresql.md) |
-| **MariaDB / MySQL** | Gated | Code | Code | Code | Yes | [`mariadb-integration.yml`](../.github/workflows/mariadb-integration.yml) · [mariadb.md](mariadb.md) |
-| **SQL Server** | Gated | Gated | Gated | Code | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
-| **Sybase (ASE)** | Code | Code | Off¹ | Code | No | [driver.md](../driver.md) |
-| **Oracle** | Gated | Code | Code | Code | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
-| **DB2** | N/A² | Code | Code | — | No | Dialect file only |
+| **MariaDB / MySQL** | Gated | Gated | Gated | N/A¹ | Yes | [`mariadb-integration.yml`](../.github/workflows/mariadb-integration.yml) · [mariadb.md](mariadb.md) |
+| **SQL Server** | Gated | Gated | Gated | Gated | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
+| **Sybase (ASE)** | Code | Code | Off² | Code | No | [driver.md](../driver.md) |
+| **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
+| **DB2** | N/A³ | Code | Code | Code | No | Dialect file only |
 
-¹ Sybase dialect disables MERGE/UPSERT until ASE is integration-gated (`supportsUpsert()` false).
+¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
+² Sybase dialect disables MERGE/UPSERT until ASE is integration-gated.  
+³ `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
 
-² `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
+Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
 
 ---
 
 ## What “Gated” means
 
 A **Gated** row means GitHub Actions runs a dedicated job against a live or in-process
-database service and fails the build on regression. It does **not** guarantee every
-engine feature or every config combination — see each engine’s integration page for
-suite scope.
+database service and fails the build on regression. See each engine’s integration page
+for the exact test classes and methods.
 
 | Engine | Local command | CI job |
 | ------ | ------------- | ------ |
@@ -79,5 +81,5 @@ Treat that as **integrator-owned validation**:
 
 - [configuration.md](../configuration.md) — `"driver"` (engine) and `transport`
 - [driver.md](../driver.md) — per-engine DSN and SQL rules
-- [oracle-testing.md](../oracle-testing.md) — deeper manual Oracle suites (RETURNING, MERGE, pagination)
+- [oracle-testing.md](../oracle-testing.md) — Oracle troubleshooting and evidence notes
 - [support/sqlite.md](../support/sqlite.md) — SQLite capability notes

@@ -6,22 +6,17 @@
 
 Full engine matrix: [README.md](README.md).
 
-The job starts PostgreSQL 16 plus Redis and Memcached service containers. Local runs
-require PHP 8.2+, `ext-pdo_pgsql`, and matching env vars (see Command). Tests skip when
-`pdo_pgsql` or the service is unavailable.
-
 ## Suite
 
-The v1 integration test lives in `tests/Postgres` and is run with
-`tests/postgres-bootstrap.php` so it can use a PostgreSQL-specific config
-without conflicting with the default SQLite test bootstrap.
+`tests/Postgres/PostgresIntegrationTest.php` with `tests/postgres-bootstrap.php`.
 
-It proves:
-
-* `Database::connect()` can select a PostgreSQL connection from JSON config
-* named-parameter writes execute through UDA
-* named-parameter reads return expected values
-* CI can gate a real PostgreSQL service separately from the default test suite
+| Test | Proves |
+| ---- | ------ |
+| `test_postgres_read_write_and_named_parameter_execution` | Connect + named CRUD |
+| `test_postgres_transaction_commits` | `Database::transaction()` |
+| `test_postgres_insert_returning_row` | `INSERT … RETURNING` via builder |
+| `test_postgres_upsert_on_conflict` | `ON CONFLICT` upsert |
+| `test_postgres_pagination_limit_offset` | `limit()` / `offset()` on live rows |
 
 ## Command
 
@@ -36,12 +31,5 @@ vendor/bin/phpunit --bootstrap tests/postgres-bootstrap.php tests/Postgres
 
 ## CI Enforcement
 
-GitHub Actions workflow: `.github/workflows/postgres-integration.yml`
-
-The `postgres-integration` job:
-
-1. Starts PostgreSQL 16, Redis, and Memcached services.
-2. Installs PHP 8.2 with `pdo_pgsql`, `redis`, and `memcached`.
-3. Installs Composer dependencies.
-4. Runs architecture guardrails with `composer check`.
-5. Runs `vendor/bin/phpunit --bootstrap tests/postgres-bootstrap.php tests/Postgres`.
+The `postgres-integration` job starts PostgreSQL 16 (plus Redis/Memcached for broader
+suites when extended), PHP 8.2 + `pdo_pgsql`, `composer check`, then PHPUnit as above.

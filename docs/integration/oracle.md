@@ -10,20 +10,19 @@ Full engine matrix: [README.md](README.md).
 
 CI uses [gvenzl/oracle-free](https://hub.docker.com/r/gvenzl/oracle-free) (Oracle Database
 **Free** for development and testing). Image build scripts are Apache-2.0; database use
-must comply with Oracle’s Free license terms. This is **not** Oracle partner
-certification.
+must comply with Oracle’s Free license terms.
 
 ## Suite
 
-`tests/Oracle/OracleIntegrationTest.php` with `tests/oracle-bootstrap.php`.
+`tests/oracle-bootstrap.php` loads config; PHPUnit runs all of `tests/Oracle/`:
 
-v1 CI scope:
+| Class | Proves |
+| ----- | ------ |
+| `OracleIntegrationTest` | Connect + named CRUD smoke |
+| `PaginationTest` | `OFFSET … FETCH NEXT`, streaming, invalid limit |
+| `ReturningAndMergeTest` | RETURNING INTO (insert/update/delete), MERGE upsert, multi-row returning |
 
-* `Database::connect()` against `driver: oracle`
-* named-parameter INSERT/SELECT
-
-RETURNING, MERGE, and pagination suites are documented in
-[oracle-testing.md](../oracle-testing.md) for manual or future expansion.
+Shared harness: `OracleTestCase` (identifier warning suppression, table fixtures).
 
 ## Command
 
@@ -36,25 +35,9 @@ UDA_ORACLE_PASSWORD=uda_test_pw \
 vendor/bin/phpunit --bootstrap tests/oracle-bootstrap.php tests/Oracle
 ```
 
-Local Docker (matches CI user):
-
-```bash
-docker run --rm -d -p 1521:1521 \
-  -e ORACLE_PASSWORD='Oracle_UDA_CI1' \
-  -e APP_USER=uda_test \
-  -e APP_USER_PASSWORD=uda_test_pw \
-  gvenzl/oracle-free:23-slim-faststart
-```
-
-Requires `oci8` and `pdo_oci` PHP extensions.
-
 ## CI Enforcement
 
-GitHub Actions: `.github/workflows/oracle-integration.yml`
+Starts `gvenzl/oracle-free:23-slim-faststart`, PHP 8.2 + `oci8` + `pdo_oci`, `composer check`,
+then full `tests/Oracle` (expect several minutes on cold start).
 
-The `oracle-integration` job:
-
-1. Starts `gvenzl/oracle-free:23-slim-faststart` with `healthcheck.sh` (90s start period).
-2. Installs PHP 8.2 with `oci8` and `pdo_oci`.
-3. Runs `composer check`.
-4. Runs PHPUnit with env vars for `uda_test` application user.
+See [oracle-testing.md](../oracle-testing.md) for troubleshooting and version evidence.

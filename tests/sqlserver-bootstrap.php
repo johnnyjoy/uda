@@ -33,11 +33,12 @@ $config = [
             'pass' => getenv('MSSQL_PASSWORD') ?: 'Your_Str0ng!Passw0rd123',
             'init_sql' => [
                 <<<'SQL'
-IF OBJECT_ID(N'dbo.uda_mssql_cert', N'U') IS NULL
+IF OBJECT_ID(N'dbo.uda_mssql_ig', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.uda_mssql_cert (
+    CREATE TABLE dbo.uda_mssql_ig (
         id INT NOT NULL PRIMARY KEY,
-        name NVARCHAR(100) NOT NULL
+        name NVARCHAR(100) NOT NULL,
+        score INT NOT NULL DEFAULT 0
     );
 END
 SQL,
