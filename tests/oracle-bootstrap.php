@@ -8,6 +8,12 @@ if (is_file($autoload)) {
     require $autoload;
 }
 
+// Mitigate pdo_oci statement-GC segfaults when many statements run in one process
+// (https://github.com/php/php-src/issues/18494). CI also uses --process-isolation.
+if (extension_loaded('pdo_oci')) {
+    gc_disable();
+}
+
 $baseDir = sys_get_temp_dir() . '/uda-oracle-tests-' . getmypid();
 
 if (!is_dir($baseDir)) {

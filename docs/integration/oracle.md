@@ -38,6 +38,7 @@ vendor/bin/phpunit --bootstrap tests/oracle-bootstrap.php tests/Oracle
 ## CI Enforcement
 
 Starts `gvenzl/oracle-free:23-slim-faststart`, PHP 8.2 + `oci8` + `pdo_oci`, `composer check`,
-then full `tests/Oracle` (expect several minutes on cold start).
+then full `tests/Oracle` with `--process-isolation` (avoids `pdo_oci` statement-GC segfaults in
+one long-lived process). Expect several minutes on cold start.
 
 See [oracle-testing.md](../oracle-testing.md) for troubleshooting and version evidence.

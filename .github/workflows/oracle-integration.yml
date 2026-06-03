@@ -46,7 +46,9 @@ jobs:
           UDA_ORACLE_SERVICE: FREEPDB1
           UDA_ORACLE_USER: uda_test
           UDA_ORACLE_PASSWORD: uda_test_pw
-        run: vendor/bin/phpunit --bootstrap tests/oracle-bootstrap.php tests/Oracle
+        # pdo_oci can segfault when statement handles are GC'd after many tests in one
+        # process (php/php-src#18494). Per-test processes avoid that.
+        run: vendor/bin/phpunit --process-isolation --bootstrap tests/oracle-bootstrap.php tests/Oracle
 
       - name: Reference Oracle integration docs
         run: echo "See docs/integration/oracle.md for details"

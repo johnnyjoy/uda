@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration depth (Phase A): Postgres/MariaDB/SQL Server expanded tests; Oracle `PaginationTest` + `ReturningAndMergeTest` restored in CI.
 - Fix SQL Server and Oracle `Select` pagination: emit integer literals for `OFFSET`/`FETCH` (drivers reject bound row-count parameters).
 - Fix Oracle CI pagination: use `FETCH FIRST` when offset is unset (avoid `OFFSET 0` + `pdo_oci` ORA-03137); lighter fixture resets; reconnect on ORA-03114.
+- Fix Oracle CI exit 139: run `tests/Oracle` with `--process-isolation` and disable GC in `oracle-bootstrap.php` (pdo_oci statement-GC segfault, php#18494).
 - Structured `QueryException`: `category()`, `sqlState()`, `driverCode()`; factories `guardrail()`, `fromPdo()`, `unsupported()` (`docs/public-api.md` §7).
 - Connection cache option `require_table_hints` — fail loud on hintless raw SQL reads when cache is enabled (`docs/configuration.md`, `docs/caching.md`).
 - Connection option `trace: true` emits `E_USER_NOTICE` on driver alias normalization during ingestion (`docs/configuration.md`).
