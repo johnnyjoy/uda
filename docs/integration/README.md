@@ -28,7 +28,7 @@ Legend:
 | **PostgreSQL** | Gated | Gated | Gated | Gated | Yes | [`postgres-integration.yml`](../.github/workflows/postgres-integration.yml) · [postgresql.md](postgresql.md) |
 | **MariaDB / MySQL** | Gated | Gated | Gated | N/A¹ | Yes | [`mariadb-integration.yml`](../.github/workflows/mariadb-integration.yml) · [mariadb.md](mariadb.md) |
 | **SQL Server** | Gated | Gated | Gated | Gated | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
-| **Sybase (ASE)** | Spike | Spike | Off² | Spike | Spike³ | [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) · [sybase.md](sybase.md) |
+| **Sybase (ASE)** | Code | Code | Off² | Code | Manual³ | [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) · [sybase.md](sybase.md) |
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
 | **DB2** | N/A⁴ | Code | Code | Code | No | Dialect file only |
 
@@ -54,7 +54,7 @@ for the exact test classes and methods.
 | MariaDB | See [mariadb.md](mariadb.md) | `mariadb-integration` |
 | SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-integration` |
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
-| Sybase (spike) | See [sybase.md](sybase.md) | `sybase-integration` (optional) |
+| Sybase | See [sybase.md](sybase.md) | `sybase-integration` (manual + license secret) |
 
 Also run `composer check` before merge (architecture guardrails).
 

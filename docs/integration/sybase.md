@@ -1,23 +1,54 @@
 # Sybase ASE Integration (spike)
 
-## Status
+## Spike outcome (2026-06-03)
 
-**Optional CI spike** on every push and pull request (`.github/workflows/sybase-integration.yml`).
+**Required CI on public GitHub Actions: no-go.**
 
-The job uses `continue-on-error: true` until the community Docker image proves stable
-across several runs. It is **not** merge-blocking yet.
+The community image [superbeeeeeee/docker-sybase](https://hub.docker.com/r/superbeeeeeee/docker-sybase)
+does not include a valid SAP ASE license. On GHA the service container never becomes healthy:
 
-Full engine matrix: [README.md](README.md).
+```text
+SySAM: Failed to obtain license(s) for ASE_CORE feature
+SySAM: Cannot find license file.
+There is no valid license for ASE server product. Installation date is not found
+or installation grace period has expired. Server will not boot.
+```
+
+The image author documents that a **SAP ASE Developer Edition license must be mounted**
+for dev use; the image grace period may also expire. This is an **SAP licensing constraint**,
+not a UDA defect.
+
+UDA keeps:
+
+- Dialect and capability tests in `composer test` (no live ASE).
+- Live integration tests under `tests/Sybase/` for local or licensed runners.
+- A **manual** workflow (`.github/workflows/sybase-integration.yml`) — not on push/PR.
+
+## CI workflow
+
+| Trigger | What runs |
+| ------- | --------- |
+| `workflow_dispatch` (no secret) | `composer check` + `SybaseCapabilitiesTest` |
+| `workflow_dispatch` + `SYBASE_LICENSE_B64` | Boots ASE with mounted license, runs `tests/Sybase` |
+
+To enable live CI in your fork:
+
+1. Obtain SAP ASE Developer Edition license file (`license.dat` or `.lic`).
+2. Base64-encode it and add repo secret **`SYBASE_LICENSE_B64`**.
+3. Run **Sybase Integration (manual)** from the Actions tab.
+
+Do not commit SAP license files to the repository.
+
+## Status vs merge-blocking engines
+
+Sybase is **not** merge-blocking. Five engines are gated: SQLite, PostgreSQL, MariaDB,
+SQL Server, Oracle. See [README.md](README.md).
 
 ## Licensing and image disclaimer
 
-CI uses the community image [superbeeeeeee/docker-sybase](https://hub.docker.com/r/superbeeeeeee/docker-sybase).
-
-- Intended for **local development and CI spikes only**, not production.
-- SAP ASE Developer Edition licensing applies; image validity may be time-limited.
+- Intended for **local development and licensed CI only**, not production.
+- SAP ASE Developer Edition licensing applies.
 - No official SAP Docker image is used.
-
-Do not treat a green spike run as production readiness for Sybase.
 
 ## Suite
 
@@ -29,14 +60,20 @@ Do not treat a green spike run as production readiness for Sybase.
 | `test_sybase_transaction_commits` | `Database::transaction()` |
 | `test_sybase_insert_returning_output` | `INSERT … OUTPUT` via builder |
 | `test_sybase_pagination_limit_offset` | `OFFSET … FETCH NEXT` (T-SQL shape) |
-| `test_sybase_upsert_builder_throws` | MERGE upsert disabled until ASE is gated (`SybaseCapabilitiesTest` alignment) |
+| `test_sybase_upsert_builder_throws` | MERGE upsert disabled until ASE is gated |
 
-Config uses `"driver": "sybase", "transport": "dblib"` (not `"driver": "dblib"` alone — that
-normalizes to sybase + dblib but is easy to confuse with SQL Server).
+Config uses `"driver": "sybase", "transport": "dblib"`.
 
-## Command
+## Local command
 
 ```bash
+# Mount your SAP license (path varies by image; superbeeeeeee expects flexlm):
+docker run -d -p 5000:5000 \
+  -v /path/to/licenses:/usr/local/flexlm/licenses:ro \
+  -e SA_PASSWORD=Sybase_UDA_CI1 \
+  -e DATABASE=master \
+  superbeeeeeee/docker-sybase:latest
+
 TDSVER=7.4 \
 SYBASE_HOST=127.0.0.1 \
 SYBASE_PORT=5000 \
@@ -46,24 +83,7 @@ SYBASE_PASSWORD='Sybase_UDA_CI1' \
 vendor/bin/phpunit --bootstrap tests/sybase-bootstrap.php tests/Sybase
 ```
 
-## CI enforcement
-
-1. Start `superbeeeeeee/docker-sybase` on port **5000** (`SA_PASSWORD`, `healthcheck` script).
-2. Install FreeTDS + PHP 8.2 `pdo_dblib`.
-3. Run `composer check`, then the Sybase PHPUnit suite with `TDSVER=7.4`.
-
-## Promotion (Phase B3)
-
-After **three consecutive green** spike runs on `main`, consider:
-
-- Remove `continue-on-error` from the workflow.
-- Add `sybase-integration` to branch protection alongside other `*-integration` jobs.
-
-If the job stays flaky, restrict to `workflow_dispatch` or a nightly cron and document that
-in CONTRIBUTING.
-
 ## MERGE / upsert (Phase B4)
 
 `Query/Dialect/Sybase` sets `supportsMerge()` and `supportsUpsert()` to **false** until ASE
-MERGE is verified in this container. A future spike can attempt live MERGE and update
-`tests/Query/SybaseCapabilitiesTest.php` if ASE accepts UDA’s emitted SQL.
+MERGE is verified against a licensed container. See `tests/Query/SybaseCapabilitiesTest.php`.
