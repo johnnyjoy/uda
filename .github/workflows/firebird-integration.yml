@@ -5,14 +5,13 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Optional integration: official Firebird 5 + pdo_firebird. Job uses continue-on-error
-# until three consecutive green runs on master; then remove continue-on-error and
-# add firebird-integration to branch protection.
+# Merge-blocking integration: official Firebird 5 + pdo_firebird.
+# Expect ~2–5 minutes (container start + extension install). Add firebird-integration
+# to branch protection required checks alongside other *-integration jobs.
 jobs:
   firebird-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
 
     services:
       firebird:

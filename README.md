@@ -35,9 +35,10 @@ a guide.
 **Normative matrix:** [`docs/integration/README.md`](docs/integration/README.md).
 
 CI integration-gates **SQLite**, **PostgreSQL**, **MariaDB**, **SQL Server**
-(`sqlserver` + **`dblib`** on Linux CI), **Oracle**, and **DB2**. Workflows:
+(`sqlserver` + **`dblib`** on Linux CI), **Oracle**, **DB2**, and **Firebird**. Workflows:
 `sqlite-integration.yml`, `postgres-integration.yml`, `mariadb-integration.yml`,
-`sqlserver-integration.yml`, `oracle-integration.yml`, `db2-integration.yml`. Engines in
+`sqlserver-integration.yml`, `oracle-integration.yml`, `db2-integration.yml`,
+`firebird-integration.yml`. Engines in
 `config/example-config.json` illustrate config shape — **Sybase** is not CI-gated.
 Worker/concurrency rules: `docs/architecture.md`.
 

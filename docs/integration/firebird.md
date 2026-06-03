@@ -2,16 +2,14 @@
 
 ## Status
 
-**Optional CI** on push and pull request (`.github/workflows/firebird-integration.yml`).
-
-The job uses **`continue-on-error: true`** until three consecutive green runs on the
-default branch. After that, remove `continue-on-error` and add **`firebird-integration`**
-to branch protection required checks.
+**Enforced in CI** on every push and pull request (`.github/workflows/firebird-integration.yml`).
 
 **Connect path:** `driver: firebird` (alias `interbase`) with bundled PHP **`pdo_firebird`**.
 
 Image: official [`firebirdsql/firebird:5-noble`](https://hub.docker.com/r/firebirdsql/firebird).
 Expect **~2–5 minutes** per run (container start + extension install via setup-php).
+
+**Branch protection:** add required check `firebird-integration` with the other `*-integration` jobs.
 
 Full engine matrix: [README.md](README.md).
 

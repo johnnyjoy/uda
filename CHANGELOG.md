@@ -11,16 +11,12 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
-### Added
-
-- **`firebird` engine connectable** via `UDA\Driver\Firebird` and `pdo_firebird` (MERGE upsert,
-  RETURNING, pagination; writable CTE off). Optional `firebird-integration` CI job — see
-  `docs/integration/firebird.md`.
-
 ## [1.0.0] - 2026-06-03
 
 ### Added
 
+- **`firebird` engine connectable** via `UDA\Driver\Firebird` and `pdo_firebird` (MERGE upsert,
+  RETURNING, pagination; writable CTE off). See `docs/integration/firebird.md`.
 - Structured `QueryException`: `category()`, `sqlState()`, `driverCode()`; factories
   `guardrail()`, `fromPdo()`, `unsupported()` (`docs/public-api.md` §7).
 - Connection cache option `require_table_hints` — fail loud on hintless raw SQL reads
@@ -35,8 +31,8 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
   scoped to a connection namespace (not a substitute for app cache invalidation).
 - SQL Server: optional `params.trust_server_certificate` for the `sqlsrv` transport
   (local/CI containers without full TLS trust chains).
-- GitHub Actions **integration** jobs for PostgreSQL, MariaDB, SQL Server, Oracle, and DB2
-  (SQLite already covered); matrix in `docs/integration/README.md`.
+- GitHub Actions **integration** jobs for PostgreSQL, MariaDB, SQL Server, Oracle, DB2, and
+  Firebird (SQLite already covered); matrix in `docs/integration/README.md`.
 - Composer package **`universal-data-abstractor/universal-data-abstractor`** (Universal Data Abstractor).
 - `tools/check-license.php` — MIT-only `@license` headers in `src/`.
 - Contributor docs: `CONTRIBUTING.md`, `SECURITY.md`, `docs/releases.md`; GitLab MR

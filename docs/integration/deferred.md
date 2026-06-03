@@ -174,7 +174,7 @@ not by default.
 
 ## Suggested issue labels (if tracking in GitHub)
 
-- `integration:firebird` — driver + connect + optional CI (post-v1)
+- `integration:firebird` — writable CTE or follow-ups on Firebird dialect
 - `integration:writable-cte` — future dialect + tests
 
 ~~`integration:db2`~~ — done. ~~`integration:sqlsrv`~~ — closed.
