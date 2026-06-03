@@ -1,12 +1,12 @@
 {
-    "name": "universal-data-abstraction/universal-data-abstraction",
-    "description": "A comprehensive PHP 8.2+ Universal Data Abstraction System",
+    "name": "universal-data-abstractor/universal-data-abstractor",
+    "description": "Universal Data Abstractor (UDA) — PHP 8.2+ deterministic SQL execution and query composition",
     "type": "library",
     "license": "MIT",
     "authors": [
         {
-            "name": "Universal Data Abstraction Team",
-            "email": "team@universaldataabstraction.com"
+            "name": "Universal Data Abstractor Team",
+            "email": "team@universaldataabstractor.com"
         }
     ],
     "require": {
@@ -26,7 +26,6 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "UniversalDataAbstraction\\Tests\\": "tests/",
             "Tests\\": "tests/"
         }
     },

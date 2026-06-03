@@ -5,10 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**Audience:** people who depend on the UDA package — upgrading versions, wiring
-config, and reviewing breaking API changes. CI job names, internal refactor phases,
-and spike outcomes belong in `docs/integration/` or commit messages, not here.
-See `docs/releases.md` and `CONTRIBUTING.md`.
+**Audience:** integrators adopting UDA and reviewing API changes at release time.
+CI job names and maintainer workflow detail belong in `docs/integration/` or
+`CONTRIBUTING.md`, not here. See `docs/releases.md`.
 
 ## [Unreleased]
 
@@ -30,6 +29,7 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
   (local/CI containers without full TLS trust chains).
 - GitHub Actions **integration** jobs for PostgreSQL, MariaDB, SQL Server, Oracle, and DB2
   (SQLite already covered); matrix in `docs/integration/README.md`.
+- Composer package **`universal-data-abstractor/universal-data-abstractor`** (Universal Data Abstractor).
 - `tools/check-license.php` — MIT-only `@license` headers in `src/`.
 - Contributor docs: `CONTRIBUTING.md`, `SECURITY.md`, `docs/releases.md`; GitLab MR
   templates for mirror workflows.
@@ -43,9 +43,8 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
 
 - Renamed abstract builder base to `UDA\Query` (`src/UDA/Query.php`); removed
   `UDA\Query\Builder`. Concrete builders use `extends \UDA\Query`.
-- **Breaking:** GitHub required check names `*-cert` → `*-integration` (update branch
-  protection if you pinned old names). Wording avoids TLS “certificate” confusion.
-- **Breaking:** `UDA\Cache::clearForTests()` renamed to `UDA\Cache::clear()` — same
+- GitHub required check names use `*-integration` (not `*-cert`).
+- `UDA\Cache::clearForTests()` renamed to `UDA\Cache::clear()` — same
   scope (process-local statics only; does not purge Memcached/Redis).
 - Config ingestion normalizes each connection to **`engine`** + **`transport`**; per-engine
   classes under `UDA\Driver\` build DSN strings; `UDA\Driver` owns `new PDO()`.
@@ -58,8 +57,6 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
   on ASE (`supportsMerge` / `supportsUpsert` false).
 - **`db2` engine connectable** via `UDA\Driver\Db2` and `pdo_ibm` (MERGE upsert and
   pagination builders; `returning()` still unsupported per dialect).
-- **Breaking (maintainers):** add required check **`db2-integration`** in branch protection
-  alongside other `*-integration` jobs when upgrading from a release without DB2 CI.
 - PDO failures map through `QueryException::fromPdo()` with SQLSTATE extraction.
 - `Query\Expr` aliases quote via `SQL\Identifier` / `Driver::quoteIdentifier()` (same
   rules as column identifiers).

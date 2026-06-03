@@ -8,10 +8,9 @@
 
 # 1. Purpose
 
-Universal Data Abstractor (UDA) exists for exactly two purposes:
-
-1. **Uniform database access**
-2. **Performance improvement through transparent caching**
+Universal Data Abstractor (UDA) is the **abstractor** for uniform database access
+and transparent read caching through one execution pipeline. Integrators build
+repositories and DALs on `Database` or `Link`.
 
 No other objectives exist.
 

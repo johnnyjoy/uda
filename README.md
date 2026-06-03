@@ -1,7 +1,9 @@
 # UDA
 
-Universal Data Abstraction (UDA) is a PHP 8.2+ library for deterministic SQL
-execution through one application-facing handle: `UDA\Database`.
+Universal Data Abstractor (UDA) is a PHP 8.2+ **abstractor** for deterministic SQL
+execution through one handle: `UDA\Database` — engine routing, fluent builders,
+and transparent read cache. Application classes build their domain data layer on
+`Database` or `UDA\Link`.
 
 ## Start Here
 
@@ -18,7 +20,7 @@ execution through one application-facing handle: `UDA\Database`.
 
 **Agent skills (build a DAL on UDA):** `skills/README.md` — checklists for Cursor, Claude, OpenCode, etc.
 
-* Install: `composer require universal-data-abstraction/universal-data-abstraction`
+* Install: `composer require universal-data-abstractor/universal-data-abstractor`
 * Getting started: `docs/getting-started.md`
 * Public API: `docs/public-api.md`
 * Product contract: `docs/product-contract-v1.md`

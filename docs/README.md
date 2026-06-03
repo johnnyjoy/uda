@@ -2,6 +2,9 @@
 
 **UDA — Universal Data Abstractor**
 
+Deterministic SQL abstractor: one pipeline, dialect-aware builders, transparent
+read cache. Integrators build domain data layers on `Database` or `Link`.
+
 A small, high-performance SQL execution and query composition system.
 
 Goals:

@@ -32,21 +32,16 @@ Optional: `redis`, `memcached`, `igbinary`
 
 Universal Data Abstractor (UDA) is a deterministic SQL execution engine with transparent read acceleration.
 
+UDA is the **abstractor**: one pipeline (`Database` → `Driver` → PDO), dialect-aware
+builders, named-parameter discipline, and transparent read caching. Integrators
+build repositories, DALs, and domain APIs on `Database` or `Link`.
+
 UDA exists to:
 
 1. Centralize SQL.
 2. Enforce execution discipline.
 3. Accelerate reads safely.
 4. Minimize system entropy.
-
-UDA is **not**:
-
-* an ORM
-* ActiveRecord
-* schema reflection
-* query inference
-* SQL parsing
-* automatic table discovery
 
 UDA executes SQL deterministically.
 

@@ -22,7 +22,7 @@ or an ORM layer.
 ## Install
 
 ```bash
-composer require universal-data-abstraction/universal-data-abstraction
+composer require universal-data-abstractor/universal-data-abstractor
 ```
 
 UDA requires PHP 8.2+ and PDO.

@@ -3,8 +3,7 @@
 **Status:** authoritative product target for finishing UDA v1.
 
 UDA is a PHP 8.2+ Composer library for application and repository classes
-that need deterministic SQL execution across relational database engines
-without ORM ceremony.
+that need deterministic, explicit SQL execution across relational database engines.
 
 ## Product Promise
 
@@ -14,6 +13,10 @@ Application code imports one handle:
 use UDA\Database;
 ```
 
+UDA is the **abstractor**: engine routing, builders, cache, and one execution
+pipeline. Domain shape — tables, queries, methods — lives in integrator classes,
+often via `UDA\Link`.
+
 From that point forward, `Database` is the database. Application classes use
 `Database` to connect, run named-parameter SQL, create fluent builders, execute
 transactions, and inspect the last executed SQL for debugging. Application
@@ -22,26 +25,18 @@ dialect classes, or connection wrapper objects.
 
 ## Who UDA Serves
 
-UDA serves PHP classes that own database work directly, usually repository or
-domain-specific data access classes. These classes need:
+UDA serves PHP classes that own database work directly — repositories and
+domain-specific data access classes built on `Database` or `Link`.
+
+## What UDA Provides
 
 * one uniform execution model across engines
-* explicit SQL rather than object-relational mapping
+* explicit SQL via raw strings and fluent builders
 * named parameter discipline before SQL reaches PDO
 * deterministic query-builder output for common CRUD and reads
 * transparent read acceleration without caller-visible cache calls
 * multiple named connections, including multiple connections of the same backend
-
-## Product Boundaries
-
-UDA is not:
-
-* an ORM
-* Active Record
-* a migration system
-* schema reflection
-* SQL parsing or table inference
-* a framework service layer
+* class-scoped delegation via `Link` for domain data layers
 
 UDA exists only where a feature improves uniformity, performance, safety,
 determinism, or developer clarity. Traditional PHP patterns are acceptable only
