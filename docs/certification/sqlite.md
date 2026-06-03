@@ -42,7 +42,7 @@ GitHub Actions workflow: `.github/workflows/sqlite-cert.yml`
 
 The `sqlite-cert` job runs on every push and pull request. Steps:
 
-1. Spin up Redis (`redis:7`) and Memcached (`memcached:1.6`) services.
+1. Spin up Redis (`redis:7`) and Memcached (`memcached:1.6`) services (TCP health checks; official image has no `memcached-tool`).
 2. Install PHP 8.2 with `redis`/`memcached` extensions and Composer dependencies.
 3. Run architecture guardrails with `composer check`.
 4. Run `vendor/bin/phpunit tests/SQLite tests/Cache tests/Runtime`.

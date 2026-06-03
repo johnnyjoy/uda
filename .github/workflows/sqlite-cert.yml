@@ -22,7 +22,7 @@ jobs:
         ports:
           - 11211:11211
         options: >-
-          --health-cmd "memcached-tool localhost stats"
+          --health-cmd "bash -c '(echo >/dev/tcp/127.0.0.1/11211)'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
