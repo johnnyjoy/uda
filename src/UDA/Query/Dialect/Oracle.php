@@ -76,15 +76,16 @@ final class Oracle extends Dialect
     {
         $fragment = '';
 
+        // LIMIT/OFFSET are validated ints; pdo_oci mishandles bound OFFSET/FETCH row counts.
         if ($state->offset !== null) {
-            $fragment .= ' OFFSET ' . $state->param($state->offset) . ' ROWS';
+            $fragment .= sprintf(' OFFSET %d ROWS', $state->offset);
         }
 
         if ($state->limit !== null) {
             if ($fragment === '') {
                 $fragment = ' OFFSET 0 ROWS';
             }
-            $fragment .= ' FETCH NEXT ' . $state->param($state->limit) . ' ROWS ONLY';
+            $fragment .= sprintf(' FETCH NEXT %d ROWS ONLY', $state->limit);
         }
 
         return $fragment;

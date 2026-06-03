@@ -84,11 +84,12 @@ class SqlServer extends Dialect
             throw new QueryException('SQL Server requires ORDER BY when using pagination');
         }
 
+        // LIMIT/OFFSET are validated ints on the builder; T-SQL rejects bound row counts.
         $offset = $state->offset ?? 0;
-        $fragment = ' OFFSET ' . $state->param($offset) . ' ROWS';
+        $fragment = sprintf(' OFFSET %d ROWS', $offset);
 
         if ($state->limit !== null) {
-            $fragment .= ' FETCH NEXT ' . $state->param($state->limit) . ' ROWS ONLY';
+            $fragment .= sprintf(' FETCH NEXT %d ROWS ONLY', $state->limit);
         }
 
         return $fragment;

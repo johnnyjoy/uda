@@ -23,7 +23,7 @@ final class PaginationTest extends OracleTestCase
         $builder = $this->baseQuery()->limit(3);
 
         $sql = strtoupper($builder->toSql()->getQuery());
-        $this->assertStringContainsString('FETCH NEXT :Q1 ROWS ONLY', $sql);
+        $this->assertStringContainsString('FETCH NEXT 3 ROWS ONLY', $sql);
 
         $rows = $this->fetchIds($builder);
         $this->assertSame([1, 2, 3], $rows);
@@ -34,7 +34,7 @@ final class PaginationTest extends OracleTestCase
         $builder = $this->baseQuery()->offset(5);
 
         $sql = strtoupper($builder->toSql()->getQuery());
-        $this->assertStringContainsString('OFFSET :Q1 ROWS', $sql);
+        $this->assertStringContainsString('OFFSET 5 ROWS', $sql);
 
         $rows = $this->fetchIds($builder);
         $this->assertSame([6, 7, 8, 9, 10], $rows);
@@ -45,8 +45,8 @@ final class PaginationTest extends OracleTestCase
         $builder = $this->baseQuery()->limit(3)->offset(4);
 
         $sql = strtoupper($builder->toSql()->getQuery());
-        $this->assertStringContainsString('OFFSET :Q1 ROWS', $sql);
-        $this->assertStringContainsString('FETCH NEXT :Q2 ROWS ONLY', $sql);
+        $this->assertStringContainsString('OFFSET 4 ROWS', $sql);
+        $this->assertStringContainsString('FETCH NEXT 3 ROWS ONLY', $sql);
 
         $rows = $this->fetchIds($builder);
         $this->assertSame([5, 6, 7], $rows);

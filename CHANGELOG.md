@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MariaDB integration (`mariadb-integration.yml`, `tests/MariaDb`, `docs/integration/mariadb.md`).
 - Oracle integration (`oracle-integration.yml`, `tests/Oracle`, `docs/integration/oracle.md`); `gvenzl/oracle-free` (Oracle Database Free).
 - Integration depth (Phase A): Postgres/MariaDB/SQL Server expanded tests; Oracle `PaginationTest` + `ReturningAndMergeTest` restored in CI.
+- Fix SQL Server and Oracle `Select` pagination: emit integer literals for `OFFSET`/`FETCH` (drivers reject bound row-count parameters).
 - Structured `QueryException`: `category()`, `sqlState()`, `driverCode()`; factories `guardrail()`, `fromPdo()`, `unsupported()` (`docs/public-api.md` §7).
 - Connection cache option `require_table_hints` — fail loud on hintless raw SQL reads when cache is enabled (`docs/configuration.md`, `docs/caching.md`).
 - Connection option `trace: true` emits `E_USER_NOTICE` on driver alias normalization during ingestion (`docs/configuration.md`).
