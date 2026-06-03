@@ -29,7 +29,6 @@ php -d memory_limit=-1 vendor/bin/phpstan analyse src/
 
 - `Purpose:` in every `src/UDA/**/*.php`
 - `@license MIT` in every `src/**/*.php` header
-- No placeholder `uda.example.com` URLs in `src/`
 - PDO usage **only** in `UDA\Driver`
 - Single `prepare`/`execute` hot path
 - Forbidden cross-domain imports

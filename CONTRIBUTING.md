@@ -15,7 +15,7 @@ in this tree. Run the same Composer commands locally before opening a PR.
 
 ```bash
 composer install --no-interaction --prefer-dist
-composer check    # Purpose, PDO path, imports, placeholder URLs, …
+composer check    # Purpose, PDO path, imports, …
 composer stan
 composer test
 ```
