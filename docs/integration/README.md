@@ -30,12 +30,13 @@ Legend:
 | **SQL Server** | Gated | Gated | Gated | Gated | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
 | **Sybase (ASE)** | Code | Code | Off² | Code | Manual³ | [sybase.md](sybase.md) · [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) |
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
-| **DB2** | N/A⁴ | Code | Code | Code | No | Dialect file only |
+| **DB2** | Code | Code | Code | N/A⁴ | Spike⁵ | [db2.md](db2.md) · [`db2-integration.yml`](../.github/workflows/db2-integration.yml) |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT.  
 ³ Not on push/PR CI (no upstream license); manual workflow + `UDA_SYBASE_LIVE` for licensees.  
-⁴ `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
+⁴ Db2 dialect rejects `returning()` before PDO; requires `pdo_ibm` at connect time.  
+⁵ CI job runs on push/PR but **`continue-on-error`** until stable; not branch-protection required yet.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
 
@@ -55,6 +56,7 @@ for the exact test classes and methods.
 | SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-integration` |
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
 | Sybase (live, optional) | `UDA_SYBASE_LIVE=1 composer test:sybase-live` | `sybase-integration` (manual only; not on PR) |
+| DB2 | See [db2.md](db2.md) | `db2-integration` (optional; may fail while stabilizing) |
 
 Also run `composer check` before merge (architecture guardrails).
 

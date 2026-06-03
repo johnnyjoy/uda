@@ -192,6 +192,7 @@ final class Driver
             'sqlite' => \UDA\Driver\SQLite::class,
             'oracle' => \UDA\Driver\Oracle::class,
             'pgsql' => \UDA\Driver\PostgreSQL::class,
+            'db2' => \UDA\Driver\Db2::class,
             default => null,
         };
     }
@@ -452,6 +453,7 @@ final class Driver
                 ? \UDA\Driver\Dblib::dsn($params)
                 : \UDA\Driver\SQLServer::dsn($params),
             'sybase' => \UDA\Driver\Sybase::dsn($params),
+            'db2' => \UDA\Driver\Db2::dsn($params),
             default => throw new ConfigException('Unsupported database engine: ' . (string) $engine),
         };
     }

@@ -12,8 +12,7 @@ declare(strict_types=1);
  * Purpose: Compiles query builders into DB2-specific SQL.
  *
  * Handles DB2 pagination and MERGE/upsert syntax in the Query domain.
- * Not connectable until UDA\Driver\Db2 exists — Database::queryDialect()
- * intentionally excludes engine db2 until then.
+ * Requires UDA\Driver\Db2 and pdo_ibm at connect time.
  */
 
 namespace UDA\Query\Dialect;
@@ -49,14 +48,19 @@ final class Db2 extends Dialect
             return '';
         }
 
+        // LIMIT/OFFSET are validated ints; Db2 LUW rejects bound row-count parameters.
+        if ($state->offset === null && $state->limit !== null) {
+            return sprintf(' FETCH FIRST %d ROWS ONLY', $state->limit);
+        }
+
         $fragment = '';
 
         if ($state->offset !== null) {
-            $fragment .= ' OFFSET ' . $state->param($state->offset) . ' ROWS';
+            $fragment .= sprintf(' OFFSET %d ROWS', $state->offset);
         }
 
         if ($state->limit !== null) {
-            $fragment .= ' FETCH NEXT ' . $state->param($state->limit) . ' ROWS ONLY';
+            $fragment .= sprintf(' FETCH NEXT %d ROWS ONLY', $state->limit);
         }
 
         return $fragment;

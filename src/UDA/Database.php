@@ -9,6 +9,7 @@ use UDA\Exception\ConnectionException;
 use UDA\Exception\QueryException;
 use UDA\Query;
 use UDA\Query\Delete;
+use UDA\Query\Dialect\Db2 as Db2Dialect;
 use UDA\Query\Dialect\Dialect;
 use UDA\Query\Dialect\MariaDb;
 use UDA\Query\Dialect\Oracle as OracleDialect;
@@ -627,6 +628,7 @@ final class Database
             'sqlserver' => new SqlServerDialect(),
             'sybase' => new Sybase(),
             'oracle' => new OracleDialect(),
+            'db2' => new Db2Dialect(),
             default => throw new QueryException(
                 'No SQL dialect available for engine: ' . $this->driver->engineName()
             ),

@@ -8,6 +8,7 @@
         <testsuite name="UDA">
             <directory>tests</directory>
             <exclude>tests/Sybase</exclude>
+            <exclude>tests/Db2</exclude>
         </testsuite>
         <testsuite name="SybaseLive">
             <directory>tests/Sybase</directory>

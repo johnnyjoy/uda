@@ -56,8 +56,10 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
   canonical keys only.
 - `UDA\Driver\Sybase` engine class; Sybase dialect disables MERGE/upsert until verified
   on ASE (`supportsMerge` / `supportsUpsert` false).
-- `db2` omitted from `Database::connect()` until `UDA\Driver\Db2` exists;
-  `Query/Dialect/Db2.php` remains for future compilation.
+- **`db2` engine connectable** via `UDA\Driver\Db2` and `pdo_ibm` (MERGE upsert and
+  pagination builders; `returning()` still unsupported per dialect).
+- Optional **`db2-integration`** GitHub Actions job (IBM community Db2 image; compiles
+  `pdo_ibm`; not merge-blocking until CI is stable).
 - PDO failures map through `QueryException::fromPdo()` with SQLSTATE extraction.
 - `Query\Expr` aliases quote via `SQL\Identifier` / `Driver::quoteIdentifier()` (same
   rules as column identifiers).

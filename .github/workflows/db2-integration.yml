@@ -1,0 +1,109 @@
+name: DB2 Integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Db2 Community Edition startup is slow and occasionally flaky; not merge-blocking
+# until three consecutive green runs on the default branch.
+jobs:
+  db2-integration:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 45
+
+    services:
+      db2:
+        image: icr.io/db2_community/db2:11.5.9.0
+        env:
+          LICENSE: accept
+          DB2INST1_PASSWORD: UDA_Db2_CI1
+          DBNAME: testdb
+          ARCHIVE_LOGS: "false"
+          AUTOCONFIG: "false"
+        ports:
+          - 50000:50000
+        options: >-
+          --privileged=true
+          --health-cmd="su - db2inst1 -c \"~/sqllib/bin/db2gcf -s\""
+          --health-interval 30s
+          --health-timeout 40s
+          --health-retries 15
+          --health-start-period 180s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Db2 setup to complete
+        run: |
+          set -euxo pipefail
+          cid='${{ job.services.db2.id }}'
+          for attempt in $(seq 1 60); do
+            if docker logs "$cid" 2>&1 | grep -q 'Setup has completed'; then
+              echo "Db2 setup completed (attempt ${attempt})"
+              exit 0
+            fi
+            sleep 10
+          done
+          docker logs "$cid" | tail -200 || true
+          exit 1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo
+          coverage: none
+          tools: pecl
+
+      - name: Cache IBM CLI driver
+        id: clidriver-cache
+        uses: actions/cache@v4
+        with:
+          path: clidriver
+          key: ${{ runner.os }}-ibm-clidriver-v1
+
+      - name: Install IBM CLI driver
+        if: steps.clidriver-cache.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://public.dhe.ibm.com/ibmdl/export/pub/software/data/db2/drivers/odbc_cli/linuxx64_odbc_cli.tar.gz
+          tar xzf linuxx64_odbc_cli.tar.gz
+
+      - name: Build and enable pdo_ibm
+        id: pdo-ibm
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxml2-dev
+          pecl download pdo_ibm
+          tar xzf pdo_ibm-*.tgz
+          cd pdo_ibm-*/
+          phpize
+          ./configure --with-pdo-ibm="${{ github.workspace }}/clidriver"
+          make -j"$(nproc)"
+          ext_dir="$(php -r 'echo ini_get("extension_dir");')"
+          sudo cp modules/pdo_ibm.so "${ext_dir}/"
+          echo "pdo_ibm_path=${ext_dir}/pdo_ibm.so" >> "$GITHUB_OUTPUT"
+          php -d extension=pdo_ibm.so -m | grep -i pdo_ibm
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run DB2 integration suites
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/clidriver/lib
+          DB2_HOST: 127.0.0.1
+          DB2_PORT: 50000
+          DB2_DATABASE: testdb
+          DB2_USER: db2inst1
+          DB2_PASSWORD: UDA_Db2_CI1
+        run: |
+          php -d extension=${{ steps.pdo-ibm.outputs.pdo_ibm_path }} \
+            vendor/bin/phpunit --bootstrap tests/db2-bootstrap.php tests/Db2
+
+      - name: Reference DB2 integration docs
+        run: echo "See docs/integration/db2.md for details"
