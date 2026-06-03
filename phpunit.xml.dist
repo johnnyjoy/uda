@@ -7,6 +7,10 @@
     <testsuites>
         <testsuite name="UDA">
             <directory>tests</directory>
+            <exclude>tests/Sybase</exclude>
+        </testsuite>
+        <testsuite name="SybaseLive">
+            <directory>tests/Sybase</directory>
         </testsuite>
     </testsuites>
     <source>

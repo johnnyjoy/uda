@@ -1,9 +1,8 @@
 # Deferred integration work (Phase C)
 
 Phases A and B of the integration expansion are **complete**. Five engines are
-merge-blocking in CI (SQLite, PostgreSQL, MariaDB, SQL Server, Oracle). Sybase ASE
-was spiked and **does not belong in required public CI** without a mounted SAP
-Developer license — see [sybase.md](sybase.md).
+merge-blocking in CI (SQLite, PostgreSQL, MariaDB, SQL Server, Oracle). **Sybase ASE** live tests and CI are **disabled** (retained in repo); config remains in
+code — see [sybase.md](sybase.md).
 
 This page records **explicitly deferred** follow-ups. None are required for the
 current integration milestone.
@@ -21,7 +20,7 @@ integration matrix.
 | Engine | Public GHA without secrets | UDA code ready? | Practical CI path |
 | ------ | -------------------------- | --------------- | ----------------- |
 | **DB2** | **Yes** (IBM community image + `LICENSE: accept`) | **No** — no `Driver/Db2.php` / connect | Service container after driver + `pdo_ibm` |
-| **Sybase ASE** | **No** — SAP ASE_CORE license required | **Yes** — tests + `pdo_dblib` | `workflow_dispatch` + `SYBASE_LICENSE_B64` (already in repo) |
+| **Sybase ASE** | **No** on upstream push/PR | **Yes** — code + unit tests | **Manual** — `SYBASE_LICENSE_B64` or `UDA_SYBASE_LIVE=1` |
 
 ---
 
@@ -88,12 +87,13 @@ services:
 | -------- | ------------------------ | ----- |
 | [superbeeeeeee/docker-sybase](https://hub.docker.com/r/superbeeeeeee/docker-sybase) | **No** (unless volume mount) | UDA spike: ASE_CORE failure, grace expired — [sybase.md](sybase.md) |
 | Mount `license.dat` via volume | **Yes, maintainer-owned** | Paths: `/usr/local/flexlm/licenses` (this image) or `/opt/sybase/SYSAM-2_0/licenses` (older images) |
-| Repo secret `SYBASE_LICENSE_B64` | **Yes** | **Implemented** in `.github/workflows/sybase-integration.yml` (`workflow_dispatch` + `docker run -v`) |
+| Repo secret `SYBASE_LICENSE_B64` | **Yes** | **Manual workflow** — not on upstream PR; fork/maintainer opt-in |
 | Build-from-SAP-tarball images ([cboudereau/docker-sybase](https://github.com/cboudereau/docker-sybase), [blieusong/ase-server](https://hub.docker.com/r/blieusong/ase-server)) | Same — mount license | Image build does not remove SySAM requirement |
 | SAP ASE Express in custom Dockerfile ([annagapuz/docker-sap-ase-express](https://github.com/annagapuz/docker-sap-ase-express)) | Express license from SAP download | Heavier build; still not “zero-config” on GHA |
 | [datagrip/sybase:16.0](https://github.com/DataGrip/docker-env) | Bundled dev image | Mac/Docker 20.x may need `-T11889` on `dataserver` (snap validation) |
 
-**UDA already supports Sybase in code:** `driver: sybase`, `transport: dblib`, `pdo_dblib`, `tests/Sybase/`.
+**UDA supports Sybase in code only:** `driver: sybase`, `transport: dblib`, `pdo_dblib`;
+`tests/Query/SybaseCapabilitiesTest.php` (no ASE).
 
 **No known method** for **anonymous** push/PR CI on `github.com` runners without either:
 
@@ -106,20 +106,19 @@ services:
 
 ### Recommendation for UDA
 
-1. **Sybase:** Keep current design — manual workflow + optional `SYBASE_LICENSE_B64`; do not add to branch protection on public repo.
+1. **Sybase:** **Not on upstream PR CI** — licensees use manual workflow or `UDA_SYBASE_LIVE=1`.
 2. **DB2:** Treat as a **separate build task**: driver/connect first, then copy IBM community service pattern into `db2-integration.yml`; expect slow/flaky startup and budget CI time accordingly.
-3. **Neither** should block the five-engine integration milestone.
 
 ---
 
-## Sybase ASE (Phase B outcome)
+## Sybase ASE — disabled (2026-06-03)
 
 | Item | Status |
 | ---- | ------ |
-| Required GHA on push/PR | **No-go** — ASE_CORE / SySAM license |
-| Live tests in repo | `tests/Sybase/` for local or licensed runners |
-| CI workflow | `workflow_dispatch` only; optional `SYBASE_LICENSE_B64` secret |
-| MERGE / upsert in dialect | Disabled until proven on licensed ASE (Phase B4) |
+| Required GHA on push/PR | **No** — upstream has no license |
+| Live tests in repo | Opt-in — `UDA_SYBASE_LIVE=1`; excluded from default `composer test` |
+| CI workflow | **Manual only** — `sybase-integration`; live steps if `SYBASE_LICENSE_B64` set |
+| MERGE / upsert in dialect | Stays **off** until live ASE is re-enabled and verified |
 
 ---
 
@@ -186,7 +185,6 @@ not by default.
 
 - `integration:db2` — driver + connect + optional CI
 - `integration:sqlsrv` — second SQL Server transport job
-- `integration:sybase-license` — licensed ASE runner path
 - `integration:writable-cte` — future dialect + tests
 
 ---

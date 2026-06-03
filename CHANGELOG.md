@@ -64,6 +64,9 @@ See `docs/releases.md` and `CONTRIBUTING.md`.
 - Docs: engine integration matrix, Octane/RoadRunner/Swoole concurrency notes, cache
   ops (`flush`/`clear`) vs read-path caching (`docs/caching.md`, `docs/integration/`).
 - All `src/` PHPDoc `@license` headers aligned to MIT; `@link` targets point at GitHub docs.
+- Sybase ASE live integration opt-in only: excluded from default `composer test`;
+  `UDA_SYBASE_LIVE=1` for local runs; manual `sybase-integration` workflow (not on
+  push/PR) supports forks with `SYBASE_LICENSE_B64`. Upstream has no SAP license.
 
 ### Fixed
 

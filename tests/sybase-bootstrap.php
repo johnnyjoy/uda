@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+/**
+ * Bootstrap for Sybase live integration tests (disabled unless UDA_SYBASE_LIVE=1).
+ *
+ *   UDA_SYBASE_LIVE=1 vendor/bin/phpunit --bootstrap tests/sybase-bootstrap.php tests/Sybase
+ */
+
 $autoload = __DIR__ . '/../vendor/autoload.php';
 
 if (is_file($autoload)) {

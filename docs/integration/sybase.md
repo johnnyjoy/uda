@@ -1,89 +1,60 @@
-# Sybase ASE Integration (spike)
+# Sybase ASE (optional live tests)
 
-## Spike outcome (2026-06-03)
+## Status
 
-**Required CI on public GitHub Actions: no-go.**
+**Upstream CI does not run Sybase** on push or pull request — this project has no SAP ASE
+license. Live tests and a **manual** workflow stay in the repo so **you** can run them if you
+have ASE and (for GHA) mount your own license.
 
-The community image [superbeeeeeee/docker-sybase](https://hub.docker.com/r/superbeeeeeee/docker-sybase)
-does not include a valid SAP ASE license. On GHA the service container never becomes healthy:
+**Still supported in code:** `driver: sybase` with `transport: dblib` (FreeTDS /
+`pdo_dblib`), `UDA\Driver\Sybase`, and `Query\Dialect/Sybase`.
 
-```text
-SySAM: Failed to obtain license(s) for ASE_CORE feature
-SySAM: Cannot find license file.
-There is no valid license for ASE server product. Installation date is not found
-or installation grace period has expired. Server will not boot.
-```
+Unit tests (no ASE): `tests/Query/SybaseCapabilitiesTest.php` — included in `composer test`.
 
-The image author documents that a **SAP ASE Developer Edition license must be mounted**
-for dev use; the image grace period may also expire. This is an **SAP licensing constraint**,
-not a UDA defect.
+## What is disabled vs available
 
-UDA keeps:
+| Context | Behavior |
+| ------- | -------- |
+| **Upstream push/PR** | No Sybase job — not merge-blocking |
+| **Default `composer test`** | Excludes `tests/Sybase/`; live tests skipped without `UDA_SYBASE_LIVE=1` |
+| **You have ASE + license (local)** | `UDA_SYBASE_LIVE=1` + `composer test:sybase-live` |
+| **You have license (GitHub fork)** | `workflow_dispatch` on **Sybase Integration (manual)** + repo secret `SYBASE_LICENSE_B64` |
 
-- Dialect and capability tests in `composer test` (no live ASE).
-- Live integration tests under `tests/Sybase/` for local or licensed runners.
-- A **manual** workflow (`.github/workflows/sybase-integration.yml`) — not on push/PR.
-
-## CI workflow
-
-| Trigger | What runs |
-| ------- | --------- |
-| `workflow_dispatch` (no secret) | `composer check` + `SybaseCapabilitiesTest` |
-| `workflow_dispatch` + `SYBASE_LICENSE_B64` | Boots ASE with mounted license, runs `tests/Sybase` |
-
-To enable live CI in your fork:
-
-1. Obtain SAP ASE Developer Edition license file (`license.dat` or `.lic`).
-2. Base64-encode it and add repo secret **`SYBASE_LICENSE_B64`**.
-3. Run **Sybase Integration (manual)** from the Actions tab.
-
-Do not commit SAP license files to the repository.
-
-## Status vs merge-blocking engines
-
-Sybase is **not** merge-blocking. Five engines are gated: SQLite, PostgreSQL, MariaDB,
-SQL Server, Oracle. See [README.md](README.md).
-
-## Licensing and image disclaimer
-
-- Intended for **local development and licensed CI only**, not production.
-- SAP ASE Developer Edition licensing applies.
-- No official SAP Docker image is used.
-
-## Suite
-
-`tests/sybase-bootstrap.php` loads config; PHPUnit runs `tests/Sybase/SybaseIntegrationTest.php`.
-
-| Test | Proves |
-| ---- | ------ |
-| `test_sybase_read_write_and_named_parameters` | Connect + named CRUD via `pdo_dblib` |
-| `test_sybase_transaction_commits` | `Database::transaction()` |
-| `test_sybase_insert_returning_output` | `INSERT … OUTPUT` via builder |
-| `test_sybase_pagination_limit_offset` | `OFFSET … FETCH NEXT` (T-SQL shape) |
-| `test_sybase_upsert_builder_throws` | MERGE upsert disabled until ASE is gated |
-
-Config uses `"driver": "sybase", "transport": "dblib"`.
-
-## Local command
+## Run live tests locally
 
 ```bash
-# Mount your SAP license (path varies by image; superbeeeeeee expects flexlm):
-docker run -d -p 5000:5000 \
-  -v /path/to/licenses:/usr/local/flexlm/licenses:ro \
-  -e SA_PASSWORD=Sybase_UDA_CI1 \
-  -e DATABASE=master \
-  superbeeeeeee/docker-sybase:latest
-
 TDSVER=7.4 \
+UDA_SYBASE_LIVE=1 \
 SYBASE_HOST=127.0.0.1 \
 SYBASE_PORT=5000 \
 SYBASE_DATABASE=master \
 SYBASE_USER=sa \
-SYBASE_PASSWORD='Sybase_UDA_CI1' \
-vendor/bin/phpunit --bootstrap tests/sybase-bootstrap.php tests/Sybase
+SYBASE_PASSWORD='your_password' \
+composer test:sybase-live
 ```
 
-## MERGE / upsert (Phase B4)
+## Run live tests on GitHub Actions (your fork / your secrets)
 
-`Query/Dialect/Sybase` sets `supportsMerge()` and `supportsUpsert()` to **false** until ASE
-MERGE is verified against a licensed container. See `tests/Query/SybaseCapabilitiesTest.php`.
+1. Obtain SAP ASE Developer `license.dat` (your responsibility).
+2. Base64-encode it and add repository secret **`SYBASE_LICENSE_B64`**.
+3. Actions → **Sybase Integration (manual)** → Run workflow.
+4. With the secret set, the job starts ASE, sets `UDA_SYBASE_LIVE=1`, and runs `tests/Sybase`.
+5. Without the secret, the same workflow runs only `SybaseCapabilitiesTest`.
+
+Do not commit license files to the repository.
+
+## When upstream might add push/PR Sybase CI
+
+Only if ASE can run on public GHA **without** a maintainer license (today it cannot).
+Until then, optional manual workflow + local opt-in remain the supported paths.
+
+## Dialect notes
+
+- MERGE / upsert: **off** in dialect until verified on live ASE (`supportsMerge` / `supportsUpsert` false)
+- OUTPUT-style `returning()` on insert: same shape as SQL Server; validate on your server
+
+## Related
+
+- [README.md](README.md) — integration matrix
+- [deferred.md](deferred.md) — DB2 and other follow-ups
+- [driver.md](../driver.md) — engine vs transport

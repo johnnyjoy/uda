@@ -28,13 +28,13 @@ Legend:
 | **PostgreSQL** | Gated | Gated | Gated | Gated | Yes | [`postgres-integration.yml`](../.github/workflows/postgres-integration.yml) · [postgresql.md](postgresql.md) |
 | **MariaDB / MySQL** | Gated | Gated | Gated | N/A¹ | Yes | [`mariadb-integration.yml`](../.github/workflows/mariadb-integration.yml) · [mariadb.md](mariadb.md) |
 | **SQL Server** | Gated | Gated | Gated | Gated | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
-| **Sybase (ASE)** | Code | Code | Off² | Code | Manual³ | [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) · [sybase.md](sybase.md) |
+| **Sybase (ASE)** | Code | Code | Off² | Code | Manual³ | [sybase.md](sybase.md) · [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) |
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
 | **DB2** | N/A⁴ | Code | Code | Code | No | Dialect file only |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
-² Sybase dialect disables MERGE/UPSERT until ASE is integration-gated.  
-³ Sybase: `workflow_dispatch` only; live ASE needs `SYBASE_LICENSE_B64`. Not merge-blocking.  
+² Sybase dialect disables MERGE/UPSERT.  
+³ Not on push/PR CI (no upstream license); manual workflow + `UDA_SYBASE_LIVE` for licensees.  
 ⁴ `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
@@ -54,7 +54,7 @@ for the exact test classes and methods.
 | MariaDB | See [mariadb.md](mariadb.md) | `mariadb-integration` |
 | SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-integration` |
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
-| Sybase | See [sybase.md](sybase.md) | `sybase-integration` (manual + license secret) |
+| Sybase (live, optional) | `UDA_SYBASE_LIVE=1 composer test:sybase-live` | `sybase-integration` (manual only; not on PR) |
 
 Also run `composer check` before merge (architecture guardrails).
 
@@ -70,19 +70,16 @@ CI-gated. See the matrix above before production use.
 
 ## Using a non-gated engine
 
-You may configure Sybase if your environment has the right PDO extensions and servers.
-Treat that as **integrator-owned validation**:
-
-1. Confirm connect + CRUD + transactions on your target.
-2. Run builder and upsert paths your app uses (Sybase: avoid upsert until gated).
-3. Do not infer production readiness from config acceptance alone.
+You may configure Sybase if your environment has ASE and `pdo_dblib`. Live tests in this
+repo are **disabled** unless you set `UDA_SYBASE_LIVE=1` (see [sybase.md](sybase.md)).
+Avoid upsert until MERGE is verified on your server.
 
 ---
 
 ## Deferred work (Phase C)
 
 Integration Phases A–B are complete. Follow-ups (DB2 connect, `sqlsrv` CI job,
-writable CTE tests, Sybase MERGE on licensed ASE, etc.) are documented in
+writable CTE tests, etc.) are documented in
 [deferred.md](deferred.md) — not merge-blocking.
 
 ---

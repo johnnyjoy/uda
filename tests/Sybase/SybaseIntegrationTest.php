@@ -4,11 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Sybase;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Tests\Integration\IntegrationTable;
 use UDA\Database;
 use UDA\Exception\QueryException;
 
+/**
+ * Live ASE integration — disabled by default (no SAP license in CI).
+ *
+ * Run when ASE is available:
+ *
+ *   UDA_SYBASE_LIVE=1 vendor/bin/phpunit --bootstrap tests/sybase-bootstrap.php tests/Sybase
+ */
+#[Group('sybase-live')]
 final class SybaseIntegrationTest extends TestCase
 {
     use IntegrationTable;
@@ -17,6 +26,13 @@ final class SybaseIntegrationTest extends TestCase
 
     protected function setUp(): void
     {
+        if (!self::sybaseLiveEnabled()) {
+            self::markTestSkipped(
+                'Sybase live integration is disabled (no ASE license in this repo). '
+                . 'Set UDA_SYBASE_LIVE=1 and bootstrap tests/sybase-bootstrap.php when ASE is available.'
+            );
+        }
+
         if (!extension_loaded('pdo_dblib')) {
             self::markTestSkipped('pdo_dblib extension is required for Sybase integration.');
         }
@@ -97,5 +113,12 @@ final class SybaseIntegrationTest extends TestCase
             ->values(['id' => 1, 'name' => 'nope', 'score' => 0])
             ->key(['id'])
             ->toSql();
+    }
+
+    private static function sybaseLiveEnabled(): bool
+    {
+        $flag = getenv('UDA_SYBASE_LIVE');
+
+        return $flag !== false && $flag !== '' && $flag !== '0';
     }
 }

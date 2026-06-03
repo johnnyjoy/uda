@@ -21,7 +21,9 @@ composer test
 ```
 
 For cache or engine-heavy changes, also match the relevant
-`.github/workflows/*-integration.yml` jobs (see `docs/integration/`). Sybase is manual-only; future engines are listed in `docs/integration/deferred.md`.
+`.github/workflows/*-integration.yml` jobs (see `docs/integration/`). Sybase is not on
+push/PR CI; optional `composer test:sybase-live` or manual `sybase-integration` if you
+have an ASE license (`docs/integration/sybase.md`).
 
 ## Pull requests (GitHub)
 
