@@ -39,7 +39,7 @@ shape — they are **not** CI-certified. Worker/concurrency rules: `docs/archite
 
 ## Contributing, security, releases
 
-- **Contributing:** `CONTRIBUTING.md` (GitHub Actions CI, local validation).
+- **Contributing:** `CONTRIBUTING.md` — GitHub PRs, GitHub Actions CI, local `composer check`.
 - **License:** `LICENSE.md` (MIT)
 - **Security:** `SECURITY.md`
 - **Changelog:** `CHANGELOG.md`
@@ -47,7 +47,8 @@ shape — they are **not** CI-certified. Worker/concurrency rules: `docs/archite
 
 ## Where CI runs
 
-GitHub Actions: `.github/workflows/` (default job + engine certification jobs). Run the same Composer targets locally when developing from a GitLab mirror (`CONTRIBUTING.md`).
+GitHub Actions on the canonical repo: `.github/workflows/` (default job + engine
+certification jobs). See `CONTRIBUTING.md` for the PR workflow and local gates.
 
 ## Local validation
 

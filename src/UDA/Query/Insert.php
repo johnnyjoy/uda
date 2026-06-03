@@ -23,7 +23,7 @@ use UDA\Query\Dialect\InsertState;
 /**
  * INSERT query builder that produces Sql objects for execution
  */
-final class Insert extends Abs
+final class Insert extends Builder
 {
     use ConsumesCtes;
     /** @var ?string Table to insert into */

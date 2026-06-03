@@ -9,8 +9,10 @@ default branch. Older lines only if maintainers agree.
 
 Do **not** open a public issue for an undisclosed vulnerability.
 
-1. **Confidential** GitLab issue, or  
+1. **GitHub private security advisory** on the canonical repo, or  
 2. Email authors from `composer.json` — subject: `[SECURITY] UDA`.
+
+(GitLab confidential issues on a mirror are acceptable if you cannot use GitHub.)
 
 Include: versions, repro steps, impact if known.
 

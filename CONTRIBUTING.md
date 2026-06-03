@@ -1,8 +1,9 @@
 # Contributing to UDA
 
+**Canonical repo:** [github.com/johnnyjoy/uda](https://github.com/johnnyjoy/uda)
+
 **CI:** GitHub Actions only (`.github/workflows/`). There is no `.gitlab-ci.yml`
-in this tree—run the same Composer commands locally before merge, or add CI on
-your fork.
+in this tree. Run the same Composer commands locally before opening a PR.
 
 ## Requirements
 
@@ -10,40 +11,45 @@ your fork.
 - Composer 2.x
 - Read `docs/style-guide.md` and `docs/contract.md` before non-trivial changes
 
-## Local workflow (before MR)
+## Local validation (before a PR)
 
 ```bash
 composer install --no-interaction --prefer-dist
-composer check    # Purpose, PDO path, imports, …
+composer check    # Purpose, PDO path, imports, placeholder URLs, …
 composer stan
 composer test
 ```
 
-For cache or PostgreSQL-heavy changes, also match `.github/workflows/sqlite-cert.yml`
-and `postgres-cert.yml` (see `docs/certification/`).
+For cache or PostgreSQL-heavy changes, also match `.github/workflows/sqlite-cert.yml`,
+`postgres-cert.yml`, and `sqlserver-cert.yml` where relevant (see `docs/certification/`).
 
-## Merge requests (GitLab)
+## Pull requests (GitHub)
 
-1. Branch from default (or fork + branch).
-2. Use the Default MR template.
-3. Do not edit `docs/query-cookbook.md` without explicit per-section approval.
-4. User-visible change → bullet under `CHANGELOG.md` `[Unreleased]`.
+1. Fork or branch from `master`.
+2. Make changes; keep diffs focused.
+3. Run the local validation commands above.
+4. Open a PR against `master`. CI must pass on GitHub Actions.
+5. Do not edit `docs/query-cookbook.md` without explicit per-section approval.
+6. User-visible change → bullet under `CHANGELOG.md` `[Unreleased]`.
 
-**Protected default branch:** require MRs; require passing checks **or** documented
-equivalent (e.g. GitHub Actions on a mirror); squash policy is team choice.
+Squash vs merge is maintainer choice; one logical change per PR is preferred.
 
-## Merge requests (GitHub)
+## GitLab mirror (optional)
 
-Same commands as above; use the repo’s PR template if any.
+If you work from a GitLab mirror, use the same local validation commands. Open the
+PR on GitHub (canonical) or follow your mirror’s merge policy. Templates under
+`.gitlab/` are for mirror convenience only — they do not drive CI.
 
 ## Code style
 
 - `src/UDA/**/*.php` must contain `Purpose:` (`tools/check-purpose.php`).
-- PHPDoc: `docs/style-guide.md`; alignment may be review-only—see enforcement map there.
+- PHPDoc: `docs/style-guide.md`; alignment may be review-only — see enforcement map there.
 
 ## Security
 
-`SECURITY.md`. Prefer **confidential** GitLab issues for undisclosed problems.
+See `SECURITY.md`. Do not open a public issue for an undisclosed vulnerability.
+Prefer GitHub **private security advisories** on the canonical repo, or email
+authors from `composer.json`.
 
 ## Releases
 

@@ -240,18 +240,17 @@ $db->delete()
 
 `toSql()` exists for debugging/logging; it does not execute.
 
-### 3.1 What is `UDA\Query\Abs`?
+### 3.1 What is `UDA\Query\Builder`?
 
-**`Abs` is the shared chassis for fluent query builders** — not a type you use or extend in application code.
+**`Builder` is the shared chassis for fluent query builders** — not a type you use or extend in application code.
 
 | | |
 | --- | --- |
-| **Full name** | `UDA\Query\Abs` |
-| **Short name means** | **Abs**tract base class (historical shorthand, not “abstractor”) |
+| **Full name** | `UDA\Query\Builder` |
 | **Extends** | Nothing public — five `final` builders extend it internally: `Select`, `Insert`, `Update`, `Delete`, `Upsert` |
 | **You obtain builders via** | `$db->select()`, `$db->insert()`, … — never `new Select()` |
 
-**What `Abs` owns (shared infrastructure):**
+**What `Builder` owns (shared infrastructure):**
 
 | Concern | Role |
 | ------- | ---- |
@@ -263,14 +262,14 @@ $db->delete()
 | **`toSql()`** | Abstract: each concrete builder compiles itself to immutable `Query\Sql`. |
 | **Terminators** | `row()`, `exec()`, etc. live on concrete builders; they call `delegateThroughDatabase()` → same `Database → Driver → PDO` path as raw SQL. |
 
-**What `Abs` is not:**
+**What `Builder` is not:**
 
 | Confusable | Difference |
 | ---------- | ---------- |
-| **`UDA\Driver`** | Executes SQL. `Abs` only *builds* SQL and hands off to `Database`. |
-| **`Query\Dialect\SQLite`** (etc.) | Renders engine-specific SQL *text* for the builder. `Abs` holds the dialect reference; concrete builders call into it. |
-| **`Query\Sql` vs `SQL\SqlMessage`** | `Query\Sql` = builder output (immutable value). `SQL\SqlMessage` = execution envelope with params + guardrail metadata — built inside `Abs::buildSql()`. |
-| **Public API** | Application code never type-hints `Abs`. Use `Select`, `Insert`, … returned from `Database`, or don’t name the type at all. |
+| **`UDA\Driver`** | Executes SQL. `Builder` only *builds* SQL and hands off to `Database`. |
+| **`Query\Dialect\SQLite`** (etc.) | Renders engine-specific SQL *text* for the builder. `Builder` holds the dialect reference; concrete builders call into it. |
+| **`Query\Sql` vs `SQL\SqlMessage`** | `Query\Sql` = builder output (immutable value). `SQL\SqlMessage` = execution envelope with params + guardrail metadata — built inside `Builder::buildSql()`. |
+| **Public API** | Application code never type-hints `Builder`. Use `Select`, `Insert`, … returned from `Database`, or don’t name the type at all. |
 
 **Lifecycle (one connection, one builder):**
 
@@ -282,28 +281,13 @@ $db->select()
        → bindDialect(queryDialect())
   → ->from('users')->where('id', 1)->row()
        → Select::toSql()  // uses dialect + quote()
-       → Abs::delegateThroughDatabase('row', ...)
+       → Builder::delegateThroughDatabase('row', ...)
        → Database::executeBuilder(...) → Driver → PDO
 ```
 
-**Why keep the name `Abs`?** Renaming to `AbstractBuilder` would churn every builder file and downstream type-hints for marginal clarity. The class docblock and this section are the contract: **short internal name, not a public extension point.** A semver-major alias remains an option later.
+The class lives in `UDA\Query`, so the symbol is **`Builder`** (not `QueryBuilder`). **Do not extend.**
 
-### 3.2 Is `Abs` the most accurate name?
-
-**No.** `Abs` is accurate only as an abbreviation of “abstract base” — not as a description of the type’s role.
-
-| Candidate | Fit | Notes |
-| --------- | --- | ----- |
-| **`QueryBuilder`** | Best | Matches what `Database` already calls it in PHPDoc (`use UDA\Query\Abs as QueryBuilder`). `Select extends QueryBuilder` reads naturally. |
-| **`AbstractQueryBuilder`** | Best (explicit) | Standard PHP idiom; grep-friendly; zero ambiguity. |
-| **`BuilderBase`** | OK | Shorter; still clearer than `Abs`. |
-| **`Abs`** | Poor | Cryptic in isolation; newcomers grep “AbstractBuilder” and find nothing; easily mistaken for unrelated “abstractor” product naming. |
-
-**What the class actually is:** the abstract base for fluent SQL builders — param bag, engine-bound quoting, dialect binding, guardrail metadata, and delegation back to `Database`. Any name containing **Query** + **Builder** (+ optionally **Abstract**) describes that role; `Abs` does not.
-
-**Disposition (unchanged for v1):** keep the class symbol `Abs` to avoid churn. Treat **`QueryBuilder`** as the conceptual name in prose and PHPDoc (already done in `Database.php`). On a semver-major release, rename the class to `QueryBuilder` or add `AbstractQueryBuilder` with a long deprecation alias — not a silent find-replace mid-stream.
-
-### 3.3 Compiled `Query\Sql` and connection deferral
+### 3.2 Compiled `Query\Sql` and connection deferral
 
 Builders bind **engine and dialect at creation** (`$db->select()`). Compilation is not cross-engine portable: `toSql()` emits dialect-specific text.
 
@@ -496,8 +480,8 @@ after confirming the intent is correct. It has no effect on SELECT builders.
 
 | Symbol / name | What it is |
 | ------------- | ----------- |
-| `UDA\Query\Abs` | **Builder chassis** — abstract base shared by `Select`/`Insert`/…; param bag, `$engine`, quoting, guardrails, execution delegation. **Do not extend.** See §3.1. |
-| `UDA\Query\Sql` | Immutable SQL **value** produced by builders before `Database` turns it into a `SqlMessage` for execution. Not the same as `UDA\SQL\SqlMessage`. Same-engine deferral: §3.3. |
+| `UDA\Query\Builder` | **Builder chassis** — abstract base shared by `Select`/`Insert`/…; param bag, `$engine`, quoting, guardrails, execution delegation. **Do not extend.** See §3.1. |
+| `UDA\Query\Sql` | Immutable SQL **value** produced by builders before `Database` turns it into a `SqlMessage` for execution. Not the same as `UDA\SQL\SqlMessage`. Same-engine deferral: §3.2. |
 | `UDA\SQL\SqlMessage` | Executable SQL + metadata envelope used on the `Database` → `Driver` boundary. |
 | `UDA\Driver` | **The driver** — runtime for one connection; owns PDO and executes SQL. (Car: person at the wheel.) |
 | **Engine** | SQL family (`pgsql`, `sqlserver`, …): dialect + quoting + fragments. Config JSON key is still `"driver"`; read via `Config::engine()`. (Car: the motor.) |
@@ -513,10 +497,9 @@ after confirming the intent is correct. It has no effect on SELECT builders.
 
 | Issue | Disposition |
 | ----- | ----------- |
-| `Abs` class name | **Keep symbol for v1**; not the most accurate name — conceptual name is **`QueryBuilder`** (see §3.2). Semver-major: rename to `QueryBuilder` or `AbstractQueryBuilder`. |
+| `Builder` class name | **Done** — renamed from `Abs`; lives in `UDA\Query` so symbol is `Builder`, not `QueryBuilder`. |
 | `Sql` vs `SqlMessage` | **Keep**; glossary + table above. |
 | Two `SQLite` classes | **Keep**; glossary + driver-vs-dialect note. |
-| Future public rename appetite | Prefer **`QueryBuilder`** (matches existing `Database` alias) or **`AbstractQueryBuilder`** (explicit PHP idiom) over `AbstractBuilder` alone. |
 
 ---
 

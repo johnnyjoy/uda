@@ -23,7 +23,7 @@ use UDA\Query\Dialect\DeleteState;
 /**
  * DELETE query builder that produces Sql objects for execution
  */
-final class Delete extends Abs
+final class Delete extends Builder
 {
     use ConsumesCtes;
     /** @var ?string Table to delete from */

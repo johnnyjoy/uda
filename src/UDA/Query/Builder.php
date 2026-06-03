@@ -13,9 +13,8 @@ declare(strict_types=1);
 /*
  * Purpose: Base query builder providing shared infrastructure for all concrete query builders.
  *
- * `Abs` = abstract base class (historical short name). Application code uses
- * `Database::select()` / `insert()` / … — not this type directly. See
- * `docs/public-api.md` §3.1.
+ * Application code uses `Database::select()` / `insert()` / … — not this type directly.
+ * See `docs/public-api.md` §3.1.
  */
 
 namespace UDA\Query;
@@ -29,9 +28,9 @@ use UDA\SQL\SqlMessage;
 use UDA\SQL\Value;
 
 /**
- * Abstract base class for all query builders implementing the builder pattern.
+ * Abstract base class for fluent SQL query builders.
  */
-abstract class Abs
+abstract class Builder
 {
     /**
      * Materialize this builder as an immutable `Sql` value for execution or inspection.
@@ -384,4 +383,3 @@ abstract class Abs
     }
 
 }
-
