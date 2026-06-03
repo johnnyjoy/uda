@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MariaDB integration (`mariadb-integration.yml`, `tests/MariaDb`, `docs/integration/mariadb.md`).
 - Oracle integration (`oracle-integration.yml`, `tests/Oracle`, `docs/integration/oracle.md`); `gvenzl/oracle-free` (Oracle Database Free).
 - Integration depth (Phase A): Postgres/MariaDB/SQL Server expanded tests; Oracle `PaginationTest` + `ReturningAndMergeTest` restored in CI.
+- Sybase ASE integration spike (Phase B): `sybase-integration.yml` (`continue-on-error`), `tests/Sybase`, `docs/integration/sybase.md`; community `superbeeeeeee/docker-sybase` on port 5000.
 - Fix SQL Server and Oracle `Select` pagination: emit integer literals for `OFFSET`/`FETCH` (drivers reject bound row-count parameters).
 - Fix Oracle CI pagination: use `FETCH FIRST` when offset is unset (avoid `OFFSET 0` + `pdo_oci` ORA-03137); lighter fixture resets; reconnect on ORA-03114.
 - Fix Oracle CI exit 139: run `tests/Oracle` with `--process-isolation` and disable GC in `oracle-bootstrap.php` (pdo_oci statement-GC segfault, php#18494).

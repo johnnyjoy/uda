@@ -51,8 +51,9 @@ Create a JSON config file and point `UDA_CONFIG` at it:
 export UDA_CONFIG=/path/to/uda.json
 ```
 
-CI integration-gates **SQLite, PostgreSQL, MariaDB, SQL Server, and Oracle**; **Sybase**
-is accepted in config but not gated in GitHub Actions. See `docs/integration/README.md`.
+CI integration-gates **SQLite, PostgreSQL, MariaDB, SQL Server, and Oracle**. **Sybase**
+runs an optional spike job (`sybase-integration`, `continue-on-error`). See
+`docs/integration/README.md`.
 
 ## Connect
 

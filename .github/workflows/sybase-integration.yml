@@ -1,0 +1,58 @@
+name: Sybase Integration (spike)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  sybase-integration:
+    runs-on: ubuntu-latest
+    # Spike: allow failure until the community ASE image proves stable on GHA.
+    continue-on-error: true
+    services:
+      sybase:
+        image: superbeeeeeee/docker-sybase:latest
+        env:
+          SA_PASSWORD: Sybase_UDA_CI1
+          DATABASE: master
+        ports:
+          - 5000:5000
+        options: >-
+          --health-cmd healthcheck
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+          --health-start-period 90s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FreeTDS
+        run: sudo apt-get update && sudo apt-get install -y freetds-common freetds-dev
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_dblib
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run Sybase integration suites
+        env:
+          TDSVER: "7.4"
+          SYBASE_HOST: 127.0.0.1
+          SYBASE_PORT: 5000
+          SYBASE_DATABASE: master
+          SYBASE_USER: sa
+          SYBASE_PASSWORD: Sybase_UDA_CI1
+        run: vendor/bin/phpunit --bootstrap tests/sybase-bootstrap.php tests/Sybase
+
+      - name: Reference Sybase integration docs
+        run: echo "See docs/integration/sybase.md for spike status and licensing"

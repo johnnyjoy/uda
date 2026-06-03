@@ -28,13 +28,14 @@ Legend:
 | **PostgreSQL** | Gated | Gated | Gated | Gated | Yes | [`postgres-integration.yml`](../.github/workflows/postgres-integration.yml) · [postgresql.md](postgresql.md) |
 | **MariaDB / MySQL** | Gated | Gated | Gated | N/A¹ | Yes | [`mariadb-integration.yml`](../.github/workflows/mariadb-integration.yml) · [mariadb.md](mariadb.md) |
 | **SQL Server** | Gated | Gated | Gated | Gated | Yes | [`sqlserver-integration.yml`](../.github/workflows/sqlserver-integration.yml) · [sqlserver.md](sqlserver.md) |
-| **Sybase (ASE)** | Code | Code | Off² | Code | No | [driver.md](../driver.md) |
+| **Sybase (ASE)** | Spike | Spike | Off² | Spike | Spike³ | [`sybase-integration.yml`](../.github/workflows/sybase-integration.yml) · [sybase.md](sybase.md) |
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
-| **DB2** | N/A³ | Code | Code | Code | No | Dialect file only |
+| **DB2** | N/A⁴ | Code | Code | Code | No | Dialect file only |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT until ASE is integration-gated.  
-³ `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
+³ Sybase job runs on push/PR with `continue-on-error` until stable; not merge-blocking yet.  
+⁴ `Query/Dialect/Db2.php` exists for future compilation; no `Driver/Db2.php` connect path.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
 
@@ -53,6 +54,7 @@ for the exact test classes and methods.
 | MariaDB | See [mariadb.md](mariadb.md) | `mariadb-integration` |
 | SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-integration` |
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
+| Sybase (spike) | See [sybase.md](sybase.md) | `sybase-integration` (optional) |
 
 Also run `composer check` before merge (architecture guardrails).
 
