@@ -11,6 +11,12 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
+### Added
+
+- **`firebird` engine connectable** via `UDA\Driver\Firebird` and `pdo_firebird` (MERGE upsert,
+  RETURNING, pagination; writable CTE off). Optional `firebird-integration` CI job — see
+  `docs/integration/firebird.md`.
+
 ## [1.0.0] - 2026-06-03
 
 ### Added

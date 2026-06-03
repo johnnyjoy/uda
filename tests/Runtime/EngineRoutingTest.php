@@ -28,6 +28,8 @@ final class EngineRoutingTest extends TestCase
             'oci' => ['oci', 'oracle'],
             'oracle' => ['oracle', 'oracle'],
             'db2' => ['db2', 'db2'],
+            'firebird' => ['firebird', 'firebird'],
+            'interbase' => ['interbase', 'firebird'],
         ];
     }
 

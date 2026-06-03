@@ -80,6 +80,30 @@ trait IntegrationTable
         }
     }
 
+    protected function seedFirebirdTable(Database $db): void
+    {
+        try {
+            $db->exec('DROP TABLE UDA_FB_IG');
+        } catch (\Throwable) {
+            // Table may not exist on first run.
+        }
+
+        $db->exec(
+            'CREATE TABLE UDA_FB_IG (
+                ID INTEGER NOT NULL PRIMARY KEY,
+                NAME VARCHAR(100) NOT NULL,
+                SCORE INTEGER NOT NULL DEFAULT 0
+            )'
+        );
+        $db->exec('DELETE FROM UDA_FB_IG');
+        for ($i = 1; $i <= 10; $i++) {
+            $db->exec(
+                'INSERT INTO UDA_FB_IG (ID, NAME, SCORE) VALUES (:id, :name, :score)',
+                ['id' => $i, 'name' => 'row' . $i, 'score' => $i * 10]
+            );
+        }
+    }
+
     private function seedTsqlIntegrationTable(Database $db, string $table): void
     {
         $qualified = 'dbo.' . $table;

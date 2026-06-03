@@ -31,11 +31,13 @@ Legend:
 | **Sybase (ASE)** | Code | Code | Off² | Code | No³ | [sybase.md](sybase.md) |
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
 | **DB2** | Gated | Gated | Gated | N/A⁴ | Yes | [db2.md](db2.md) · [`db2-integration.yml`](../.github/workflows/db2-integration.yml) |
+| **Firebird** | Code | Code | Code | Code | Optional⁵ | [firebird.md](firebird.md) · [`firebird-integration.yml`](../.github/workflows/firebird-integration.yml) |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT.  
 ³ No CI workflow — upstream has no ASE license; local `UDA_SYBASE_LIVE=1` only.  
-⁴ Db2 dialect rejects `returning()` before PDO; requires `pdo_ibm` at connect time.
+⁴ Db2 dialect rejects `returning()` before PDO; requires `pdo_ibm` at connect time.  
+⁵ `firebird-integration` runs on push/PR with **`continue-on-error`** until stable; not merge-blocking yet.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
 
@@ -55,9 +57,9 @@ for the exact test classes and methods.
 | SQL Server | See [sqlserver.md](sqlserver.md) | `sqlserver-integration` |
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
 | DB2 | See [db2.md](db2.md) | `db2-integration` |
+| Firebird | See [firebird.md](firebird.md) | `firebird-integration` (optional; `continue-on-error`) |
 
-Sybase has **no CI job**. Licensees with ASE run `UDA_SYBASE_LIVE=1 composer test:sybase-live`
-locally — see [sybase.md](sybase.md).
+Sybase has **no CI job**. Licensees run `UDA_SYBASE_LIVE=1 composer test:sybase-live` locally — see [sybase.md](sybase.md).
 
 Also run `composer check` before merge (architecture guardrails).
 
@@ -81,9 +83,9 @@ Avoid upsert until MERGE is verified on your server.
 
 ## Deferred work (Phase C)
 
-Integration Phases A–B are complete. Follow-ups (DB2 connect, `sqlsrv` CI job,
-writable CTE tests, etc.) are documented in
-[deferred.md](deferred.md) — not merge-blocking.
+Integration Phases A–B are complete. Follow-ups (writable CTE, cache scope, etc.) are
+documented in [deferred.md](deferred.md). **Firebird** (post-v1) is planned in
+`memory-bank/tasks.md` — not merge-blocking until after v1.0.0.
 
 ---
 

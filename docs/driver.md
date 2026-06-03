@@ -67,6 +67,8 @@ Cross-engine dispatch (which class builds DSN, which supplies quoting) lives on 
 * `Sybase` — Sybase ASE engine rules + `dblib:` DSN (via `Dblib::dsn`)
 * `Dblib` — `dblib:` DSN only (SQL Server over DBLib transport)
 * `Oracle` — engine + `oci:` DSN
+* `Db2` — engine + `ibm:` DSN (`pdo_ibm`)
+* `Firebird` — engine + `firebird:` DSN (`pdo_firebird`)
 
 > Per-engine classes do not create PDO. `UDA\Driver` always performs `new PDO()` after calling their static `::dsn()`.
 

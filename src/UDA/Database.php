@@ -11,6 +11,7 @@ use UDA\Query;
 use UDA\Query\Delete;
 use UDA\Query\Dialect\Db2 as Db2Dialect;
 use UDA\Query\Dialect\Dialect;
+use UDA\Query\Dialect\Firebird as FirebirdDialect;
 use UDA\Query\Dialect\MariaDb;
 use UDA\Query\Dialect\Oracle as OracleDialect;
 use UDA\Query\Dialect\PostgreSql;
@@ -629,6 +630,7 @@ final class Database
             'sybase' => new Sybase(),
             'oracle' => new OracleDialect(),
             'db2' => new Db2Dialect(),
+            'firebird' => new FirebirdDialect(),
             default => throw new QueryException(
                 'No SQL dialect available for engine: ' . $this->driver->engineName()
             ),

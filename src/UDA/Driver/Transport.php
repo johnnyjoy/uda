@@ -33,6 +33,7 @@ final class Transport
             'sqlite' => 'sqlite',
             'oci', 'oracle' => 'oracle',
             'db2' => 'db2',
+            'firebird', 'interbase' => 'firebird',
             default => strtolower(trim((string) $engine)),
         };
     }
@@ -48,6 +49,7 @@ final class Transport
             'pgsql', 'postgres', 'postgresql' => 'pgsql',
             'mysql', 'mariadb' => 'mysql',
             'oci', 'oracle' => 'oci',
+            'firebird' => 'firebird',
             'sqlite' => 'sqlite',
             default => strtolower(trim((string) $transport)),
         };
@@ -65,6 +67,7 @@ final class Transport
             'sqlserver' => 'sqlsrv',
             'sybase' => 'dblib',
             'oracle' => 'oci',
+            'firebird' => 'firebird',
             default => self::engineKey($engine),
         };
     }

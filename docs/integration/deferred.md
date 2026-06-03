@@ -134,15 +134,11 @@ services:
 
 ## SQL Server `sqlsrv` transport (second job)
 
-Today CI uses **`pdo_dblib`** against `mcr.microsoft.com/mssql/server` — sufficient to
-prove T-SQL builders, OUTPUT, pagination, and MERGE.
+**Status: closed — won't pursue.** Maintainer decision: `pdo_sqlsrv` is not worth CI
+coverage; Linux CI already proves T-SQL via `pdo_dblib` against the same container.
 
-A separate job for **`pdo_sqlsrv`** / ODBC would add:
-
-- TLS / certificate trust configuration on Linux runners
-- Duplicate test maintenance for the same engine semantics
-
-**Defer** until a product requirement needs `sqlsrv:` DSN validation in CI, not `dblib:`.
+Historical note: a separate job would have duplicated test maintenance for the same
+engine semantics and added TLS/ODBC friction on runners.
 
 ---
 
@@ -178,9 +174,10 @@ not by default.
 
 ## Suggested issue labels (if tracking in GitHub)
 
-- `integration:db2` — driver + connect + optional CI
-- `integration:sqlsrv` — second SQL Server transport job
+- `integration:firebird` — driver + connect + optional CI (post-v1)
 - `integration:writable-cte` — future dialect + tests
+
+~~`integration:db2`~~ — done. ~~`integration:sqlsrv`~~ — closed.
 
 ---
 

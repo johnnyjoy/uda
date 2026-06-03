@@ -193,6 +193,7 @@ final class Driver
             'oracle' => \UDA\Driver\Oracle::class,
             'pgsql' => \UDA\Driver\PostgreSQL::class,
             'db2' => \UDA\Driver\Db2::class,
+            'firebird' => \UDA\Driver\Firebird::class,
             default => null,
         };
     }
@@ -454,6 +455,7 @@ final class Driver
                 : \UDA\Driver\SQLServer::dsn($params),
             'sybase' => \UDA\Driver\Sybase::dsn($params),
             'db2' => \UDA\Driver\Db2::dsn($params),
+            'firebird' => \UDA\Driver\Firebird::dsn($params),
             default => throw new ConfigException('Unsupported database engine: ' . (string) $engine),
         };
     }

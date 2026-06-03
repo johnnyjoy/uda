@@ -1,0 +1,67 @@
+name: Firebird Integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Optional integration: official Firebird 5 + pdo_firebird. Job uses continue-on-error
+# until three consecutive green runs on master; then remove continue-on-error and
+# add firebird-integration to branch protection.
+jobs:
+  firebird-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+
+    services:
+      firebird:
+        image: firebirdsql/firebird:5-noble
+        env:
+          FIREBIRD_ROOT_PASSWORD: UDA_Fb_Root1
+          FIREBIRD_USER: uda_test
+          FIREBIRD_PASSWORD: UDA_Fb_CI1
+          FIREBIRD_DATABASE: uda_test.fdb
+          FIREBIRD_DATABASE_DEFAULT_CHARSET: UTF8
+        ports:
+          - 3050:3050
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Firebird port
+        run: |
+          set -euxo pipefail
+          for attempt in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/3050) >/dev/null 2>&1; then
+              echo "Firebird accepting connections (attempt ${attempt})"
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_firebird
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run Firebird integration suites
+        env:
+          FIREBIRD_HOST: 127.0.0.1
+          FIREBIRD_PORT: 3050
+          FIREBIRD_DATABASE: uda_test.fdb
+          FIREBIRD_USER: uda_test
+          FIREBIRD_PASSWORD: UDA_Fb_CI1
+        run: vendor/bin/phpunit --bootstrap tests/firebird-bootstrap.php tests/Firebird
+
+      - name: Reference Firebird integration docs
+        run: echo "See docs/integration/firebird.md for details"
