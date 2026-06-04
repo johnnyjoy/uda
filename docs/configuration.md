@@ -75,8 +75,7 @@ Each entry in `connections` describes how a database connection is created.
 | **params**     | yes      | Object of driver-specific connection parameters used to build the PDO DSN.                              |
 | **user**       | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
 | **pass**       | no       | Password. May reference environment variable `{env:VAR_NAME}`.                                          |
-| **options**    | no       | Object of PDO options. Keys must be integers (`PDO::*`).                                                |
-| **persistent** | no       | Persistent PDO connections are **on by default**. Set `false` to opt a connection out (sugar for `PDO::ATTR_PERSISTENT`). Inherited from `defaults.persistent`. See [Persistent connections](#persistent-connections). |
+| **options**    | no       | Object of PDO options. Keys must be integers (`PDO::*`). `PDO::ATTR_PERSISTENT` and `PDO::ATTR_ERRMODE` are forced by UDA and cannot be overridden here — see [Persistent connections](#persistent-connections). |
 | **init_sql**   | no       | Array of SQL statements executed after connection.                                                      |
 | **cache**      | no       | Connection-specific cache policy configuration.                                                         |
 | **trace**      | no       | When `true`, emit **`E_USER_NOTICE`** during ingestion if this connection uses a driver **alias** that normalizes to canonical engine + transport (e.g. `"driver": "dblib"` → sybase). Omit or `false` in production. |
@@ -119,34 +118,19 @@ Microsoft SQL Server over DBLib must set `"driver": "sqlserver", "transport": "d
 ### Persistent connections
 
 In long-lived deployments (php-fpm, mod_php, containerized workers) the cost of opening a fresh
-database connection on every request is pure overhead. UDA therefore keeps the PDO handle in PHP's
-per-process connection pool **by default**, so subsequent requests reuse it and skip the TCP/auth
-handshake.
+database connection on every request is pure overhead. UDA connections are therefore **always
+persistent**: the PDO handle stays in PHP's per-process pool and is reused across requests, skipping
+the TCP/auth handshake.
 
-No configuration is required to get this. To opt a connection out, set `"persistent": false`:
+This is intrinsic, not a setting — there is no `persistent` config key. Like `PDO::ATTR_ERRMODE`
+(which UDA forces to exception mode for reconnect classification), `PDO::ATTR_PERSISTENT` is set by
+UDA and cannot be overridden through `options`.
 
-```json
-"batch": {
-  "driver": "pgsql",
-  "persistent": false,
-  "params": { "host": "db.internal", "dbname": "app" }
-}
-```
+Safety:
 
-Opt every connection out at once via `defaults`:
-
-```json
-"defaults": { "connection": "app", "persistent": false }
-```
-
-Notes:
-
-* Persistent is the default. Resolution is `connection.persistent` → `defaults.persistent` → `true`.
-  A connection's own flag overrides `defaults`; an explicit `options[PDO::ATTR_PERSISTENT]` overrides both.
 * On checkout, UDA rolls back any transaction a prior request left open on a pooled handle, so each
   request starts from a clean session.
-* `init_sql` still runs on each checkout, since session state of a reused handle is not assumed.
-* Opting out can be useful for one-off CLI scripts or drivers where a long-lived handle is undesirable.
+* `init_sql` still runs on each checkout, since the session state of a reused handle is not assumed.
 
 ### Important Rule
 

@@ -93,10 +93,6 @@ final class Validator
             $this->errors[] = "defaults.options must be an array";
         }
 
-        if (isset($defaults['persistent']) && !is_bool($defaults['persistent'])) {
-            $this->errors[] = "defaults.persistent must be boolean";
-        }
-
         if (isset($config['default']) && is_string($config['default']) && !isset($defaults['connection'])) {
             $defaults['connection'] = $config['default'];
         }
@@ -134,11 +130,6 @@ final class Validator
 
             if (isset($connection['trace']) && !is_bool($connection['trace'])) {
                 $this->errors[] = "Connection '$name' 'trace' must be boolean";
-                continue;
-            }
-
-            if (isset($connection['persistent']) && !is_bool($connection['persistent'])) {
-                $this->errors[] = "Connection '$name' 'persistent' must be boolean";
                 continue;
             }
 

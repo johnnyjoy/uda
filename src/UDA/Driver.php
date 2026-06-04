@@ -128,16 +128,6 @@ final class Driver
     private ?OracleReturning $oracleReturning = null;
 
     /**
-     * Whether this connection uses a persistent PDO handle.
-     *
-     * Set by resolvePdoOptions(). When true, a pooled handle may be reused across
-     * requests, so checkout clears any transaction a prior request left open.
-     *
-     * @var bool
-     */
-    private bool $persistent = false;
-
-    /**
      * Open the configured connection and run any initialization SQL.
      * Callers enter through Driver::connect() so the connection name can be
      * resolved consistently with Config defaults.
@@ -662,17 +652,12 @@ final class Driver
 
         $opts = array_replace($defaults, $opt);
 
-        // Persistent connections are the default (config `persistent: false` opts out); this is
-        // sugar for PDO::ATTR_PERSISTENT, but an explicit options[PDO::ATTR_PERSISTENT] always wins.
-        if (!array_key_exists(PDO::ATTR_PERSISTENT, $opts)) {
-            $opts[PDO::ATTR_PERSISTENT] = Config::persistent($this->connection);
-        }
-
-        // UDA requires exceptions for all error handling including reconnect classification.
-        // This cannot be overridden by consumer config.
+        // UDA always uses persistent connections and always requires exception error mode.
+        // Both are intrinsic to the runtime and cannot be overridden by consumer config:
+        // persistence is how UDA avoids per-request connection overhead in php-fpm/containers,
+        // and reconnect classification depends on exceptions.
+        $opts[PDO::ATTR_PERSISTENT] = true;
         $opts[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
-
-        $this->persistent = (bool) ($opts[PDO::ATTR_PERSISTENT] ?? false);
 
         return $opts;
     }
@@ -1304,21 +1289,16 @@ final class Driver
     /**
      * Clear residual transaction state from a reused persistent handle.
      *
-     * A persistent PDO connection is drawn from PHP's process pool and may carry an
-     * open transaction left behind by an earlier request that ended abnormally.
+     * UDA connections are persistent, so a handle is drawn from PHP's process pool and may
+     * carry an open transaction left behind by an earlier request that ended abnormally.
      * Rolling back on checkout guarantees each request starts from a clean session.
-     * No-op for non-persistent connections, which are never shared.
      *
-     * @param PDO $pdo  The freshly opened (possibly pooled) handle.
+     * @param PDO $pdo  The freshly opened (pooled) handle.
      *
      * @return void
      */
     private function resetPersistentState(PDO $pdo): void
     {
-        if (!$this->persistent) {
-            return;
-        }
-
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
