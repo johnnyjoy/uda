@@ -615,10 +615,9 @@ The system is compliant when:
 * exactly one read surface exists
 * cache is transparent
 * metadata-first caching implemented
-* TTL layering implemented
-* stale-on-error implemented
+* deferred cache policy state is explicit in docs (TTL layering and stale-on-error are not active in v1 runtime)
 * no DSN leakage exists
 * no Scope classes exist
 * configuration ingestion validated
 * SQLite integration tests pass
-* policy guard tests pass
+* active guard tests pass

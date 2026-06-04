@@ -599,7 +599,7 @@ If a design requires cleverness to understand, it is probably wrong.
 
 ---
 
-If you're open to it, there is **one additional section that would make this document much stronger** for an open-source project:
+Optional follow-up section for stronger CI enforcement:
 
 ### “Static Analysis Rules”
 

@@ -8,7 +8,7 @@ major databases, optional read cache. Storefront:
 
 ## For application developers (start here)
 
-You are building **your** repositories or data classes with explicit SQL.
+This path targets repository and data classes with explicit SQL.
 
 | Order | Document | Purpose |
 | ----- | -------- | ------- |
@@ -59,7 +59,7 @@ Process: [CONTRIBUTING.md](../CONTRIBUTING.md) at repo root. Local plans under
 | ----- | --- |
 | DAL / repositories | [building-your-dal.md](building-your-dal.md), [patterns.md](patterns.md) |
 | Config / engines | [engines.md](engines.md), [configuration.md](configuration.md) |
-| Cache | [caching.md](caching.md), [cache-doctrine.md](cache-doctrine.md) |
+| Cache | [caching.md](caching.md) (current runtime), [cache-doctrine.md](cache-doctrine.md) (future design doctrine) |
 | API | [public-api.md](public-api.md) |
 | Drivers (internals) | [driver.md](driver.md) |
 | CI per engine | [integration/](integration/) |

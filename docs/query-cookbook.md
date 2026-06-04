@@ -11,7 +11,7 @@ Goals:
 * Empower developers to express complex queries **without escaping the system**.
 * Keep query syntax identical across databases—dialects handle vendor-specific clauses.
 
-> **Dialect note:** Builders never embed vendor branching. When you call `$db->select()` or `$db->insert()`, UDA binds the connection’s SQL dialect behind the scenes so LIMIT/OFFSET, `ON CONFLICT`, `MERGE`, etc. are emitted correctly for PostgreSQL, SQLite, SQL Server, Sybase, Oracle, MariaDB, or DB2 (stub). Stick to the fluent API; the dialect layer takes care of the SQL nuances.
+> **Dialect note:** Builders never embed vendor branching. When `$db->select()` or `$db->insert()` is called, UDA binds the connection’s SQL dialect behind the scenes so LIMIT/OFFSET, `ON CONFLICT`, `MERGE`, etc. are emitted correctly for PostgreSQL, SQLite, SQL Server, Sybase, Oracle, MariaDB, and DB2. Stick to the fluent API; the dialect layer handles SQL nuances.
 
 > **Cache hint:** Every `Database` helper (`rows`, `row`, `value`, `values`, `list`, `each`, `exec`, `returning`) accepts an optional `$tableHints` array. Pass table names when issuing raw SQL so cache metadata stays accurate; see `docs/caching.md#raw-sql-table-hints` for details.
 

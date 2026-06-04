@@ -77,8 +77,8 @@ CI-gated. See the matrix above before production use.
 
 ## Using a non-gated engine
 
-You may configure Sybase if your environment has ASE and `pdo_dblib`. Live tests in this
-repo are **disabled** unless you set `UDA_SYBASE_LIVE=1` (see [sybase.md](sybase.md)).
+Sybase can be configured when the environment has ASE and `pdo_dblib`. Live tests in this
+repo are **disabled** unless `UDA_SYBASE_LIVE=1` is set (see [sybase.md](sybase.md)).
 Avoid upsert until MERGE is verified on your server.
 
 ---

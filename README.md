@@ -1,22 +1,22 @@
 # Universal Data Abstractor (UDA)
 
 **Slim SQL execution for PHP repositories** — one API across major databases, optional
-read cache, explicit queries you control.
+read cache, explicit queries under project control.
 
-You ship PHP APIs and services with **SQL in repository classes** — methods your team
-names, SQL you can read in a PR. UDA is the **engine under that layer**: connect, run
+PHP APIs and services can keep **SQL in repository classes** — methods the team
+names, SQL visible in PR review. UDA is the **engine under that layer**: connect, run
 named-parameter SQL, use dialect-aware fluent builders when they help, and keep the
 same code when the database changes.
 
-- **Readable data layer** — SQL stays in methods you can review in PRs and explain to ops.
+- **Readable data layer** — SQL stays in methods that are reviewable in PRs and explainable to ops.
 - **Many databases, one habit** — Postgres today, SQL Server or Oracle tomorrow; edit `uda.json`, not every query file.
 - **Stable team contract** — one handle (`Database` or `Link`), named params only, integration-tested engines in CI.
-- **More speed when you need it** — transparent read cache (Redis, Memcached, in-memory, …); enable in config, keep table hints on reads.
-- **You write the queries** — repositories and `Link`; domain methods, not generated `find()` helpers.
+- **More speed when needed** — transparent read cache (Redis, Memcached, in-memory, …); enable in config, keep table hints on reads.
+- **Explicit query ownership** — repositories and `Link`; domain methods, not generated `find()` helpers.
 
 ## What UDA does
 
-| Area | You can… |
+| Area | UDA provides… |
 | ---- | -------- |
 | **Connect** | `connectDefault()`, `connectNamed()`, `connectWithConfig()`; one pooled `Database` + PDO per connection name per process; transparent reconnect on dropped connections |
 | **Raw reads** | `row`, `rows`, `value`, `values` (first column of each row), `list` (first row as numeric list) — all accept SQL string, `Sql::of()`, or compiled `Query\Sql` |
@@ -31,14 +31,14 @@ same code when the database changes.
 | **Guardrails** | Unbounded `UPDATE` / `DELETE` blocked by default; `->unsafe()` when intentionally global |
 | **Cache** | Config-driven read cache; table hints on raw reads; `flushCache()` for ops — repositories stay unchanged |
 | **Debug** | `lastSql()`, `lastParams()`, builder `toSql()` (compile only) |
-| **Errors** | `QueryException` with `category()`, `sqlState()`, `driverCode()` for mapping in your API layer |
-| **Structure** | `UDA\Link` on repository classes, or inject `Database` from your container |
+| **Errors** | `QueryException` with `category()`, `sqlState()`, `driverCode()` for mapping in the application API layer |
+| **Structure** | `UDA\Link` on repository classes, or dependency injection of `Database` from the project container |
 | **Observe** | Optional `Database::setQueryObserver()` at bootstrap ([metrics.md](docs/metrics.md)) |
 
 ```text
 HTTP / CLI / worker
-    → your controller or job
-    → your repository (SQL or builders here)
+    → application controller or job
+    → application repository (SQL or builders here)
     → UDA\Database or UDA\Link
     → (internal) Driver → PDO → engine
 ```
@@ -112,7 +112,7 @@ See **Configuration**, **Fluent queries**, and **Caching** below. Full layer gui
 ## Configuration
 
 UDA loads **one JSON file** (`.json` extension). Production default: environment variable
-`UDA_CONFIG` points at the file. You can also pass a path to `Database::connect()`.
+`UDA_CONFIG` points at the file. A path can also be passed to `Database::connect()`.
 
 ```json
 {
@@ -247,9 +247,9 @@ $db->select()          ← entry (wired to this connection’s engine + dialect)
 **WHERE is a sub-chain.** `where()`, `whereIn()`, `whereExists()`, and `whereRaw()` return a
 `WhereBuilder`. Stack predicates there (`where` chains to `where` on the same `WhereBuilder`).
 
-**What `end()` actually means.** The name is easy to misread: `end()` does **not** mean “you
-are done with the query.” It means **end the WHERE sub-chain** — flush predicates onto the
-parent `Select` / `Update` / `Delete` and return that parent so you can keep chaining.
+**What `end()` actually means.** The name is easy to misread: `end()` does **not** mean “the
+query is done.” It means **end the WHERE sub-chain** — flush predicates onto the
+parent `Select` / `Update` / `Delete` and return that parent so chaining can continue.
 
 | Situation | What to do |
 | --------- | ------------ |
@@ -257,7 +257,7 @@ parent `Select` / `Update` / `Delete` and return that parent so you can keep cha
 | **More SELECT after WHERE** | **Need** `end()` — `orderBy`, `limit`, `groupBy`, and `union` live on `Select`, not on `WhereBuilder`. |
 | **Compile SELECT (`toSql`) after WHERE** | **Omit** `end()` — `toSql()` on `WhereBuilder` ends WHERE and compiles, same as `rows()`. |
 | **Finish UPDATE / DELETE** | **Need** `end()` before `exec()` or `returning()` — those terminators are not on `WhereBuilder`. |
-| **Subquery value for `whereExists` / `joinSub`** | **Need** `end()` or `toSql()` on the inner query so you pass a `Select` or `Sql`, not a `WhereBuilder`. |
+| **Subquery value for `whereExists` / `joinSub`** | **Need** `end()` or `toSql()` on the inner query so the value passed is `Select` or `Sql`, not `WhereBuilder`. |
 
 ```php
 // Read terminator straight off WHERE (proxy end)
@@ -307,7 +307,7 @@ return an immutable `Query\Sql` value for reuse / logging).
 
 **`upsert()`** — `exec()` only.
 
-Do not call `rows()` when you only need one row — use `row()` or `value()`.
+Avoid `rows()` when only one row is needed — use `row()` or `value()`.
 
 ### Builder entrypoints (chain steps vs terminators)
 
@@ -444,7 +444,7 @@ $bob   = $db->row($template, ['id' => 2], ['users']);
 
 #### Fluent partial builder (reuse the FROM / SELECT shape)
 
-Because chain steps clone the builder (see **How chaining works**), you can keep a shared
+Because chain steps clone the builder (see **How chaining works**), a shared
 `from` / column list and fork different `where` branches — each branch finishes with a read
 terminator (`rows()`, etc.); `WhereBuilder` ends the WHERE clause automatically:
 
@@ -507,7 +507,7 @@ $rows = $db->rows($sql, $inParams, ['users']);
 
 In fluent chains, `whereRaw()` merges named parameters into the builder bag. Reuse the same
 SQL fragment with different binds — no `end()` before `rows()` (the read terminator ends
-WHERE for you):
+WHERE clause automatically):
 
 ```php
 $statusFilter = 'o.status = :status';
@@ -545,7 +545,7 @@ the repository class. More recipes: [patterns.md](docs/patterns.md).
 
 ## Errors
 
-UDA throws typed exceptions — map them in your HTTP or job layer, not by parsing message text.
+UDA throws typed exceptions — map them in the HTTP or job layer, not by parsing message text.
 
 | Exception | When |
 | --------- | ---- |
@@ -600,7 +600,7 @@ Enable per connection in `uda.json`:
 | **Invalidation** | Writes with hints → `Cache::touch()`; reads compare metadata to table mtimes (**wired in v1**) |
 | **Stale on error** | `allowStaleOnError` + `maxStaleSeconds` when DB fails (**not wired in v1**) |
 | **Layering** | Stricter table/connection policy wins on multi-table reads ([caching.md](docs/caching.md#layering-connection-default-30s-vs-table-300s-when-policy-ttl-exists)) |
-| **Backend expiry** | Redis/Memcached/array keys for payload/metadata expire after **3600s** (orphan cleanup, not your policy) |
+| **Backend expiry** | Redis/Memcached/array keys for payload/metadata expire after **3600s** (orphan cleanup, not application policy) |
 | **Not TTL** | `store.timeout` is Redis **connect** timeout — see [caching.md § TTL map](docs/caching.md#ttl-and-freshness--full-map) |
 | **Strict mode** | `require_table_hints: true` rejects hintless raw reads when cache is on (builders unaffected) |
 | **Ops** | `Database::flushCache()` for deploy/incident purge — not for normal app logic |
@@ -622,7 +622,7 @@ Both expose raw SQL, builders, and transactions on the same pipeline.
 
 Typical setup: **php-fpm** (or equivalent) behind nginx/Apache, often in a container.
 Set `UDA_CONFIG`, mount `uda.json`, call `Database::setQueryObserver()` once in
-`public/index.php` if you need slow-query or error logging.
+`public/index.php` when slow-query or error logging is required.
 
 Long-lived workers (Octane, RoadRunner, Swoole): shared handle per worker — read
 [getting-started.md](docs/getting-started.md) and [architecture.md](docs/architecture.md).

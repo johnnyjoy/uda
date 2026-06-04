@@ -1,11 +1,15 @@
 # UDA Cache Doctrine
 
+> **Status: future-state design doctrine.**  
+> This document describes the target cache policy model (interval, max-age, layered TTL, stale-on-error).
+> Current v1 runtime behavior is documented in [caching.md](caching.md) and is narrower.
+
 Cache exists to reduce read load **without changing caller behavior**. Repositories
 always call `Database` the same way; `Driver` + `Cache` decide whether a read is served
 from cache, from the database, or (when policy allows) from **stale cache during an outage**.
 
-This document is the **design intent**. See [caching.md](caching.md) for configuration,
-runtime path, and what is wired in each release.
+This document is the **design intent / target**. See [caching.md](caching.md) for configuration,
+runtime path, and what is wired in the current release.
 
 ---
 

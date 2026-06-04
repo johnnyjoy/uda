@@ -73,7 +73,7 @@ $generated = Database::connectWithConfig('/tmp/generated-uda.json', 'tenant_001'
 ## Three sharp edges (read before debugging)
 
 1. **Positional `?` placeholders** — Rejected before PDO. Always use named
-   parameters (`:id`, `:name`, …). If you paste SQL from tutorials, rewrite binds.
+   parameters (`:id`, `:name`, …). SQL copied from tutorials should be rewritten to named binds.
 
 2. **Read cache without table hints** — When caching is enabled, reads that
    should participate in metadata/TTL must pass **table hints** (the string array
