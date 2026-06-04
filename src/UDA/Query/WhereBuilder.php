@@ -765,7 +765,7 @@ final class WhereBuilder
      *
      * @throws QueryException If the parent builder is not a Select.
      */
-    public function count(string $expression = '*'): int
+    public function count(string $expression = '1'): int
     {
         $parent = $this->end();
 

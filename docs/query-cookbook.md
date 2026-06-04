@@ -426,6 +426,45 @@ Benefits:
 
 ---
 
+# Counting Rows
+
+`count()` is a read terminator that returns an integer. It wraps the query so the
+database counts rows without sending them back.
+
+```php
+$total = $db->select()
+    ->from('employees')
+    ->count();
+```
+
+Equivalent SQL:
+
+```sql
+SELECT COUNT(1) AS total FROM (SELECT * FROM employees) uda_count
+```
+
+Count a filtered set — `count()` closes the WHERE chain for you:
+
+```php
+$active = $db->select()
+    ->from('employees')
+    ->where('active', 1)
+    ->count();
+```
+
+Pass an expression only when you need non-NULL or DISTINCT semantics:
+
+```php
+$withEmail   = $db->select()->from('employees')->count('email');
+$departments = $db->select()->from('employees')->count('DISTINCT department_id');
+```
+
+Row counts default to `COUNT(1)`. `COUNT(*)` and `COUNT(1)` count the same rows, so
+the default avoids any column expansion; supply a column only to count non-NULL values
+(`count('email')`) or distinct values (`count('DISTINCT department_id')`).
+
+---
+
 # INSERT
 
 ```php

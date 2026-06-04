@@ -1061,7 +1061,7 @@ final class Select extends \UDA\Query
      *
      * @return int Integer result.
      */
-    public function count(string $expression = '*'): int
+    public function count(string $expression = '1'): int
     {
         $countSql = $this->buildCountSql($expression);
 
@@ -1078,7 +1078,7 @@ final class Select extends \UDA\Query
     private function buildCountSql(string $expression): Sql
     {
         $inner = $this->toSql();
-        $expr = trim($expression) === '' ? '*' : $expression;
+        $expr = trim($expression) === '' ? '1' : $expression;
 
         $query = sprintf(
             'SELECT COUNT(%s) AS total FROM (%s) uda_count',
