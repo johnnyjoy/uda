@@ -439,7 +439,7 @@ final class Select extends \UDA\Query
      *
      * @return WhereBuilder
      */
-    public function whereExists(Select|Sql $subquery): WhereBuilder
+    public function whereExists(Select|Sql|WhereBuilder $subquery): WhereBuilder
     {
         $clone = clone $this;
         $whereBuilder = new WhereBuilder($clone, $clone->params);
@@ -449,13 +449,17 @@ final class Select extends \UDA\Query
     }
 
     /**
-     * Start a WHERE NOT EXISTS chain
+     * Start a WHERE NOT EXISTS chain.
      *
-     * @param Sql $subquery  Subquery to check for non-existence
+     * Accepts a Select, Sql, or an open WhereBuilder (the result of calling
+     * whereRaw/where/etc. on a subquery Select). When given a WhereBuilder the
+     * chain is closed via end() and the resulting Select is used as the subquery.
+     *
+     * @param Select|Sql|WhereBuilder $subquery  Subquery to check for non-existence.
      *
      * @return WhereBuilder
      */
-    public function whereNotExists(Select|Sql $subquery): WhereBuilder
+    public function whereNotExists(Select|Sql|WhereBuilder $subquery): WhereBuilder
     {
         $clone = clone $this;
         $whereBuilder = new WhereBuilder($clone, $clone->params);

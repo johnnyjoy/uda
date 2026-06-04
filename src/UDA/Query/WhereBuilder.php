@@ -548,7 +548,7 @@ final class WhereBuilder
      *
      * @return self
      */
-    public function exists(Select|Sql $subquery): self
+    public function exists(Select|Sql|WhereBuilder $subquery): self
     {
         $this->addCondition('EXISTS ' . $this->renderSubquery($subquery));
 
@@ -558,11 +558,11 @@ final class WhereBuilder
     /**
      * Create NOT EXISTS condition with subquery
      *
-     * @param Sql $subquery  Subquery to check for non-existence
+     * @param Select|Sql|WhereBuilder $subquery  Subquery to check for non-existence.
      *
      * @return self
      */
-    public function notExists(Select|Sql $subquery): self
+    public function notExists(Select|Sql|WhereBuilder $subquery): self
     {
         $this->addCondition('NOT EXISTS ' . $this->renderSubquery($subquery));
 
@@ -956,8 +956,12 @@ final class WhereBuilder
      *
      * @return string String result.
      */
-    private function renderSubquery(Select|Sql $subquery): string
+    private function renderSubquery(Select|Sql|WhereBuilder $subquery): string
     {
+        if ($subquery instanceof WhereBuilder) {
+            $subquery = $subquery->end();
+        }
+
         $sql = $subquery instanceof Select ? $subquery->toSql() : $subquery;
         $query = $sql->getQuery();
         $replacements = [];
