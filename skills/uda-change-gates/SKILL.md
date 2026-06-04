@@ -34,7 +34,7 @@ php -d memory_limit=-1 vendor/bin/phpstan analyse src/
 - Forbidden cross-domain imports
 - Forbidden class suffixes (Manager, Service, …)
 
-Application DAL code under your app namespace is **not** scanned — your discipline is import boundaries (see `uda-dal-layer`).
+Application data-access code under your app namespace is **not** scanned — your discipline is import boundaries (see `uda-data-access`).
 
 ## Application PR review (hostile)
 

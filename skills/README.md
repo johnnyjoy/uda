@@ -4,7 +4,7 @@ Executable checklists for building and operating a **database abstraction layer*
 on UDA. Skills complement the docs; they do not replace
 [docs/building-your-dal.md](../docs/building-your-dal.md).
 
-**UDA is not an ORM.** One execution path; import only `Database` or `Link` in
+**Explicit SQL in repository classes.** One execution path; import only `Database` or `Link` in
 application code.
 
 ---
@@ -17,9 +17,9 @@ front matter (`name`, `description`). Any tool that supports “skills” (or ma
 
 | How to load | |
 | ----------- | -- |
-| **Path** | `skills/uda-dal-layer/SKILL.md` (and others below) |
+| **Path** | `skills/uda-data-access/SKILL.md` (and others below) |
 | **Chat** | Attach or reference the file path your agent supports |
-| **Project bootstrap** | e.g. `AGENTS.md` / `CLAUDE.md`: “For DAL work on UDA, follow `skills/uda-dal-layer/SKILL.md`.” |
+| **Project bootstrap** | e.g. `AGENTS.md` / `CLAUDE.md`: “For repository/data-access work on UDA, follow `skills/uda-data-access/SKILL.md`.” |
 | **Local copy** | Optional symlink into your agent’s skills folder — never required in git |
 
 Canonical copy lives in **this repo** under `skills/`. Do not depend on IDE-only
@@ -31,7 +31,7 @@ config directories for discovery.
 
 | Skill | When to load |
 | ----- | ------------ |
-| [uda-dal-layer](uda-dal-layer/SKILL.md) | New repository class, `Database` vs `Link`, layering, anti-patterns |
+| [uda-data-access](uda-data-access/SKILL.md) | Your repositories on UDA — `Database` vs `Link`, anti-patterns (renamed from `uda-dal-layer`; DAL already means data access layer) |
 | [uda-sql-and-cache](uda-sql-and-cache/SKILL.md) | Queries, terminators, table hints, cache flush/clear |
 | [uda-config-deploy](uda-config-deploy/SKILL.md) | JSON config, env, Redis/Memcached, FPM vs workers |
 | [uda-change-gates](uda-change-gates/SKILL.md) | Before merge to **UDA itself**: guardrails, tests |

@@ -11,14 +11,19 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
+### Fixed
+
+- `WhereBuilder::toSql()` proxies through `end()` like read terminators, so `->where(...)->toSql()` no longer requires a manual `end()` on SELECT builders.
+
 ### Changed
 
+- Agent skill `skills/uda-dal-layer` renamed to **`skills/uda-data-access`** (clearer name; “DAL layer” was redundant).
 - Composer package name **`johnnyjoy/uda`** (install: `composer require johnnyjoy/uda`).
-- Documentation reorganized for **application developers**: README quick start
-  with `Link` example, php-fpm/container deploy (not bare-metal-only), new
-  [docs/building-your-dal.md](docs/building-your-dal.md) and [docs/engines.md](docs/engines.md),
-  [docs/README.md](docs/README.md) user vs contributor paths; agent skills
-  described as tool-agnostic under `skills/`.
+- Documentation reorganized for **application developers**: README as full
+  storefront (lead, capabilities, engines, Configuration / Raw SQL / Fluent queries /
+  reuse & bulk insert, Caching sections, `Link` quick start), plus [docs/building-your-dal.md](docs/building-your-dal.md),
+  [docs/engines.md](docs/engines.md), [docs/README.md](docs/README.md) user vs
+  contributor paths; agent skills described as tool-agnostic under `skills/`.
 
 ## [1.0.0] - 2026-06-03
 

@@ -242,6 +242,11 @@ $db->delete()
 
 `toSql()` exists for debugging/logging; it does not execute.
 
+On **SELECT**, `where()` returns `WhereBuilder`. Read terminators and `toSql()` on that
+object call `end()` internally, then forward to `Select` — so `->where(...)->toSql()` and
+`->where(...)->rows()` work without a manual `end()`. You still need `end()` before
+`orderBy`, `limit`, or `groupBy`, and before `exec()` / `returning()` on update/delete.
+
 ### 3.1 What is `UDA\Query` (the abstract base)?
 
 **`UDA\Query` is the shared chassis for fluent query builders** — not a type you use or extend in application code.
@@ -302,7 +307,6 @@ $db = Database::connect('app');
 $sql = $db->select('id', 'name')
     ->from('users')
     ->where('active', 1)
-    ->end()
     ->toSql();
 
 $rows = Database::connect('replica')->rows($sql);

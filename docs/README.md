@@ -1,13 +1,14 @@
 # UDA documentation
 
-**Universal Data Abstractor** — PHP library for application database abstraction
-(SQL + thin classes on top of `UDA\Database` / `UDA\Link`).
+**Universal Data Abstractor** — slim SQL execution for PHP repositories; one API across
+major databases, optional read cache. Storefront:
+[../README.md](../README.md).
 
 ---
 
 ## For application developers (start here)
 
-You are building **your** repositories or data classes. UDA is not an ORM.
+You are building **your** repositories or data classes with explicit SQL.
 
 | Order | Document | Purpose |
 | ----- | -------- | ------- |
@@ -17,13 +18,13 @@ You are building **your** repositories or data classes. UDA is not an ORM.
 | 4 | [**patterns.md**](patterns.md) | Repository recipes (pagination, filters, joins) |
 | 5 | [**public-api.md**](public-api.md) | Method reference when you need exact semantics |
 | 6 | [**configuration.md**](configuration.md) | Full config schema, cache stores, env |
-| 7 | [**caching.md**](caching.md) | Table hints, TTL, flush vs clear |
+| 7 | [**caching.md**](caching.md) | Table hints, mtime vs policy vs backend TTL, flush vs clear |
 
 **Also useful:** [product-contract-v1.md](product-contract-v1.md) (v1 promise),
 [security.md](security.md) (binding, identifiers), [metrics.md](metrics.md) (query observer).
 
 **Agent skills:** [skills/README.md](../skills/README.md) — checklists for any AI
-tool that loads skills; start with `skills/uda-dal-layer/SKILL.md`.
+tool that loads skills; start with `skills/uda-data-access/SKILL.md`.
 
 **Query cookbook:** [query-cookbook.md](query-cookbook.md) — large SQL pattern
 reference (maintainer-guarded edits).

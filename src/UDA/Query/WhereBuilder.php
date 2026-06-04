@@ -620,8 +620,8 @@ final class WhereBuilder
     }
 
     // -------------------------------------------------------------------------
-    // Proxy terminators — call end() then forward, so ->where(...)->rows() works
-    // without requiring an explicit ->end() call.
+    // Proxy terminators — call end() then forward, so ->where(...)->rows() and
+    // ->where(...)->toSql() work without requiring an explicit ->end() call.
     // -------------------------------------------------------------------------
 
     /**
@@ -752,6 +752,24 @@ final class WhereBuilder
         }
 
         return $parent->count($expression);
+    }
+
+    /**
+     * End the chain and compile SELECT to Sql (no execution).
+     *
+     * @return Sql Compiled SQL and parameters.
+     *
+     * @throws QueryException If the parent builder is not a Select.
+     */
+    public function toSql(): Sql
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Select) {
+            throw new QueryException('toSql() is only available on SELECT builders.');
+        }
+
+        return $parent->toSql();
     }
 
     /**

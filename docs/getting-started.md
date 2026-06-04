@@ -20,8 +20,7 @@ use the link form:
 use UDA\Link;
 ```
 
-The link still resolves the same `Database` handle. It is not a second runtime
-or an ORM layer.
+The link still resolves the same `Database` handle — not a second runtime or query API.
 
 ## Install
 

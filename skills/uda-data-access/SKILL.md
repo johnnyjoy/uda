@@ -1,14 +1,18 @@
 ---
-name: uda-dal-layer
+name: uda-data-access
 description: >-
-  Build application database abstraction on UDA using Database or Link only.
-  Use when creating repository classes, DAL modules, or wiring SQL behind a
-  class boundary. Rejects Driver, PDO, ORM patterns, and second execution paths.
+  Build your application's data access on UDA (repository classes, Database or Link).
+  Use when creating repository classes or wiring SQL behind a class boundary.
+  Rejects Driver, PDO, entity-mapping patterns, and second execution paths.
 ---
 
-# UDA: database abstraction layer (application)
+# UDA: your data access layer
 
-UDA is **not** an ORM. Your layer is **SQL + thin classes** that call UDA.
+UDA is the engine. **Your** layer is explicit SQL in repository-style classes that call
+`Database` or `Link` — not a second framework inside UDA.
+
+> **Skill name:** `uda-data-access` (not “dal-layer”). DAL already means *data access layer*;
+> adding “layer” again was redundant. This skill is about **your** repositories on top of UDA.
 
 ## Hard rules
 
@@ -68,7 +72,7 @@ Reference fixture: `tests/Fixtures/TraitUserRepository.php`.
 | `Database::setQueryObserver()` inside repository methods | Ops hook belongs in bootstrap once — not per query |
 | Timing/logging every `row()`/`rows()` call in app code | Use `setQueryObserver()` instead (see `uda-config-deploy`) |
 
-## Layering (allowed)
+## Stack (where your code sits)
 
 ```text
 HTTP / CLI / job
@@ -78,7 +82,7 @@ HTTP / CLI / job
     → (internal) Driver → PDO
 ```
 
-Your layer may **not** insert another SQL execution tier below `Database`.
+Do not insert another SQL execution tier below `Database`.
 
 ## Checklist (new repository)
 
