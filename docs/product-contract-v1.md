@@ -7,6 +7,8 @@ that need deterministic, explicit SQL execution across relational database engin
 
 ## Product Promise
 
+**How to build your layer:** [building-your-dal.md](building-your-dal.md).
+
 Application code imports one handle:
 
 ```php

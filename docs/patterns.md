@@ -1,4 +1,8 @@
 # UDA Repository Patterns Cookbook
+
+**Prerequisites:** [building-your-dal.md](building-your-dal.md) (`Link` vs `Database`,
+layer rules). This cookbook adds **SQL recipes** for repository methods.
+
 This document demonstrates **practical repository patterns** using UDA.
 
 Goals:

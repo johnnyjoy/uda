@@ -1,154 +1,67 @@
-# UDA Documentation Index (Normative Order)
+# UDA documentation
 
-**UDA — Universal Data Abstractor**
-
-Deterministic SQL abstractor: one pipeline, dialect-aware builders, transparent
-read cache. Integrators build domain data layers on `Database` or `Link`.
-
-A small, high-performance SQL execution and query composition system.
-
-Goals:
-
-* **Uniformity** — one clear way to perform common DB operations
-* **Performance** — minimal abstraction overhead
-* **Leverage** — powerful SQL composition without framework weight
-
-The system intentionally favors:
-
-```
-fewer layers
-fewer abstractions
-fewer execution paths
-```
+**Universal Data Abstractor** — PHP library for application database abstraction
+(SQL + thin classes on top of `UDA\Database` / `UDA\Link`).
 
 ---
 
-# Directive Precedence (Hard Rule)
+## For application developers (start here)
 
-Documentation is hierarchical.
-If two documents disagree, the higher document wins.
+You are building **your** repositories or data classes. UDA is not an ORM.
 
-Order of authority:
+| Order | Document | Purpose |
+| ----- | -------- | ------- |
+| 1 | [**building-your-dal.md**](building-your-dal.md) | Layer shape, `Link` vs inject `Database`, rules, examples |
+| 2 | [**getting-started.md**](getting-started.md) | Install, connect, builders, transactions, worker sharp edges |
+| 3 | [**engines.md**](engines.md) | `uda.json` snippets per database |
+| 4 | [**patterns.md**](patterns.md) | Repository recipes (pagination, filters, joins) |
+| 5 | [**public-api.md**](public-api.md) | Method reference when you need exact semantics |
+| 6 | [**configuration.md**](configuration.md) | Full config schema, cache stores, env |
+| 7 | [**caching.md**](caching.md) | Table hints, TTL, flush vs clear |
 
-1. **Project constitution / prompts / style guide** — non-negotiable design philosophy
-2. **contract.md** — compact architectural invariants
-3. **spec.md** — full normative specification
-4. **design.md** — implementation structure
-5. **All other documents** — explanatory
+**Also useful:** [product-contract-v1.md](product-contract-v1.md) (v1 promise),
+[security.md](security.md) (binding, identifiers), [metrics.md](metrics.md) (query observer).
 
-If **code conflicts with documentation**, the code is incorrect.
+**Agent skills:** [skills/README.md](../skills/README.md) — checklists for any AI
+tool that loads skills; start with `skills/uda-dal-layer/SKILL.md`.
 
----
-
-# Required Reading (Before Changing Code)
-
-Anyone modifying UDA must read these documents first.
-
-| Document            | Purpose                                        |
-| ------------------- | ---------------------------------------------- |
-| **constitution.md** | design philosophy and project goals            |
-| **product-contract-v1.md** | finished v1 product promise and boundaries |
-| **style-guide.md**  | formatting, naming, documentation requirements |
-| **contract.md**     | hard architectural rules                       |
-| **spec.md**         | detailed system contract and invariants        |
-| **design.md**       | how the specification is implemented           |
-
-These define the **rules of the system**.
+**Query cookbook:** [query-cookbook.md](query-cookbook.md) — large SQL pattern
+reference (maintainer-guarded edits).
 
 ---
 
-# Operational References
+## For contributors
 
-Read these when modifying specific subsystems.
+Changes to UDA itself (`src/UDA/`). Read before editing:
 
-| Document                   | Scope                                               |
-| -------------------------- | --------------------------------------------------- |
-| **architecture.md**        | domain boundaries and component relationships       |
-| **cache-doctrine.md**      | transparent caching philosophy                      |
-| **caching.md**             | cache key design, TTL policy, invalidation rules    |
-| **security.md**            | parameter binding, fragments, identifier validation |
-| **configuration.md**       | config structure and validation                     |
-| **drivers.md / driver.md** | engine-specific behavior                            |
+| Document | Purpose |
+| -------- | ------- |
+| [contract.md](contract.md) | Architectural invariants |
+| [spec.md](spec.md) | Full normative specification |
+| [constitution.md](constitution.md) | Design philosophy |
+| [architecture.md](architecture.md) | Domains, pipeline, pooling |
+| [driver.md](driver.md) | Engine vs `UDA\Driver` vocabulary |
+| [style-guide.md](style-guide.md) | PHPDoc, naming |
+| [integration/README.md](integration/README.md) | CI engine matrix |
+| [releases.md](releases.md) | Versioning, tags |
 
-These documents explain **how subsystems operate**.
+Process: [CONTRIBUTING.md](../CONTRIBUTING.md) at repo root. Local plans under
+`docs/plans/` are gitignored drafts when present.
 
----
-
-# Usage Documentation
-
-These documents describe **how application developers should use UDA**.
-
-| Document              | Purpose                         |
-| --------------------- | ------------------------------- |
-| **public-api.md**     | official API surface            |
-| **getting-started.md** | install, config, connect, and common usage examples |
-| **repositories.md**   | recommended repository pattern  |
-| **query-cookbook.md** | common SQL composition patterns |
-
-These documents are **developer-facing guidance**.
+**Do not** point application developers at constitution/spec as “getting started.”
 
 ---
 
-# Policy: Documentation First
+## Index by topic
 
-Behavioral changes must update documentation.
+| Topic | Doc |
+| ----- | --- |
+| DAL / repositories | [building-your-dal.md](building-your-dal.md), [patterns.md](patterns.md) |
+| Config / engines | [engines.md](engines.md), [configuration.md](configuration.md) |
+| Cache | [caching.md](caching.md), [cache-doctrine.md](cache-doctrine.md) |
+| API | [public-api.md](public-api.md) |
+| Drivers (internals) | [driver.md](driver.md) |
+| CI per engine | [integration/](integration/) |
+| Changelog | [../CHANGELOG.md](../CHANGELOG.md) |
 
-Required updates:
-
-| Change Type                | Required Docs       |
-| -------------------------- | ------------------- |
-| architecture or invariants | `spec.md`           |
-| implementation structure   | `design.md`         |
-| public API                 | `public-api.md`     |
-| caching behavior           | `caching.md`        |
-| developer patterns         | `query-cookbook.md` |
-
-A code change without corresponding documentation updates is incomplete.
-
----
-
-# Project Philosophy
-
-UDA is intentionally **not a framework**.
-
-It aims to be:
-
-* small
-* predictable
-* deterministic
-* fast
-
-The design avoids:
-
-* abstraction layers that do not add value
-* multiple execution paths
-* hidden behavior
-* unnecessary objects
-
-If a feature increases complexity without improving **uniformity or performance**, it should not exist.
-
----
-
-## Small optional improvement (recommended)
-
-You could add one short section at the bottom that helps new contributors immediately understand the **core architecture**:
-
-```
-# Core Architecture
-
-Application
-    ↓
-Repository
-    ↓
-Database
-    ↓
-Driver
-    ↓
-PDO
-```
-
-And one sentence:
-
-> UDA guarantees a **single execution pipeline** for all SQL operations.
-
-That tiny addition helps readers orient themselves in about **3 seconds**, which maintainers appreciate.
+Legacy maintainer map: [docs-index.md](docs-index.md) (points here).

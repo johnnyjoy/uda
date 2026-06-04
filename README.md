@@ -1,73 +1,162 @@
-# UDA
+# Universal Data Abstractor (UDA)
 
-Universal Data Abstractor (UDA) is a PHP 8.2+ **abstractor** for deterministic SQL
-execution through one handle: `UDA\Database` — engine routing, fluent builders,
-and transparent read cache. Application classes build their domain data layer on
-`Database` or `UDA\Link`.
+PHP 8.2+ library for **your** database abstraction layer in **web apps and
+services** — explicit SQL, named parameters, optional builders, transparent read
+cache. **Not an ORM.**
 
-## Start Here
+Typical deploy: **php-fpm** (or equivalent request-bound PHP) behind nginx or Apache,
+often in a **Docker/Kubernetes** image. CLI and cron use the same `uda.json`.
+Long-running workers (Octane, RoadRunner, Swoole) are supported with extra rules —
+see [getting-started.md](docs/getting-started.md).
 
-**Canonical reading order:** `docs/getting-started.md` → `docs/public-api.md` →
-`docs/architecture.md` → `docs/configuration.md` → `docs/caching.md` →
-`docs/contract.md` (full index: `docs/docs-index.md`).
-
-* **getting-started** — Install, env config, connect, first reads/writes, `Link`, builders.
-* **public-api** — Normative method semantics, terminators, cache hints, glossary.
-* **architecture** — Single pipeline, pooling, reconnect, prepared-statement LRU notes.
-* **configuration** — JSON schema, connections, cache stores.
-* **caching** — Transparent cache behaviour and table hints in depth.
-* **contract** — Hard rules that should match what you infer from code review.
-
-**Agent skills (build a DAL on UDA):** `skills/README.md` — agent-agnostic checklists for humans and AI assistants.
-
-* Install: `composer require universal-data-abstractor/universal-data-abstractor`
-* Getting started: `docs/getting-started.md`
-* Public API: `docs/public-api.md`
-* Product contract: `docs/product-contract-v1.md`
-* Configuration: `docs/configuration.md`
-* Architecture rules: `docs/contract.md`, `docs/architecture.md`
-
-Do not edit `docs/query-cookbook.md` without explicit approval; it is treated as
-a guide.
-
-## Engine integration (CI)
-
-**Normative matrix:** [`docs/integration/README.md`](docs/integration/README.md).
-
-CI integration-gates **SQLite**, **PostgreSQL**, **MariaDB**, **SQL Server**
-(`sqlserver` + **`dblib`** on Linux CI), **Oracle**, **DB2**, and **Firebird**. Workflows:
-`sqlite-integration.yml`, `postgres-integration.yml`, `mariadb-integration.yml`,
-`sqlserver-integration.yml`, `oracle-integration.yml`, `db2-integration.yml`,
-`firebird-integration.yml`. Engines in
-`config/example-config.json` illustrate config shape — **Sybase** is not CI-gated.
-Worker/concurrency rules: `docs/architecture.md`.
-
-## Contributing, security, releases
-
-- **Contributing:** `CONTRIBUTING.md` — GitHub PRs, GitHub Actions CI, local `composer check`.
-- **License:** `LICENSE.md` (MIT)
-- **Security:** `SECURITY.md`
-- **Changelog:** `CHANGELOG.md`
-- **Versioning / tags:** `docs/releases.md`
-
-## Where CI runs
-
-GitHub Actions on the canonical repo: `.github/workflows/` (default job + engine
-integration jobs). See `CONTRIBUTING.md` for the PR workflow and local gates.
-
-## Local validation
-
-PHP 8.2+.
+**GitHub:** [github.com/johnnyjoy/uda](https://github.com/johnnyjoy/uda)
 
 ```bash
-composer install
-composer check
-composer stan
-composer test
+composer require johnnyjoy/uda
 ```
 
-If PHPStan needs more memory:
+## Quick start (web service + `Link`)
 
-```bash
-php -d memory_limit=-1 vendor/bin/phpstan analyse src/
+**1. Config** — mount `uda.json` in the image or VM; set `UDA_CONFIG`. Use your DB
+service hostname (Compose/Kubernetes), not `localhost`, inside the app container:
+
+```json
+{
+  "defaults": { "connection": "app" },
+  "connections": {
+    "app": {
+      "driver": "pgsql",
+      "params": {
+        "host": "postgres",
+        "port": 5432,
+        "dbname": "myapp"
+      },
+      "user": { "env": "DB_USER" },
+      "pass": { "env": "DB_PASS" }
+    }
+  }
+}
 ```
+
+```dockerfile
+# Dockerfile (excerpt)
+ENV UDA_CONFIG=/etc/app/uda.json
+COPY uda.json /etc/app/uda.json
+```
+
+**2. Bootstrap** — once per request in php-fpm (e.g. `public/index.php` before
+routing). Optional ops logging via `setQueryObserver()` — see
+[metrics.md](docs/metrics.md).
+
+```php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+// UDA reads UDA_CONFIG; repositories use Link or injected Database below.
+```
+
+**3. Repository** — SQL stays in small classes; HTTP controllers call these, not
+`Database` directly everywhere:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Repository;
+
+use UDA\Link;
+
+final class UserRepository
+{
+    use Link;
+
+    protected static string $connection = 'app';
+
+    public function findName(int $id): ?string
+    {
+        $name = $this->value(
+            'SELECT name FROM users WHERE id = :id',
+            ['id' => $id],
+            ['users']
+        );
+
+        return is_string($name) ? $name : null;
+    }
+
+    public function create(int $id, string $name): void
+    {
+        $this->exec(
+            'INSERT INTO users (id, name) VALUES (:id, :name)',
+            ['id' => $id, 'name' => $name],
+            ['users']
+        );
+    }
+}
+```
+
+```php
+// Controller (conceptual)
+$user = (new UserRepository())->findName($id);
+```
+
+- **`Link`** — one connection name per repository class; fits php-fpm request flow.
+- **Named params only** (`:id`) — positional `?` is rejected.
+- **Table hints** `['users']` — required for correct cache behaviour when caching is on.
+
+Local dev with SQLite only: change `driver` / `params` — see [engines.md](docs/engines.md).
+
+**Next:** [Build your DAL on UDA](docs/building-your-dal.md) · deploy skill:
+[skills/uda-config-deploy/SKILL.md](skills/uda-config-deploy/SKILL.md)
+
+## Inject `Database` instead of `Link`
+
+Use when a service container or front controller already owns the handle:
+
+```php
+use UDA\Database;
+
+$db = Database::connectDefault(); // UDA_CONFIG + default connection
+$user = $db->row(
+    'SELECT id, name FROM users WHERE id = :id',
+    ['id' => 42],
+    ['users']
+);
+```
+
+Same pipeline as `Link`. See [building-your-dal.md](docs/building-your-dal.md#database-or-link).
+
+## Documentation (users)
+
+| Doc | You need it when… |
+| --- | ----------------- |
+| [**building-your-dal.md**](docs/building-your-dal.md) | Layer shape, FPM vs workers, repositories, rules |
+| [**getting-started.md**](docs/getting-started.md) | Builders, transactions, reconnect, Octane caveats |
+| [**engines.md**](docs/engines.md) | `uda.json` per database (Postgres, SQL Server, Firebird, …) |
+| [**patterns.md**](docs/patterns.md) | Repository recipes — pagination, filters, joins |
+| [**configuration.md**](docs/configuration.md) | Cache stores, env secrets, full schema |
+| [**public-api.md**](docs/public-api.md) | Method reference |
+
+Full map: [**docs/README.md**](docs/README.md).
+
+## Agent skills (any AI tool that loads skills)
+
+[`skills/`](skills/README.md) — agent-agnostic checklists (DAL layout, SQL/cache,
+**config & deploy** for containers/FPM, PR gates). Example:
+`skills/uda-dal-layer/SKILL.md`, `skills/uda-config-deploy/SKILL.md`.
+
+## Supported engines
+
+SQLite, PostgreSQL, MariaDB/MySQL, SQL Server, Oracle, DB2, Firebird —
+[engines.md](docs/engines.md). Sybase ASE in code; not in upstream CI (license).
+Maintainer CI matrix: [docs/integration/README.md](docs/integration/README.md).
+
+## Contributing & license
+
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) — changes to UDA itself; see [docs/README.md#for-contributors](docs/README.md#for-contributors)
+- **License:** [LICENSE.md](LICENSE.md) (MIT)
+- **Security:** [SECURITY.md](SECURITY.md)
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)

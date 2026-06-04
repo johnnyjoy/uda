@@ -5,7 +5,9 @@ One clear way to do common database operations. Cross-DB, migration-friendly, no
 **Purpose:** Define the public API surface: connect, raw SQL (named params), fluent builders, safe fragments, optional typed parameters, and the optional class link.
 **Anti-goals:** No `Driver` in userland. No `Identifier` objects. No cache API on the read path. No “Connection” objects.
 
-**Read next:** After `docs/getting-started.md`, read §1–§10 here, then `docs/architecture.md` for pipeline and runtime guarantees.
+**Read first:** [building-your-dal.md](building-your-dal.md) (how to structure your layer).
+Then §1–§10 here for exact method semantics. Contributors: pipeline detail in
+`docs/architecture.md`.
 
 ---
 

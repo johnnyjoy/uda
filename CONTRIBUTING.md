@@ -9,7 +9,8 @@ in this tree. Run the same Composer commands locally before opening a PR.
 
 - PHP ≥ 8.2, `ext-pdo`
 - Composer 2.x
-- Read `docs/style-guide.md` and `docs/contract.md` before non-trivial changes
+- Read [docs/README.md](docs/README.md#for-contributors) (contract, spec, architecture)
+  before non-trivial changes to `src/UDA/`
 
 ## Local validation (before a PR)
 

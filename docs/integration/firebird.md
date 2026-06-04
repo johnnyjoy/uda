@@ -4,7 +4,7 @@
 
 **Enforced in CI** (`.github/workflows/firebird-integration.yml`). Connect with `driver: firebird`
 (alias `interbase`) and **`pdo_firebird`**. Image: [`firebirdsql/firebird:5-noble`](https://hub.docker.com/r/firebirdsql/firebird).
-Add required check `firebird-integration` with the other `*-integration` jobs. Matrix: [README.md](README.md).
+Add required check `firebird-integration` with the other `*-integration` jobs. Consumer config: [engines.md](../engines.md#firebird).
 
 ## Requirements
 

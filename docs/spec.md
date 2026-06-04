@@ -1,20 +1,3 @@
-Below is a **fully revised `spec.md`** aligned with:
-
-* the **RFC constitution**
-* your **Database-as-handle rule**
-* **DSN never in config**
-* **Config sanitization on ingestion**
-* **Driver as runtime orchestrator**
-* **single execution path**
-* **transparent cache**
-* **no alternate APIs**
-
-I also corrected several subtle contradictions that existed between the previous `spec.md`, the **constitution**, and your **recent design decisions**.
-
-The structure remains familiar so the project does not experience documentation shock, but the rules are now **architecturally locked down**.
-
----
-
 # UDA — Universal Data Abstractor
 
 # Specification 2.1

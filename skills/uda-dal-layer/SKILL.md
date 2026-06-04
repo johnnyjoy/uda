@@ -91,4 +91,4 @@ Your layer may **not** insert another SQL execution tier below `Database`.
 
 ## Authority
 
-`docs/getting-started.md`, `docs/public-api.md`, `docs/architecture.md`.
+`docs/building-your-dal.md`, `docs/getting-started.md`, `docs/public-api.md`.

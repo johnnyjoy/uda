@@ -11,6 +11,15 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
+### Changed
+
+- Composer package name **`johnnyjoy/uda`** (install: `composer require johnnyjoy/uda`).
+- Documentation reorganized for **application developers**: README quick start
+  with `Link` example, php-fpm/container deploy (not bare-metal-only), new
+  [docs/building-your-dal.md](docs/building-your-dal.md) and [docs/engines.md](docs/engines.md),
+  [docs/README.md](docs/README.md) user vs contributor paths; agent skills
+  described as tool-agnostic under `skills/`.
+
 ## [1.0.0] - 2026-06-03
 
 ### Added
@@ -33,7 +42,7 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
   (local/CI containers without full TLS trust chains).
 - GitHub Actions **integration** jobs for PostgreSQL, MariaDB, SQL Server, Oracle, DB2, and
   Firebird (SQLite already covered); matrix in `docs/integration/README.md`.
-- Composer package **`universal-data-abstractor/universal-data-abstractor`** (Universal Data Abstractor).
+- Composer package **`johnnyjoy/uda`** (Universal Data Abstractor).
 - `tools/check-license.php` — MIT-only `@license` headers in `src/`.
 - Contributor docs: `CONTRIBUTING.md`, `SECURITY.md`, `docs/releases.md`; GitLab MR
   templates for mirror workflows.

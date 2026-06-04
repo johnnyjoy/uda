@@ -1,5 +1,9 @@
 # Getting Started With UDA
 
+**Building repositories?** Read [**building-your-dal.md**](building-your-dal.md) first
+(layer shape, `Link` examples, rules). This page continues with install, connect,
+builders, and operational sharp edges.
+
 UDA is used from application or repository classes through one public handle:
 
 ```php
@@ -22,7 +26,7 @@ or an ORM layer.
 ## Install
 
 ```bash
-composer require universal-data-abstractor/universal-data-abstractor
+composer require johnnyjoy/uda
 ```
 
 UDA requires PHP 8.2+ and PDO.
@@ -51,8 +55,9 @@ Create a JSON config file and point `UDA_CONFIG` at it:
 export UDA_CONFIG=/path/to/uda.json
 ```
 
-CI integration-gates **SQLite, PostgreSQL, MariaDB, SQL Server, and Oracle**.
-**Sybase** is not run in upstream push/PR CI (no SAP license). Optional live tests:
+Supported engines and sample config: [**engines.md**](engines.md). Upstream CI
+integration-gates SQLite, PostgreSQL, MariaDB, SQL Server, Oracle, DB2, and
+Firebird. **Sybase** is not run in upstream CI (no SAP license); optional local tests:
 `docs/integration/sybase.md`.
 
 ## Connect

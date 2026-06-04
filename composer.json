@@ -1,5 +1,5 @@
 {
-    "name": "universal-data-abstractor/universal-data-abstractor",
+    "name": "johnnyjoy/uda",
     "description": "Universal Data Abstractor (UDA) — PHP 8.2+ deterministic SQL execution and query composition",
     "type": "library",
     "license": "MIT",
