@@ -114,7 +114,7 @@ lists every place “TTL” appears, what it would mean, and what v1 actually do
 `tableMtime ≤ metadata['ctime']`. A successful `INSERT` / `UPDATE` / `DELETE` with hints
 calls `Cache::touch()` and bumps mtimes.
 
-**Where:** Every cached read path — `Driver::executeRead()` → `Cache::read()` → `isStale()`.
+**Where:** Every cached read path — `Driver::cacheHit()` → `Cache::read()` → `isStale()`.
 
 **Different from TTL because:** It is **event-driven** (writes), not “expires after N seconds.”
 A row can sit unchanged forever and the cache stays valid until something writes to a hinted table.

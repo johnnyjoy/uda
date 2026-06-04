@@ -18,6 +18,7 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * MariaDB/MySQL-compatible dialect handling INSERT IGNORE and ON DUPLICATE KEY.
@@ -62,11 +63,11 @@ final class MariaDb extends Dialect
             throw new QueryException('No columns provided for upsert query');
         }
 
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columns);
+        $quotedColumns = $this->quoteColumns($state, $columns);
         $valueGroups = [];
 
         foreach ($rows as $row) {
-            $valueGroups[] = '(' . implode(', ', array_map(fn (string $column) => $state->param($row[$column] ?? null), $columns)) . ')';
+            $valueGroups[] = '(' . implode(', ', $this->rowPlaceholders($state, $row, $columns)) . ')';
         }
 
         $verb = ($state->doNothing || $state->updates === []) ? 'INSERT IGNORE INTO' : 'INSERT INTO';

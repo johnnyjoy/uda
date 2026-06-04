@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace UDA\SQL;
 
 use UDA\Driver;
+use UDA\Exception\QueryException;
 
 /**
  * Identifier validation with engine-based quoting
@@ -48,6 +49,28 @@ class Identifier
     }
 
     /**
+     * Validate and quote an identifier for an engine in one step.
+     *
+     * Shared by the query builders and dialect state objects so identifier
+     * quoting has a single validated implementation.
+     *
+     * @param string $identifier  Identifier to validate and quote.
+     * @param string $engine      Engine key (sqlite, mariadb, pgsql, etc.).
+     *
+     * @return string The quoted identifier.
+     *
+     * @throws QueryException If the identifier is invalid.
+     */
+    public static function quoteFor(string $identifier, string $engine): string
+    {
+        try {
+            return (new self($identifier))->quoted($engine);
+        } catch (\Throwable $ex) {
+            throw new QueryException('Invalid identifier: ' . $identifier, 0, $ex);
+        }
+    }
+
+    /**
      * Get the quoted identifier for a specific engine.
      *
      * @param string $engine  Engine key (sqlite, mariadb, pgsql, etc.)
@@ -57,11 +80,13 @@ class Identifier
     public function quoted(string $engine): string
     {
         $parts = explode('.', $this->name);
+        $quoted = [];
 
-        return implode('.', array_map(
-            fn (string $part): string => $this->quoteSegment($part, $engine),
-            $parts
-        ));
+        foreach ($parts as $part) {
+            $quoted[] = $this->quoteSegment($part, $engine);
+        }
+
+        return implode('.', $quoted);
     }
 
     /**
@@ -79,10 +104,10 @@ class Identifier
             throw new InvalidIdentifierException('Identifier cannot be empty');
         }
 
-        $filteredSegments = array_filter($segments, fn ($segment) => $segment !== '');
-
-        if (count($filteredSegments) !== count($segments)) {
-            throw new InvalidIdentifierException('Identifier segments cannot be empty');
+        foreach ($segments as $segment) {
+            if ($segment === '') {
+                throw new InvalidIdentifierException('Identifier segments cannot be empty');
+            }
         }
 
         $name = implode('.', $segments);

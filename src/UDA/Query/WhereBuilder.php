@@ -77,9 +77,6 @@ final class WhereBuilder
     /** @var ParamBag Parameter bag for storing query parameters */
     private ParamBag $params;
 
-    /** @var callable Function to quote identifiers (string $identifier): string */
-    private $quoter;
-
     /** @var string|Expr|null Current column being operated on (for operator attachment) */
     private string|Expr|null $currentColumn = null;
 
@@ -97,21 +94,15 @@ final class WhereBuilder
      * This constructor is typically called internally by query builders when
      * starting a WHERE or HAVING chain. Application code usually interacts with
      * WhereBuilder through the fluent interface rather than instantiating it directly.
-     *                                     owns this WHERE/HAVING clause. Used to return control via `end()`.
-     *                                     across the query. Ensures parameter names are unique and values are
-     *                                     properly escaped through prepared statements.
-     *                                     (table/column names). Signature: `fn(string $identifier): string`.
-     *                                     This abstraction allows database-specific quoting rules.
+     * Identifier quoting is delegated to the parent builder via `$parent->quote()`.
      *
-     * @param Select|Update|Delete $parent  The query builder that
-     * @param ParamBag             $params  Shared parameter bag for storing all bound values
-     * @param callable             $quoter  Function that safely quotes SQL identifiers
+     * @param Select|Update|Delete $parent  The query builder that owns this WHERE/HAVING clause.
+     * @param ParamBag             $params  Shared parameter bag for storing all bound values.
      */
-    public function __construct(Select|Update|Delete $parent, ParamBag $params, callable $quoter)
+    public function __construct(Select|Update|Delete $parent, ParamBag $params)
     {
         $this->parent = $parent;
         $this->params = $params;
-        $this->quoter = $quoter;
     }
 
     /**
@@ -243,7 +234,12 @@ final class WhereBuilder
             if ($values === []) {
                 $this->addCondition('1 = 0');
             } else {
-                $placeholders = array_map(fn ($v) => $this->param($v), $values);
+                $placeholders = [];
+
+                foreach ($values as $value) {
+                    $placeholders[] = $this->param($value);
+                }
+
                 $this->addCondition(sprintf('%s IN (%s)', $this->quoteColumn($this->currentColumn), implode(', ', $placeholders)));
             }
         }
@@ -276,7 +272,12 @@ final class WhereBuilder
             if ($values === []) {
                 $this->addCondition('1 = 1');
             } else {
-                $placeholders = array_map(fn ($v) => $this->param($v), $values);
+                $placeholders = [];
+
+                foreach ($values as $value) {
+                    $placeholders[] = $this->param($value);
+                }
+
                 $this->addCondition(sprintf('%s NOT IN (%s)', $this->quoteColumn($this->currentColumn), implode(', ', $placeholders)));
             }
         }
@@ -577,7 +578,7 @@ final class WhereBuilder
      */
     public function group(callable $callback): self
     {
-        $nested = new self($this->parent, $this->params, $this->quoter);
+        $nested = new self($this->parent, $this->params);
         $nested->nextOperator = 'AND'; // Groups default to AND inside
         $callback($nested);
 
@@ -964,7 +965,7 @@ final class WhereBuilder
      */
     private function quote(string $identifier): string
     {
-        return ($this->quoter)($identifier);
+        return $this->parent->quote($identifier);
     }
 
     /**

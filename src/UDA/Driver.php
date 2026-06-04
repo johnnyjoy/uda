@@ -771,19 +771,20 @@ final class Driver
         $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        return $this->executeRead(
-            $message,
-            $tableHints,
-            'rows',
-            function () use ($message, $normalized): array {
-                $stmt = $this->executeInternal($message, $normalized);
-                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-                $stmt->closeCursor();
-                $this->firebirdCommit();
+        $cached = $this->cacheHit($message, $tableHints, 'rows');
 
-                return $rows;
-            }
-        );
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $stmt = $this->executeInternal($message, $normalized);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $stmt->closeCursor();
+        $this->firebirdCommit();
+
+        $this->cacheStore($message, $tableHints, 'rows', $rows);
+
+        return $rows;
     }
 
     /**
@@ -802,12 +803,24 @@ final class Driver
         $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        return $this->executeRead(
-            $message,
-            $tableHints,
-            'row',
-            fn () => $this->rowNoCache($message, $normalized)
-        );
+        $cached = $this->cacheHit($message, $tableHints, 'row');
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $stmt = $this->executeInternal($message, $normalized);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+        $this->firebirdCommit();
+
+        if ($row === false) {
+            return null;
+        }
+
+        $this->cacheStore($message, $tableHints, 'row', $row);
+
+        return $row;
     }
 
     /**
@@ -823,29 +836,21 @@ final class Driver
      */
     public function value(string|SqlMessage $sql, array $params = [], ?array $tables = null): mixed
     {
-        $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        return $this->executeRead(
-            $message,
-            $tableHints,
-            'value',
-            function () use ($message, $normalized): mixed {
-                $stmt = $this->executeInternal($message, $normalized);
+        $stmt = $this->executeInternal($message, $normalized);
 
-                if ($stmt->columnCount() !== 1) {
-                    $stmt->closeCursor();
-                    $this->firebirdCommit();
-                    throw new QueryException('value() requires a single column result');
-                }
+        if ($stmt->columnCount() !== 1) {
+            $stmt->closeCursor();
+            $this->firebirdCommit();
+            throw new QueryException('value() requires a single column result');
+        }
 
-                $scalar = $stmt->fetchColumn(0);
-                $stmt->closeCursor();
-                $this->firebirdCommit();
+        $scalar = $stmt->fetchColumn(0);
+        $stmt->closeCursor();
+        $this->firebirdCommit();
 
-                return $scalar === false ? null : $scalar;
-            }
-        );
+        return $scalar === false ? null : $scalar;
     }
 
     /**
@@ -862,19 +867,20 @@ final class Driver
         $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        return $this->executeRead(
-            $message,
-            $tableHints,
-            'values',
-            function () use ($message, $normalized): array {
-                $stmt = $this->executeInternal($message, $normalized);
-                $col = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
-                $stmt->closeCursor();
-                $this->firebirdCommit();
+        $cached = $this->cacheHit($message, $tableHints, 'values');
 
-                return $col;
-            }
-        );
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $stmt = $this->executeInternal($message, $normalized);
+        $col = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
+        $stmt->closeCursor();
+        $this->firebirdCommit();
+
+        $this->cacheStore($message, $tableHints, 'values', $col);
+
+        return $col;
     }
 
     /**
@@ -891,16 +897,24 @@ final class Driver
         $tableHints = $tables ?? ($sql instanceof SqlMessage ? $sql->getCacheTables() : []);
         [$message, $normalized] = $this->normalizeToSqlMessage($sql, $params);
 
-        return $this->executeRead(
-            $message,
-            $tableHints,
-            'list',
-            function () use ($message, $normalized): ?array {
-                $row = $this->rowNoCache($message, $normalized);
+        $cached = $this->cacheHit($message, $tableHints, 'list');
 
-                return $row === null ? null : array_values($row);
-            }
-        );
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $stmt = $this->executeInternal($message, $normalized);
+        $row = $stmt->fetch(PDO::FETCH_NUM);
+        $stmt->closeCursor();
+        $this->firebirdCommit();
+
+        if ($row === false) {
+            return null;
+        }
+
+        $this->cacheStore($message, $tableHints, 'list', $row);
+
+        return $row;
     }
 
     /**
@@ -963,8 +977,9 @@ final class Driver
     }
 
     /**
-     * Internal hot path: normalize, prepare, execute.
+     * Driver-domain hot path: normalize, prepare, execute.
      * This is the only method allowed to call PDO::prepare() and PDOStatement::execute().
+     * Public for the Driver\Oracle\Returning collaborator; consumers use Database, not Driver.
      *
      * On a reconnectable connection-lost error from prepare() or execute(), reconnects
      * once and retries the same operation. No proactive ping runs on the happy path.
@@ -977,7 +992,7 @@ final class Driver
      *
      * @throws QueryException
      */
-    protected function executeInternal(string|SqlMessage $sql, array $params, ?callable $binder = null): PDOStatement
+    public function executeInternal(string|SqlMessage $sql, array $params, ?callable $binder = null): PDOStatement
     {
         [$query, $mergedParams] = $this->normalizeSql($sql, $params);
 
@@ -994,10 +1009,12 @@ final class Driver
             try {
                 $this->firebirdBegin();
 
-                $stmt = $this->prepared->get(
-                    $query,
-                    fn (string $q): PDOStatement => $this->pdo->prepare($q),
-                );
+                $stmt = $this->prepared->get($query);
+
+                if ($stmt === null) {
+                    $stmt = $this->pdo->prepare($query);
+                    $this->prepared->put($query, $stmt);
+                }
                 $executeParams = $mergedParams;
 
                 if ($binder !== null) {
@@ -1136,84 +1153,57 @@ final class Driver
     }
 
     /**
-     * Execute without cache semantics; return the first row only.
-     *
-     * Callers must constrain SQL (for example LIMIT 1) when at most one row is intended.
-     * Additional result rows are not consumed here; closeCursor() releases the statement.
-     *
-     * @param string|SqlMessage $sql     SQL string, SQL message, or builder SQL object.
-     * @param array             $params  Named parameter values.
-     *
-     * @return ?array Result array.
-     *
-     * @throws QueryException If the operation fails.
-     */
-    protected function rowNoCache(string|SqlMessage $sql, array $params): ?array
-    {
-        $stmt = $this->executeInternal($sql, $params);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($row === false) {
-            $stmt->closeCursor();
-            $this->firebirdCommit();
-
-            return null;
-        }
-
-        $stmt->closeCursor();
-        $this->firebirdCommit();
-
-        return $row;
-    }
-
-    /**
      * RETURNING INTO runner (delegates to Driver\Oracle\Returning).
      */
     private function oracleReturningRunner(): OracleReturning
     {
-        return $this->oracleReturning ??= new OracleReturning(
-            \Closure::fromCallable([$this, 'executeInternal']),
-            fn (string $identifier): string => $this->q($identifier),
-        );
+        return $this->oracleReturning ??= new OracleReturning($this);
     }
 
     /**
-     * Execute read.
+     * Return a cached read result for this message, or null on miss/disabled cache.
      *
-     * @param SqlMessage        $message   SQL message to execute.
-     * @param array<int,string> $tables
-     * @param callable():T      $executor
+     * @param SqlMessage        $message  Compiled SQL message.
+     * @param array<int,string> $tables   Cache hint tables.
+     * @param string            $shape    Result shape key.
      *
-     * @return T
-     *
-     * @template T of array|null
+     * @return mixed Cached result on hit, null otherwise.
      */
-    protected function executeRead(SqlMessage $message, array $tables, string $shape, callable $executor): mixed
+    private function cacheHit(SqlMessage $message, array $tables, string $shape): mixed
+    {
+        if ($tables === [] || !Config::hasCache($this->connection, $tables)) {
+            return null;
+        }
+
+        $cached = Cache::read($this->connection, $message, $shape);
+
+        if ($cached === null) {
+            return null;
+        }
+
+        $this->emitObservation(
+            $message->getQuery(),
+            $message->getParams(),
+            hrtime(true),
+            true,
+            false,
+            null,
+        );
+
+        return $cached;
+    }
+
+    /**
+     * @param SqlMessage        $message  Compiled SQL message.
+     * @param array<int,string> $tables   Cache hint tables.
+     * @param string            $shape    Result shape key.
+     * @param array<mixed>      $result   Materialized read result to store.
+     */
+    private function cacheStore(SqlMessage $message, array $tables, string $shape, array $result): void
     {
         if ($tables !== [] && Config::hasCache($this->connection, $tables)) {
-            $cached = Cache::read($this->connection, $message, $shape);
-
-            if ($cached !== null) {
-                $this->emitObservation(
-                    $message->getQuery(),
-                    $message->getParams(),
-                    hrtime(true),
-                    true,
-                    false,
-                    null,
-                );
-
-                return $cached;
-            }
-        }
-
-        $result = $executor();
-
-        if (is_array($result) && $tables !== [] && Config::hasCache($this->connection, $tables)) {
             Cache::put($this->connection, $message, $tables, $result, $shape);
         }
-
-        return $result;
     }
 
     /**
@@ -1224,9 +1214,10 @@ final class Driver
      *
      * @throws Throwable Re-throws anything from callback after rollback.
      *
-     * @param callable(self): mixed $fn Callback to execute within the transaction.
+     * @param callable $fn       Callback to execute within the transaction.
+     * @param mixed    $subject  Value passed to the callback; defaults to this driver.
      */
-    public function transaction(callable $fn): mixed
+    public function transaction(callable $fn, mixed $subject = null): mixed
     {
         $level = $this->transactionLevel;
         $savepoint = null;
@@ -1245,7 +1236,7 @@ final class Driver
         $this->transactionLevel++;
 
         try {
-            $result = $fn($this);
+            $result = $fn($subject ?? $this);
             $this->transactionLevel--;
 
             if ($level === 0) {

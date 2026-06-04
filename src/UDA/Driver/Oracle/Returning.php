@@ -14,6 +14,7 @@ namespace UDA\Driver\Oracle;
 use PDO;
 use PDOException;
 use PDOStatement;
+use UDA\Driver;
 use UDA\Exception\QueryException;
 use UDA\SQL\SqlMessage;
 
@@ -28,14 +29,8 @@ use UDA\SQL\SqlMessage;
  */
 final class Returning
 {
-    /**
-     * @param callable(string,array<string,mixed>,null|callable(PDOStatement,array<string,mixed>):void):PDOStatement $execute
-     * @param callable(string):string                                                                                    $quote
-     */
-    public function __construct(
-        private readonly \Closure $execute,
-        private readonly \Closure $quote,
-    ) {
+    public function __construct(private readonly Driver $driver)
+    {
     }
 
     /**
@@ -59,13 +54,15 @@ final class Returning
             throw new QueryException('Oracle multi-row returning requires insert metadata.');
         }
 
-        $quotedColumns = array_map(
-            fn (string $col): string => ($this->quote)(strtoupper($col)),
-            $insertColumns,
-        );
+        $quotedColumns = [];
+
+        foreach ($insertColumns as $col) {
+            $quotedColumns[] = $this->driver->q(strtoupper($col));
+        }
+
         $prefix = sprintf(
             'INSERT INTO %s (%s)',
-            ($this->quote)($insertTable),
+            $this->driver->q($insertTable),
             implode(', ', $quotedColumns),
         );
 
@@ -118,7 +115,7 @@ final class Returning
         $query = \UDA\Driver\Oracle::returningIntoSql($baseQuery, $columns, $placeholders);
 
         try {
-            $stmt = ($this->execute)(
+            $stmt = $this->driver->executeInternal(
                 $query,
                 $params,
                 function (PDOStatement $stmt, array $params) use ($placeholders, &$outValues): void {

@@ -93,7 +93,7 @@ abstract class Query
      *
      * @return string Placeholder token
      */
-    protected function param(mixed $value): string
+    public function param(mixed $value): string
     {
         return Value::param($this->params, $value);
     }
@@ -105,17 +105,10 @@ abstract class Query
      *
      * @throws QueryException If the identifier is invalid
      */
-    protected function quote(string $identifier): string
+    public function quote(string $identifier): string
     {
-        if (!isset($this->quotedIdentifiers[$identifier])) {
-            try {
-                $this->quotedIdentifiers[$identifier] = (new Identifier($identifier))->quoted($this->engine);
-            } catch (\Throwable $ex) {
-                throw new QueryException('Invalid identifier: ' . $identifier, 0, $ex);
-            }
-        }
-
-        return $this->quotedIdentifiers[$identifier];
+        return $this->quotedIdentifiers[$identifier]
+            ??= Identifier::quoteFor($identifier, $this->engine);
     }
 
     /**
@@ -299,14 +292,14 @@ abstract class Query
     /**
      * Assert dialect capability.
      *
-     * @param callable(Dialect):bool $capabilityCheck
-     * @param string                 $errorMessage     Error message to raise when the capability is missing.
+     * @param string $capability    Capability key: 'returning' or 'windowFunctions'.
+     * @param string $errorMessage  Error message (with %s for the dialect name) when unsupported.
      *
      * @return void No return value.
      *
      * @throws QueryException If the operation fails.
      */
-    protected function assertDialectCapability(callable $capabilityCheck, string $errorMessage): void
+    protected function assertDialectCapability(string $capability, string $errorMessage): void
     {
         $dialect = $this->dialect;
 
@@ -314,7 +307,13 @@ abstract class Query
             return;
         }
 
-        if (!$capabilityCheck($dialect)) {
+        $supported = match ($capability) {
+            'returning' => $dialect->supportsReturning(),
+            'windowFunctions' => $dialect->supportsWindowFunctions(),
+            default => throw new QueryException('Unknown dialect capability: ' . $capability),
+        };
+
+        if (!$supported) {
             throw new QueryException(sprintf($errorMessage, $dialect->name()));
         }
     }

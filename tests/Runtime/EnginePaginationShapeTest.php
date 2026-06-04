@@ -13,7 +13,7 @@ use UDA\Driver\Sybase as SybaseRules;
 use UDA\Query\Dialect\Dialect;
 use UDA\Query\Dialect\Oracle as OracleDialect;
 use UDA\Query\Dialect\PostgreSql;
-use UDA\Query\Dialect\SelectState;
+use UDA\Query\State\Select as SelectState;
 use UDA\Query\Dialect\SqlServer as SqlServerDialect;
 use UDA\Query\Dialect\Sybase as SybaseDialect;
 use UDA\SQL\ParamBag;
@@ -83,12 +83,6 @@ final class EnginePaginationShapeTest extends TestCase
     private function compileDialectPagination(Dialect $dialect, string $engine, int $limit, int $offset): string
     {
         $params = new ParamBag();
-        $parameterize = static function (mixed $value) use ($params): string {
-            $name = $params->alloc();
-            $params->assign($name, $value);
-
-            return ':' . $name;
-        };
 
         $orderBy = in_array($engine, ['sqlserver', 'sybase'], true) ? ['[id] ASC'] : [];
 
@@ -107,7 +101,6 @@ final class EnginePaginationShapeTest extends TestCase
             tables: ['users'],
             unions: [],
             params: $params,
-            parameterize: $parameterize,
         );
 
         $method = new ReflectionMethod($dialect, 'compileSelectPagination');

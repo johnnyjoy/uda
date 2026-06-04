@@ -18,7 +18,7 @@ namespace UDA\Query;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Concerns\ConsumesCtes;
-use UDA\Query\Dialect\InsertState;
+use UDA\Query\State\Insert as InsertState;
 
 /**
  * INSERT query builder that produces Sql objects for execution
@@ -230,7 +230,7 @@ final class Insert extends \UDA\Query
     public function returning(string ...$columns): self
     {
         $this->assertDialectCapability(
-            fn ($dialect) => $dialect->supportsReturning(),
+            'returning',
             '%s dialect does not support RETURNING clauses.'
         );
 
@@ -352,8 +352,7 @@ final class Insert extends \UDA\Query
                 returning: $this->returning,
                 tables: $this->getTables(),
                 params: $this->params,
-                parameterize: fn (mixed $value): string => $this->param($value),
-                quote: fn (string $identifier): string => $this->quote($identifier),
+                engine: $this->engine,
                 selectQuery: $selectSql,
                 selectColumns: $this->insertColumns
             );
@@ -402,11 +401,21 @@ final class Insert extends \UDA\Query
             return array_values(array_unique($tables));
         }
 
-        $cteNames = array_map(static fn (array $cte): string => strtolower($cte['name']), $this->ctes);
+        $cteNames = [];
 
-        return array_values(array_filter(array_unique($tables), static function (string $table) use ($cteNames): bool {
-            return !in_array(strtolower($table), $cteNames, true);
-        }));
+        foreach ($this->ctes as $cte) {
+            $cteNames[] = strtolower($cte['name']);
+        }
+
+        $result = [];
+
+        foreach (array_unique($tables) as $table) {
+            if (!in_array(strtolower($table), $cteNames, true)) {
+                $result[] = $table;
+            }
+        }
+
+        return $result;
     }
 
     /**

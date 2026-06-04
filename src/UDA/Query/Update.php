@@ -18,7 +18,7 @@ namespace UDA\Query;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Concerns\ConsumesCtes;
-use UDA\Query\Dialect\UpdateState;
+use UDA\Query\State\Update as UpdateState;
 
 /**
  * UPDATE query builder that produces Sql objects for execution
@@ -103,7 +103,7 @@ final class Update extends \UDA\Query
     public function where(string $column, mixed $value, string $operator = '='): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->where($column, $value, $operator);
 
         return $whereBuilder;
@@ -120,7 +120,7 @@ final class Update extends \UDA\Query
     public function whereRaw(string $expression, array $params = []): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->whereRaw($expression, $params);
 
         return $whereBuilder;
@@ -136,7 +136,7 @@ final class Update extends \UDA\Query
     public function whereColumn(string $left, string $right, string $operator = '='): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->whereColumn($left, $right, $operator);
 
         return $whereBuilder;
@@ -162,7 +162,7 @@ final class Update extends \UDA\Query
     public function returning(string ...$columns): self
     {
         $this->assertDialectCapability(
-            fn ($dialect) => $dialect->supportsReturning(),
+            'returning',
             '%s dialect does not support RETURNING clauses.'
         );
 
@@ -280,8 +280,7 @@ final class Update extends \UDA\Query
                 whereClause: $this->buildWhereClause(),
                 tables: $this->getTables(),
                 params: $this->params,
-                parameterize: fn (mixed $value): string => $this->param($value),
-                quote: fn (string $identifier): string => $this->quote($identifier),
+                engine: $this->engine,
                 returning: $this->returning
             );
 
@@ -347,11 +346,21 @@ final class Update extends \UDA\Query
             return array_values(array_unique($tables));
         }
 
-        $cteNames = array_map(static fn (array $cte): string => strtolower($cte['name']), $this->ctes);
+        $cteNames = [];
 
-        return array_values(array_filter(array_unique($tables), static function (string $table) use ($cteNames): bool {
-            return !in_array(strtolower($table), $cteNames, true);
-        }));
+        foreach ($this->ctes as $cte) {
+            $cteNames[] = strtolower($cte['name']);
+        }
+
+        $result = [];
+
+        foreach (array_unique($tables) as $table) {
+            if (!in_array(strtolower($table), $cteNames, true)) {
+                $result[] = $table;
+            }
+        }
+
+        return $result;
     }
 
     /**

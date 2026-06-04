@@ -18,7 +18,7 @@ namespace UDA\Query;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Concerns\ConsumesCtes;
-use UDA\Query\Dialect\SelectState;
+use UDA\Query\State\Select as SelectState;
 
 /**
  * SELECT query builder that produces Sql objects for execution
@@ -89,7 +89,13 @@ final class Select extends \UDA\Query
     {
         parent::__clone();
         $this->cachedSql = null;
-        $this->unions = array_map(static fn (array $union): array => ['type' => $union['type'], 'query' => clone $union['query']], $this->unions);
+        $clonedUnions = [];
+
+        foreach ($this->unions as $union) {
+            $clonedUnions[] = ['type' => $union['type'], 'query' => clone $union['query']];
+        }
+
+        $this->unions = $clonedUnions;
         $this->cloneCtesOnClone();
     }
 
@@ -312,7 +318,7 @@ final class Select extends \UDA\Query
     public function where(string|Expr $column, mixed $value = null, string $operator = '='): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
 
         if ($value !== null) {
             $whereBuilder->where($column, $value, $operator);
@@ -333,7 +339,7 @@ final class Select extends \UDA\Query
     public function whereColumn(string $left, string $right, string $operator = '='): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->whereColumn($left, $right, $operator);
 
         return $whereBuilder;
@@ -353,7 +359,7 @@ final class Select extends \UDA\Query
     public function whereRaw(string $expression, array $params = []): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->whereRaw($expression, $params);
 
         return $whereBuilder;
@@ -385,7 +391,7 @@ final class Select extends \UDA\Query
     public function whereExists(Select|Sql $subquery): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->exists($subquery);
 
         return $whereBuilder;
@@ -401,7 +407,7 @@ final class Select extends \UDA\Query
     public function whereNotExists(Select|Sql $subquery): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->notExists($subquery);
 
         return $whereBuilder;
@@ -475,7 +481,7 @@ final class Select extends \UDA\Query
     public function having(string|Expr $column, mixed $value = null, string $operator = '='): WhereBuilder
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->setHavingMode(true);
 
         if ($value === null) {
@@ -500,7 +506,7 @@ final class Select extends \UDA\Query
     public function havingRaw(string $expression, array $params = []): self
     {
         $clone = clone $this;
-        $whereBuilder = new WhereBuilder($clone, $clone->params, fn ($id) => $clone->quote($id));
+        $whereBuilder = new WhereBuilder($clone, $clone->params);
         $whereBuilder->setHavingMode(true);
         $whereBuilder->whereRaw($expression, $params);
 
@@ -652,11 +658,21 @@ final class Select extends \UDA\Query
             return $tables;
         }
 
-        $cteNames = array_map(static fn (string $name): string => strtolower($name), array_column($this->ctes, 'name'));
+        $cteNames = [];
 
-        return array_values(array_filter($tables, static function (string $table) use ($cteNames): bool {
-            return !in_array(strtolower($table), $cteNames, true);
-        }));
+        foreach ($this->ctes as $cte) {
+            $cteNames[] = strtolower($cte['name']);
+        }
+
+        $result = [];
+
+        foreach ($tables as $table) {
+            if (!in_array(strtolower($table), $cteNames, true)) {
+                $result[] = $table;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -705,8 +721,7 @@ final class Select extends \UDA\Query
                 offset: $this->offset,
                 tables: $this->getTables(),
                 params: $this->params,
-                unions: $unionClauses,
-                parameterize: fn (mixed $value): string => $this->param($value)
+                unions: $unionClauses
             );
 
             $compiled = $this->requireDialect()->compileSelect($state);
@@ -797,7 +812,7 @@ final class Select extends \UDA\Query
     private function assertWindowFunctionsSupported(): void
     {
         $this->assertDialectCapability(
-            fn ($dialect) => $dialect->supportsWindowFunctions(),
+            'windowFunctions',
             '%s dialect does not support window functions.'
         );
     }

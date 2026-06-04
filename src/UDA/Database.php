@@ -445,7 +445,7 @@ final class Database
      */
     public function transaction(callable $fn): mixed
     {
-        return $this->driver->transaction(fn (): mixed => $fn($this));
+        return $this->driver->transaction($fn, $this);
     }
 
     /**

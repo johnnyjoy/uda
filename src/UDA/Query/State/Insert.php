@@ -4,26 +4,27 @@ declare(strict_types=1);
 
 /**
  * @package UDA
- * @subpackage Query\Dialect
+ * @subpackage Query\State
  * @license MIT
  */
 
 /*
  * Purpose: Carries INSERT builder state into dialect compilation.
  *
- * InsertState preserves values, generated params, returning metadata, and CTE
- * inputs for dialect compilers.
+ * Preserves values, generated params, returning metadata, and CTE inputs for
+ * dialect compilers.
  */
 
-namespace UDA\Query\Dialect;
+namespace UDA\Query\State;
 
-use Closure;
+use UDA\SQL\Identifier;
 use UDA\SQL\ParamBag;
+use UDA\SQL\Value;
 
 /**
  * Immutable state object representing an INSERT builder.
  */
-final class InsertState
+final class Insert
 {
     /**
      * Create the runtime object.
@@ -35,8 +36,7 @@ final class InsertState
      * @param ?array   $returning      Returning column list, or null when not requested.
      * @param array    $tables         Table names used for cache metadata.
      * @param ParamBag $params         Named parameter values.
-     * @param Closure  $parameterize   Closure that stores a bound value and returns its placeholder.
-     * @param Closure  $quote          Closure that quotes an identifier for the active dialect.
+     * @param string   $engine         Engine key used to quote identifiers.
      * @param ?string  $selectQuery    SELECT SQL used as the INSERT source.
      * @param array    $selectColumns  Column names read from the SELECT source.
      */
@@ -48,8 +48,7 @@ final class InsertState
         public readonly ?array $returning,
         public readonly array $tables,
         private readonly ParamBag $params,
-        private readonly Closure $parameterize,
-        private readonly Closure $quote,
+        private readonly string $engine,
         public readonly ?string $selectQuery,
         public readonly array $selectColumns
     ) {
@@ -80,13 +79,11 @@ final class InsertState
      */
     public function param(mixed $value): string
     {
-        $fn = $this->parameterize;
-
-        return $fn($value);
+        return Value::param($this->params, $value);
     }
 
     /**
-     * Quote.
+     * Quote an identifier for the active dialect.
      *
      * @param string $identifier  Identifier value.
      *
@@ -94,9 +91,7 @@ final class InsertState
      */
     public function quote(string $identifier): string
     {
-        $fn = $this->quote;
-
-        return $fn($identifier);
+        return Identifier::quoteFor($identifier, $this->engine);
     }
 
     /**

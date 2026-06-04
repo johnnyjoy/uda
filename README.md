@@ -161,7 +161,7 @@ Named parameters only — positional `?` is rejected before PDO.
 
 | Method | Returns |
 | ------ | ------- |
-| `row()` | One associative row or `null` |
+| `row()` | One associative row or `null` (single-row fetch, does not materialize all rows) |
 | `rows()` | All rows |
 | `value()` | First column of first row |
 | `values()` | First column of every row |

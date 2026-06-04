@@ -19,6 +19,8 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Select as SelectState;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * Db2 dialect implementation.
@@ -127,8 +129,8 @@ final class Db2 extends Dialect
             $sql .= ' WHEN MATCHED THEN UPDATE SET ' . implode(', ', $assignments);
         }
 
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columns);
-        $sql .= ' WHEN NOT MATCHED THEN INSERT (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', array_map(fn (string $col): string => 'src.' . $state->quote($col), $columns)) . ')';
+        $quotedColumns = $this->quoteColumns($state, $columns);
+        $sql .= ' WHEN NOT MATCHED THEN INSERT (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', $this->quoteColumns($state, $columns, 'src.')) . ')';
 
         return new Sql($sql, $state->getParams(), $state->tables);
     }

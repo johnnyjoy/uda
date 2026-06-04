@@ -19,6 +19,9 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Insert as InsertState;
+use UDA\Query\State\Select as SelectState;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * SQL Server dialect implementation.
@@ -112,10 +115,7 @@ class SqlServer extends Dialect
             if ($state->returning === []) {
                 $outputs = ['INSERTED.*'];
             } else {
-                $outputs = array_map(
-                    fn (string $col): string => 'INSERTED.' . $state->quote($col),
-                    $state->returning
-                );
+                $outputs = $this->quoteColumns($state, $state->returning, 'INSERTED.');
             }
 
             $sql .= ' OUTPUT ' . implode(', ', $outputs);
@@ -158,11 +158,11 @@ class SqlServer extends Dialect
             throw new QueryException('No columns provided for upsert query');
         }
 
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columns);
+        $quotedColumns = $this->quoteColumns($state, $columns);
         $valueSets = [];
 
         foreach ($rows as $row) {
-            $valueSets[] = '(' . implode(', ', array_map(fn (string $column) => $state->param($row[$column] ?? null), $columns)) . ')';
+            $valueSets[] = '(' . implode(', ', $this->rowPlaceholders($state, $row, $columns)) . ')';
         }
 
         $sourceColumns = implode(', ', $quotedColumns);
@@ -187,7 +187,7 @@ class SqlServer extends Dialect
         }
 
         $insertColumns = implode(', ', $quotedColumns);
-        $insertValues = implode(', ', array_map(fn (string $col): string => 'src.' . $state->quote($col), $columns));
+        $insertValues = implode(', ', $this->quoteColumns($state, $columns, 'src.'));
         $sql .= ' WHEN NOT MATCHED THEN INSERT (' . $insertColumns . ') VALUES (' . $insertValues . ');';
 
         return new Sql($sql, $state->getParams(), $state->tables);

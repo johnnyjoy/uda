@@ -10,6 +10,11 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Delete as DeleteState;
+use UDA\Query\State\Insert as InsertState;
+use UDA\Query\State\Select as SelectState;
+use UDA\Query\State\Update as UpdateState;
+use UDA\Query\State\Upsert as UpsertState;
 
 /*
  * Purpose: Defines the base SQL compilation behavior for query dialects.
@@ -256,7 +261,7 @@ abstract class Dialect
             }
 
             $columnNames = $state->selectColumns;
-            $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columnNames);
+            $quotedColumns = $this->quoteColumns($state, $columnNames);
 
             $sql = sprintf(
                 '%sINSERT INTO %s (%s) %s',
@@ -283,7 +288,7 @@ abstract class Dialect
             }
             $returningColumns = $state->returning === []
                 ? ['*']
-                : array_map(fn (string $col): string => $state->quote($col), $state->returning);
+                : $this->quoteColumns($state, $state->returning);
             $sql .= ' RETURNING ' . implode(', ', $returningColumns);
         }
 
@@ -330,7 +335,7 @@ abstract class Dialect
         }
 
         $columnNames = array_keys($firstRow);
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columnNames);
+        $quotedColumns = $this->quoteColumns($state, $columnNames);
 
         $values = [];
         $valuePlaceholders = [];
@@ -346,6 +351,49 @@ abstract class Dialect
         }
 
         return [$columnNames, $quotedColumns, $values, $valuePlaceholders];
+    }
+
+    /**
+     * Quote a list of identifiers using the state's dialect quoter.
+     *
+     * @param InsertState|UpdateState|DeleteState|UpsertState $state    Compilation state.
+     * @param array<int,string>                               $columns  Identifiers to quote.
+     * @param string                                          $prefix   Optional literal prefix (e.g. 'src.').
+     *
+     * @return array<int,string> Quoted identifiers.
+     */
+    protected function quoteColumns(
+        InsertState|UpdateState|DeleteState|UpsertState $state,
+        array $columns,
+        string $prefix = ''
+    ): array {
+        $quoted = [];
+
+        foreach ($columns as $column) {
+            $quoted[] = $prefix . $state->quote($column);
+        }
+
+        return $quoted;
+    }
+
+    /**
+     * Build named placeholders for one row's values in column order.
+     *
+     * @param InsertState|UpsertState $state    Compilation state.
+     * @param array<string,mixed>     $row      Row keyed by column name.
+     * @param array<int,string>       $columns  Column order.
+     *
+     * @return array<int,string> Named placeholders.
+     */
+    protected function rowPlaceholders(InsertState|UpsertState $state, array $row, array $columns): array
+    {
+        $placeholders = [];
+
+        foreach ($columns as $column) {
+            $placeholders[] = $state->param($row[$column] ?? null);
+        }
+
+        return $placeholders;
     }
 
     /**
@@ -389,7 +437,7 @@ abstract class Dialect
 
             $columns = $state->returning === []
                 ? ['*']
-                : array_map(fn (string $col): string => $state->quote($col), $state->returning);
+                : $this->quoteColumns($state, $state->returning);
 
             $sql .= ' RETURNING ' . implode(', ', $columns);
         }
@@ -428,7 +476,7 @@ abstract class Dialect
 
             $columns = $state->returning === []
                 ? ['*']
-                : array_map(fn (string $col): string => $state->quote($col), $state->returning);
+                : $this->quoteColumns($state, $state->returning);
 
             $sql .= ' RETURNING ' . implode(', ', $columns);
         }

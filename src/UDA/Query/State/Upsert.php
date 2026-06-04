@@ -4,26 +4,27 @@ declare(strict_types=1);
 
 /**
  * @package UDA
- * @subpackage Query\Dialect
+ * @subpackage Query\State
  * @license MIT
  */
 
 /*
  * Purpose: Carries UPSERT builder state into dialect compilation.
  *
- * UpsertState preserves conflict keys, write values, update actions, generated
- * params, and quoting callbacks for dialect compilers.
+ * Preserves conflict keys, write values, update actions, generated params, and
+ * the engine key used for quoting in dialect compilers.
  */
 
-namespace UDA\Query\Dialect;
+namespace UDA\Query\State;
 
-use Closure;
+use UDA\SQL\Identifier;
 use UDA\SQL\ParamBag;
+use UDA\SQL\Value;
 
 /**
  * Immutable UPSERT builder description consumed by dialects.
  */
-final class UpsertState
+final class Upsert
 {
     /**
      * Create the runtime object.
@@ -36,8 +37,7 @@ final class UpsertState
      * @param bool     $doNothing     Whether the upsert should ignore conflicts.
      * @param array    $tables        Table names used for cache metadata.
      * @param ParamBag $params        Named parameter values.
-     * @param Closure  $parameterize  Closure that stores a bound value and returns its placeholder.
-     * @param Closure  $quote         Closure that quotes an identifier for the active dialect.
+     * @param string   $engine        Engine key used to quote identifiers.
      */
     public function __construct(
         public readonly ?string $table,
@@ -48,8 +48,7 @@ final class UpsertState
         public readonly bool $doNothing,
         public readonly array $tables,
         private readonly ParamBag $params,
-        private readonly Closure $parameterize,
-        private readonly Closure $quote
+        private readonly string $engine
     ) {
     }
 
@@ -62,13 +61,11 @@ final class UpsertState
      */
     public function param(mixed $value): string
     {
-        $fn = $this->parameterize;
-
-        return $fn($value);
+        return Value::param($this->params, $value);
     }
 
     /**
-     * Quote.
+     * Quote an identifier for the active dialect.
      *
      * @param string $identifier  Identifier value.
      *
@@ -76,9 +73,7 @@ final class UpsertState
      */
     public function quote(string $identifier): string
     {
-        $fn = $this->quote;
-
-        return $fn($identifier);
+        return Identifier::quoteFor($identifier, $this->engine);
     }
 
     /**

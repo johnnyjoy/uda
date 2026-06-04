@@ -14,9 +14,10 @@ declare(strict_types=1);
 
 namespace UDA\Query\Dialect;
 
-use UDA\Driver\Firebird as FirebirdRules;
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Select as SelectState;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * Firebird 5+ dialect.
@@ -59,7 +60,13 @@ final class Firebird extends Dialect
         }
 
         if ($state->limit !== null) {
-            return ' ' . FirebirdRules::limitOffset($state->limit, $state->offset ?? 0);
+            $offset = $state->offset ?? 0;
+
+            if ($offset === 0) {
+                return sprintf(' FETCH FIRST %d ROWS ONLY', $state->limit);
+            }
+
+            return sprintf(' OFFSET %d ROWS FETCH NEXT %d ROWS ONLY', $offset, $state->limit);
         }
 
         return sprintf(' OFFSET %d ROWS', $state->offset);
@@ -119,9 +126,9 @@ final class Firebird extends Dialect
             $sql .= ' WHEN MATCHED THEN UPDATE SET ' . implode(', ', $assignments);
         }
 
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columns);
+        $quotedColumns = $this->quoteColumns($state, $columns);
         $sql .= ' WHEN NOT MATCHED THEN INSERT (' . implode(', ', $quotedColumns) . ') VALUES (';
-        $sql .= implode(', ', array_map(fn (string $col): string => 'src.' . $state->quote($col), $columns));
+        $sql .= implode(', ', $this->quoteColumns($state, $columns, 'src.'));
         $sql .= ')';
 
         return new Sql($sql, $state->getParams(), $state->tables);

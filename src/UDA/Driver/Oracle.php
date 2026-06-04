@@ -77,10 +77,11 @@ final class Oracle
      */
     public static function returningIntoSql(string $baseQuery, array $columns, array $placeholders): string
     {
-        $quotedColumns = array_map(
-            fn (string $col): string => self::quoteIdentifier(strtoupper($col)),
-            $columns,
-        );
+        $quotedColumns = [];
+
+        foreach ($columns as $col) {
+            $quotedColumns[] = self::quoteIdentifier(strtoupper($col));
+        }
 
         return $baseQuery . ' RETURNING ' . implode(', ', $quotedColumns) . ' INTO ' . implode(', ', $placeholders);
     }

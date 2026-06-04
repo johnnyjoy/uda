@@ -193,7 +193,7 @@ trait Link
      */
     protected function transaction(callable $fn): mixed
     {
-        return static::handle()->transaction(fn (): mixed => $fn());
+        return static::handle()->transaction($fn);
     }
 
     /**

@@ -178,6 +178,111 @@ final class ArchitectureInvariantTest extends TestCase
         self::assertStringNotContainsString('$this->row(', $body, 'Driver::value() must not delegate to row(), which allocates an intermediate array.');
     }
 
+    public function test_row_and_list_use_single_fetch_modes_not_fetch_all(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../src/UDA/Driver.php') ?: '';
+        $rowBody = self::methodBody($source, 'row');
+        $listBody = self::methodBody($source, 'list');
+
+        self::assertStringContainsString(
+            'fetch(PDO::FETCH_ASSOC)',
+            $rowBody,
+            'Driver::row() must use fetch(PDO::FETCH_ASSOC) for one-row behavior.'
+        );
+        self::assertStringContainsString(
+            'fetch(PDO::FETCH_NUM)',
+            $listBody,
+            'Driver::list() must use fetch(PDO::FETCH_NUM) for list-shaped one-row behavior.'
+        );
+        self::assertStringNotContainsString(
+            'fetchAll',
+            $rowBody,
+            'Driver::row() must not use fetchAll(), which reads the full result set.'
+        );
+        self::assertStringNotContainsString(
+            'fetchAll',
+            $listBody,
+            'Driver::list() must not use fetchAll(), which reads the full result set.'
+        );
+    }
+
+    public function test_driver_read_and_execute_paths_are_closure_free(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../src/UDA/Driver.php') ?: '';
+
+        $methods = ['rows', 'row', 'value', 'values', 'list', 'executeInternal', 'cacheHit', 'cacheStore'];
+
+        foreach ($methods as $method) {
+            $body = self::methodBody($source, $method);
+
+            self::assertDoesNotMatchRegularExpression(
+                '/\bfn\s*\(/',
+                $body,
+                'Driver::' . $method . '() must not allocate arrow-function closures on the hot path.'
+            );
+            self::assertDoesNotMatchRegularExpression(
+                '/\bfunction\s*\(/',
+                $body,
+                'Driver::' . $method . '() must not allocate anonymous-function closures on the hot path.'
+            );
+        }
+    }
+
+    public function test_read_terminators_do_not_route_through_executor_closure(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../src/UDA/Driver.php') ?: '';
+
+        self::assertStringNotContainsString(
+            'function executeRead',
+            $source,
+            'executeRead() closure dispatcher must be removed; reads use cacheHit()/cacheStore() helpers.'
+        );
+        self::assertStringContainsString('function cacheHit', $source);
+        self::assertStringContainsString('function cacheStore', $source);
+    }
+
+    public function test_dialect_state_objects_are_closure_free(): void
+    {
+        $stateFiles = [
+            'Select.php',
+            'Insert.php',
+            'Update.php',
+            'Delete.php',
+            'Upsert.php',
+        ];
+
+        foreach ($stateFiles as $file) {
+            $source = file_get_contents(__DIR__ . '/../../src/UDA/Query/State/' . $file) ?: '';
+
+            self::assertStringNotContainsString(
+                'Closure',
+                $source,
+                $file . ' must not store Closure properties; param()/quote() bind directly.'
+            );
+            self::assertDoesNotMatchRegularExpression(
+                '/\bfn\s*\(|\bfunction\s*\(/',
+                $source,
+                $file . ' must not allocate closures during compilation.'
+            );
+        }
+    }
+
+    public function test_where_builder_quotes_via_parent_not_stored_closure(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../src/UDA/Query/WhereBuilder.php') ?: '';
+
+        self::assertStringNotContainsString(
+            '$this->quoter',
+            $source,
+            'WhereBuilder must quote via its injected parent builder, not a stored quoter closure.'
+        );
+        self::assertStringContainsString(
+            '$this->parent->quote(',
+            $source,
+            'WhereBuilder::quote() must delegate to the parent builder.'
+        );
+    }
+
     /**
      * Extract a method body from source for lightweight architecture guards.
      *

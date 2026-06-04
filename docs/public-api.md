@@ -177,8 +177,9 @@ $db->transaction(function (Database $tx): void {
 ```
 
 `row()`, `value()`, and `list()` are singular reads and return `null` when no
-row exists. `rows()` and `values()` are set reads and return `[]` when no rows
-exist. Business code never touches PDO.
+row exists. `row()` uses a single-row fetch path (not full-result materialization).
+`rows()` and `values()` are set reads and return `[]` when no rows exist.
+Business code never touches PDO.
 
 ---
 

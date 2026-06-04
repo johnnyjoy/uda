@@ -19,6 +19,7 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * Base dialect that implements INSERT ... ON CONFLICT semantics.
@@ -48,11 +49,11 @@ abstract class OnConflict extends Dialect
             throw new QueryException('No columns provided for upsert query');
         }
 
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columns);
+        $quotedColumns = $this->quoteColumns($state, $columns);
         $valueGroups = [];
 
         foreach ($rows as $row) {
-            $valueGroups[] = '(' . implode(', ', array_map(fn (string $column) => $state->param($row[$column] ?? null), $columns)) . ')';
+            $valueGroups[] = '(' . implode(', ', $this->rowPlaceholders($state, $row, $columns)) . ')';
         }
 
         $sql = sprintf(
@@ -62,7 +63,7 @@ abstract class OnConflict extends Dialect
             implode(', ', $valueGroups)
         );
 
-        $sql .= ' ON CONFLICT (' . implode(', ', array_map(fn (string $key): string => $state->quote($key), $state->conflictKeys)) . ')';
+        $sql .= ' ON CONFLICT (' . implode(', ', $this->quoteColumns($state, $state->conflictKeys)) . ')';
 
         if ($state->doNothing || $state->updates === []) {
             $sql .= ' DO NOTHING';

@@ -107,7 +107,7 @@ final class Cache
             return null;
         }
 
-        if (self::isStale($connectionName, $tables, $metadata)) {
+        if (self::isStale($state, $connectionName, $tables, $metadata)) {
             return null;
         }
 
@@ -311,13 +311,15 @@ final class Cache
      */
     private static function flushArray(object $client, string $connectionName, string $namespace): void
     {
-        if (!method_exists($client, 'deleteMatching')) {
+        if (!method_exists($client, 'keys') || !method_exists($client, 'delete')) {
             return;
         }
 
-        $client->deleteMatching(
-            static fn (string $key): bool => self::keyBelongsToConnection($key, $connectionName, $namespace)
-        );
+        foreach ($client->keys() as $key) {
+            if (self::keyBelongsToConnection($key, $connectionName, $namespace)) {
+                $client->delete($key);
+            }
+        }
     }
 
     /**
@@ -397,22 +399,47 @@ final class Cache
     /**
      * Determine whether any tracked table has been updated since the entry was stored.
      *
-     * @param string $connectionName  Connection name.
+     * All table mtimes are read in a single batched backend call so the freshness gate
+     * costs one round-trip regardless of how many tables a query touches. The (potentially
+     * large) payload is never fetched here — it stays deferred until freshness is confirmed.
+     *
+     * @param array{client:object,store:string,namespace:string} $state  Runtime store state.
+     * @param string                                             $connectionName  Connection name.
+     * @param array<int, string>                                 $tables          Normalized tables.
+     * @param array<string, mixed>                               $metadata        Metadata record.
      *
      * @return bool
-     *
-     * @param array<int, string>   $tables         Normalized tables.
-     * @param array<string, mixed> $metadata       Metadata record.
      */
     private static function isStale(
+        array $state,
         string $connectionName,
         array $tables,
         array $metadata
     ): bool {
-        $ctime = $metadata['ctime'];
+        if ($tables === []) {
+            return false;
+        }
 
+        $ctime = is_int($metadata['ctime'] ?? null) ? $metadata['ctime'] : 0;
+
+        $keys = [];
         foreach ($tables as $table) {
-            if (self::tableMtime($connectionName, $table) > $ctime) {
+            if (is_string($table)) {
+                $keys[] = self::tableMtimeKey($connectionName, $table);
+            }
+        }
+
+        if ($keys === []) {
+            return false;
+        }
+
+        $mtimes = self::fetchMany($state, $keys);
+
+        foreach ($keys as $mtimeKey) {
+            $mtime = $mtimes[$mtimeKey] ?? 0;
+            $mtime = is_int($mtime) ? $mtime : (int) $mtime;
+
+            if ($mtime > $ctime) {
                 return true;
             }
         }
@@ -421,43 +448,57 @@ final class Cache
     }
 
     /**
-     * Capture current table mtimes.
+     * Read several small keys in a single backend round-trip.
      *
-     * @param string $connectionName  Connection name.
+     * Used only for the freshness gate (metadata-adjacent table mtimes), never for payloads.
+     * Returns a map of key => value for keys that are present; missing keys are omitted.
      *
-     * @return array<string, int>
+     * @param array{client:object,store:string,namespace:string} $state  Runtime store state.
+     * @param array<int, string>                                 $keys   Fully namespaced keys.
      *
-     * @param array<int, string> $tables         Normalized tables.
+     * @return array<string, mixed>
      */
-    private static function tableWriteTimes(string $connectionName, array $tables): array
+    private static function fetchMany(array $state, array $keys): array
     {
-        $times = [];
-
-        foreach ($tables as $table) {
-            $times[$table] = self::tableMtime($connectionName, $table);
+        if ($keys === []) {
+            return [];
         }
 
-        return $times;
-    }
+        $client = $state['client'];
+        $out = [];
 
-    /**
-     * Read a table mtime from the backend.
-     *
-     * @param string $connectionName  Connection name.
-     * @param string $table           Table name.
-     *
-     * @return int
-     */
-    private static function tableMtime(string $connectionName, string $table): int
-    {
-        $state = self::state($connectionName);
-        if ($state === null) {
-            return 0;
+        switch ($state['store']) {
+            case 'redis':
+                /** @var array<int, mixed>|false $values */
+                $values = $client->mGet($keys);
+                if (is_array($values)) {
+                    foreach ($keys as $i => $mtimeKey) {
+                        $value = $values[$i] ?? false;
+                        if ($value !== false) {
+                            $out[$mtimeKey] = $value;
+                        }
+                    }
+                }
+                break;
+
+            case 'memcached':
+                /** @var array<string, mixed>|false $found */
+                $found = $client->getMulti($keys);
+                if (is_array($found)) {
+                    $out = $found;
+                }
+                break;
+
+            default:
+                foreach ($keys as $mtimeKey) {
+                    $value = $client->get($mtimeKey);
+                    if ($value !== null && $value !== false) {
+                        $out[$mtimeKey] = $value;
+                    }
+                }
         }
 
-        $value = self::fetch($state['client'], self::tableMtimeKey($connectionName, $table));
-
-        return is_int($value) ? $value : (int) ($value ?? 0);
+        return $out;
     }
 
     /**
@@ -572,17 +613,21 @@ final class Cache
             }
 
             /**
-             * @param callable(string): bool $matcher  Key predicate.
+             * @return array<int,string> Stored cache keys.
+             */
+            public function keys(): array
+            {
+                return array_keys($this->items);
+            }
+
+            /**
+             * @param string $key  Cache key.
              *
              * @return void
              */
-            public function deleteMatching(callable $matcher): void
+            public function delete(string $key): void
             {
-                foreach (array_keys($this->items) as $key) {
-                    if ($matcher($key)) {
-                        unset($this->items[$key]);
-                    }
-                }
+                unset($this->items[$key]);
             }
         };
     }

@@ -4,26 +4,27 @@ declare(strict_types=1);
 
 /**
  * @package UDA
- * @subpackage Query\Dialect
+ * @subpackage Query\State
  * @license MIT
  */
 
 /*
  * Purpose: Carries UPDATE builder state into dialect compilation.
  *
- * UpdateState preserves assignments, predicates, returning metadata, and CTE
- * inputs for dialect compilers.
+ * Preserves assignments, predicates, returning metadata, and CTE inputs for
+ * dialect compilers.
  */
 
-namespace UDA\Query\Dialect;
+namespace UDA\Query\State;
 
-use Closure;
+use UDA\SQL\Identifier;
 use UDA\SQL\ParamBag;
+use UDA\SQL\Value;
 
 /**
  * Immutable state passed to dialects when compiling UPDATE builders.
  */
-final class UpdateState
+final class Update
 {
     /**
      * Create the runtime object.
@@ -34,8 +35,7 @@ final class UpdateState
      * @param ?string  $whereClause   Compiled WHERE clause, or null when absent.
      * @param array    $tables        Table names used for cache metadata.
      * @param ParamBag $params        Named parameter values.
-     * @param Closure  $parameterize  Closure that stores a bound value and returns its placeholder.
-     * @param Closure  $quote         Closure that quotes an identifier for the active dialect.
+     * @param string   $engine        Engine key used to quote identifiers.
      * @param ?array   $returning     Returning column list, or null when not requested.
      */
     public function __construct(
@@ -45,8 +45,7 @@ final class UpdateState
         public readonly ?string $whereClause,
         public readonly array $tables,
         private readonly ParamBag $params,
-        private readonly Closure $parameterize,
-        private readonly Closure $quote,
+        private readonly string $engine,
         public readonly ?array $returning
     ) {
     }
@@ -76,13 +75,11 @@ final class UpdateState
      */
     public function param(mixed $value): string
     {
-        $fn = $this->parameterize;
-
-        return $fn($value);
+        return Value::param($this->params, $value);
     }
 
     /**
-     * Quote.
+     * Quote an identifier for the active dialect.
      *
      * @param string $identifier  Identifier value.
      *
@@ -90,9 +87,7 @@ final class UpdateState
      */
     public function quote(string $identifier): string
     {
-        $fn = $this->quote;
-
-        return $fn($identifier);
+        return Identifier::quoteFor($identifier, $this->engine);
     }
 
     /**

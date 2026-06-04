@@ -17,7 +17,7 @@ declare(strict_types=1);
 namespace UDA\Query;
 
 use UDA\Exception\QueryException;
-use UDA\Query\Dialect\UpsertState;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * UPSERT query builder that produces Sql objects for execution
@@ -191,8 +191,7 @@ final class Upsert extends \UDA\Query
             doNothing: $this->doNothing,
             tables: [$this->table],
             params: $this->params,
-            parameterize: fn (mixed $value): string => $this->param($value),
-            quote: fn (string $identifier): string => $this->quote($identifier)
+            engine: $this->engine
         );
 
         $dialect = $this->requireDialect();

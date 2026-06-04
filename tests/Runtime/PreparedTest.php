@@ -9,64 +9,40 @@ use UDA\Driver\Prepared;
 
 final class PreparedTest extends TestCase
 {
+    private static function prepare(string $sql): \PDOStatement
+    {
+        return (new \PDO('sqlite::memory:'))->prepare($sql);
+    }
+
     public function test_reuses_prepared_statement_for_same_sql(): void
     {
         $prepared = new Prepared();
-        $calls = 0;
-        $prepare = function (string $sql) use (&$calls): \PDOStatement {
-            $calls++;
-            $pdo = new \PDO('sqlite::memory:');
 
-            return $pdo->prepare($sql);
-        };
+        self::assertNull($prepared->get('SELECT 1'));
 
-        $first = $prepared->get('SELECT 1', $prepare);
-        $second = $prepared->get('SELECT 1', $prepare);
+        $stmt = self::prepare('SELECT 1');
+        $prepared->put('SELECT 1', $stmt);
 
-        self::assertSame(1, $calls);
-        self::assertSame($first, $second);
+        self::assertSame($stmt, $prepared->get('SELECT 1'));
     }
 
     public function test_clear_drops_cached_statements(): void
     {
         $prepared = new Prepared();
-        $prepare = fn (string $sql): \PDOStatement => (new \PDO('sqlite::memory:'))->prepare($sql);
-
-        $prepared->get('SELECT 1', $prepare);
+        $prepared->put('SELECT 1', self::prepare('SELECT 1'));
         $prepared->clear();
 
-        $calls = 0;
-        $prepared->get('SELECT 1', function (string $sql) use (&$calls): \PDOStatement {
-            $calls++;
-
-            return (new \PDO('sqlite::memory:'))->prepare($sql);
-        });
-
-        self::assertSame(1, $calls);
+        self::assertNull($prepared->get('SELECT 1'));
     }
 
     public function test_evicts_oldest_when_capacity_exceeded(): void
     {
         $prepared = new Prepared(2);
-        $prepare = fn (string $sql): \PDOStatement => (new \PDO('sqlite::memory:'))->prepare($sql);
+        $prepared->put('SELECT 0', self::prepare('SELECT 0'));
+        $prepared->put('SELECT 1', self::prepare('SELECT 1'));
+        $prepared->put('SELECT 2', self::prepare('SELECT 2'));
 
-        $prepared->get('SELECT 0', $prepare);
-        $prepared->get('SELECT 1', $prepare);
-        $prepared->get('SELECT 2', $prepare);
-
-        $calls = 0;
-        $third = $prepared->get('SELECT 2', function (string $sql) use (&$calls): \PDOStatement {
-            $calls++;
-
-            return (new \PDO('sqlite::memory:'))->prepare($sql);
-        });
-        $miss = $prepared->get('SELECT 0', function (string $sql) use (&$calls): \PDOStatement {
-            $calls++;
-
-            return (new \PDO('sqlite::memory:'))->prepare($sql);
-        });
-
-        self::assertSame(1, $calls);
-        self::assertNotSame($third, $miss);
+        self::assertNotNull($prepared->get('SELECT 2'));
+        self::assertNull($prepared->get('SELECT 0'), 'Oldest entry should be evicted past capacity.');
     }
 }

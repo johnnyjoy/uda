@@ -19,6 +19,11 @@ namespace UDA\Query\Dialect;
 
 use UDA\Exception\QueryException;
 use UDA\Query\Sql;
+use UDA\Query\State\Delete as DeleteState;
+use UDA\Query\State\Insert as InsertState;
+use UDA\Query\State\Select as SelectState;
+use UDA\Query\State\Update as UpdateState;
+use UDA\Query\State\Upsert as UpsertState;
 
 /**
  * Oracle dialect implementation (MERGE, FETCH pagination, RETURNING metadata).
@@ -264,8 +269,8 @@ final class Oracle extends Dialect
             $sql .= ' WHEN MATCHED THEN UPDATE SET ' . implode(', ', $assignments);
         }
 
-        $quotedColumns = array_map(fn (string $col): string => $state->quote($col), $columns);
-        $sql .= ' WHEN NOT MATCHED THEN INSERT (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', array_map(fn (string $col): string => 'src.' . $state->quote($col), $columns)) . ')';
+        $quotedColumns = $this->quoteColumns($state, $columns);
+        $sql .= ' WHEN NOT MATCHED THEN INSERT (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', $this->quoteColumns($state, $columns, 'src.')) . ')';
 
         return new Sql($sql, $state->getParams(), $state->tables);
     }

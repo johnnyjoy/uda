@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 /**
  * @package UDA
- * @subpackage Query\Dialect
+ * @subpackage Query\State
  * @license MIT
  */
 
 /*
  * Purpose: Carries DELETE builder state into dialect compilation.
  *
- * DeleteState preserves target table, predicate, returning metadata, and CTE
- * inputs for dialect compilers.
+ * Preserves target table, predicate, returning metadata, and CTE inputs for
+ * dialect compilers.
  */
 
-namespace UDA\Query\Dialect;
+namespace UDA\Query\State;
 
-use Closure;
+use UDA\SQL\Identifier;
 use UDA\SQL\ParamBag;
 
 /**
  * Immutable DELETE builder snapshot for dialect compilation.
  */
-final class DeleteState
+final class Delete
 {
     /**
      * Create the runtime object.
@@ -33,7 +33,7 @@ final class DeleteState
      * @param ?string  $whereClause  Compiled WHERE clause, or null when absent.
      * @param array    $tables       Table names used for cache metadata.
      * @param ParamBag $params       Named parameter values.
-     * @param Closure  $quote        Closure that quotes an identifier for the active dialect.
+     * @param string   $engine       Engine key used to quote identifiers.
      * @param ?array   $returning    Returning column list, or null when not requested.
      */
     public function __construct(
@@ -42,7 +42,7 @@ final class DeleteState
         public readonly ?string $whereClause,
         public readonly array $tables,
         private readonly ParamBag $params,
-        private readonly Closure $quote,
+        private readonly string $engine,
         public readonly ?array $returning
     ) {
     }
@@ -64,7 +64,7 @@ final class DeleteState
     }
 
     /**
-     * Quote.
+     * Quote an identifier for the active dialect.
      *
      * @param string $identifier  Identifier value.
      *
@@ -72,9 +72,7 @@ final class DeleteState
      */
     public function quote(string $identifier): string
     {
-        $fn = $this->quote;
-
-        return $fn($identifier);
+        return Identifier::quoteFor($identifier, $this->engine);
     }
 
     /**

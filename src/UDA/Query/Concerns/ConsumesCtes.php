@@ -64,15 +64,19 @@ trait ConsumesCtes
      */
     protected function cloneCtesOnClone(): void
     {
-        $this->ctes = array_map(static function (array $cte): array {
-            return [
+        $clonedCtes = [];
+
+        foreach ($this->ctes as $cte) {
+            $clonedCtes[] = [
                 'name' => $cte['name'],
                 'quoted' => $cte['quoted'],
                 'recursive' => $cte['recursive'],
                 'query' => $cte['query'] instanceof Select ? clone $cte['query'] : $cte['query'],
                 'materialization' => $cte['materialization'] ?? null,
             ];
-        }, $this->ctes);
+        }
+
+        $this->ctes = $clonedCtes;
     }
 
     /**

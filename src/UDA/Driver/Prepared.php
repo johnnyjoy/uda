@@ -41,20 +41,28 @@ final class Prepared
     }
 
     /**
-     * @param callable(string):PDOStatement $prepare
+     * Return the cached statement for this SQL, or null on miss.
+     *
+     * On a hit the entry is moved to the most-recently-used position.
      */
-    public function get(string $query, callable $prepare): PDOStatement
+    public function get(string $query): ?PDOStatement
     {
-        if (isset($this->map[$query])) {
-            $stmt = $this->map[$query];
-            unset($this->map[$query]);
-            $this->map[$query] = $stmt;
-
-            return $stmt;
+        if (!isset($this->map[$query])) {
+            return null;
         }
 
-        $stmt = $prepare($query);
+        $stmt = $this->map[$query];
+        unset($this->map[$query]);
+        $this->map[$query] = $stmt;
 
+        return $stmt;
+    }
+
+    /**
+     * Store a prepared statement, evicting the oldest entry past capacity.
+     */
+    public function put(string $query, PDOStatement $stmt): void
+    {
         if (count($this->map) >= $this->max) {
             $oldest = array_key_first($this->map);
 
@@ -64,7 +72,5 @@ final class Prepared
         }
 
         $this->map[$query] = $stmt;
-
-        return $stmt;
     }
 }

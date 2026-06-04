@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 /**
  * @package UDA
- * @subpackage Query\Dialect
+ * @subpackage Query\State
  * @license MIT
  */
 
 /*
  * Purpose: Carries SELECT builder state into dialect compilation.
  *
- * SelectState is immutable input for Query dialects and does not own SQL
- * execution or connection behavior.
+ * Immutable input for Query dialects; does not own SQL execution or connection
+ * behavior.
  */
 
-namespace UDA\Query\Dialect;
+namespace UDA\Query\State;
 
-use Closure;
 use UDA\SQL\ParamBag;
+use UDA\SQL\Value;
 
 /**
  * Immutable snapshot of SELECT builder configuration for dialect compilation.
  */
-final class SelectState
+final class Select
 {
     /**
      * Create the runtime object.
@@ -42,7 +42,6 @@ final class SelectState
      * @param array    $tables        Table names used for cache metadata.
      * @param array    $unions        UNION clause descriptors.
      * @param ParamBag $params        Named parameter values.
-     * @param Closure  $parameterize  Closure that stores a bound value and returns its placeholder.
      */
     public function __construct(
         public readonly array $ctes,
@@ -58,8 +57,7 @@ final class SelectState
         public readonly ?int $offset,
         public readonly array $tables,
         public readonly array $unions,
-        private readonly ParamBag $params,
-        private readonly Closure $parameterize
+        private readonly ParamBag $params
     ) {
     }
 
@@ -88,9 +86,7 @@ final class SelectState
      */
     public function param(mixed $value): string
     {
-        $fn = $this->parameterize;
-
-        return $fn($value);
+        return Value::param($this->params, $value);
     }
 
     /**
