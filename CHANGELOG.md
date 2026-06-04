@@ -17,6 +17,7 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ### Changed
 
+- README and integration matrix: **Informix** and **CUBRID** listed as not in UDA yet / coming soon.
 - Agent skill `skills/uda-dal-layer` renamed to **`skills/uda-data-access`** (clearer name; “DAL layer” was redundant).
 - Composer package name **`johnnyjoy/uda`** (install: `composer require johnnyjoy/uda`).
 - Documentation reorganized for **application developers**: README as full

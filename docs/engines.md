@@ -24,6 +24,8 @@ Set `UDA_CONFIG` to your config file, then `Database::connectDefault()` or
 | DB2 | `db2` | `pdo_ibm` | |
 | Firebird | `firebird` | `pdo_firebird` | Alias `interbase` |
 | Sybase ASE | `sybase` | `pdo_dblib` | Not in upstream CI |
+| Informix | — | — | **Coming soon** — not connectable in UDA today; planned (`pdo_informix`, CI TBD) |
+| CUBRID | — | — | **Coming soon** — not connectable in UDA today; planned (`pdo_cubrid`, CI TBD) |
 
 ---
 

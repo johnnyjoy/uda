@@ -57,7 +57,8 @@ export UDA_CONFIG=/path/to/uda.json
 Supported engines and sample config: [**engines.md**](engines.md). Upstream CI
 integration-gates SQLite, PostgreSQL, MariaDB, SQL Server, Oracle, DB2, and
 Firebird. **Sybase** is not run in upstream CI (no SAP license); optional local tests:
-`docs/integration/sybase.md`.
+`docs/integration/sybase.md`. **Informix** and **CUBRID** are not in UDA yet — **coming soon**
+(see `docs/integration/deferred.md`).
 
 ## Connect
 

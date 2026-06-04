@@ -21,6 +21,7 @@ Legend:
 | **Gated** | Enforced in GitHub Actions on every push and PR |
 | **Code** | Implemented in `src/`; not gated in CI |
 | **N/A** | Not connectable via `Database::connect()` today |
+| **Soon** | Planned; not in UDA yet |
 
 | Engine | Connect | Builders | Upsert | RETURNING | CI | Workflow / doc |
 | ------ | ------- | -------- | ------ | --------- | -- | -------------- |
@@ -32,6 +33,8 @@ Legend:
 | **Oracle** | Gated | Gated | Gated | Gated | Yes | [`oracle-integration.yml`](../.github/workflows/oracle-integration.yml) · [oracle.md](oracle.md) |
 | **DB2** | Gated | Gated | Gated | N/A⁴ | Yes | [db2.md](db2.md) · [`db2-integration.yml`](../.github/workflows/db2-integration.yml) |
 | **Firebird** | Gated | Gated | Gated | Gated | Yes | [firebird.md](firebird.md) · [`firebird-integration.yml`](../.github/workflows/firebird-integration.yml) |
+| **Informix** | Soon | — | — | — | Soon | Planned — not connectable today; see [deferred.md](deferred.md) |
+| **CUBRID** | Soon | — | — | — | Soon | Planned — not connectable today; see [deferred.md](deferred.md) |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT.  

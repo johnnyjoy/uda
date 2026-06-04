@@ -45,8 +45,6 @@ HTTP / CLI / worker
 
 ## Supported databases
 
-Per-engine `uda.json` snippets: [engines.md](docs/engines.md). CI matrix: [integration/README.md](docs/integration/README.md).
-
 | Engine | In UDA | Tested in GitHub Actions on every push/PR |
 | ------ | ------ | ------------------------------------------- |
 | SQLite | Yes | Yes |
@@ -57,6 +55,10 @@ Per-engine `uda.json` snippets: [engines.md](docs/engines.md). CI matrix: [integ
 | DB2 | Yes | Yes (`pdo_ibm`) |
 | Firebird | Yes | Yes (`pdo_firebird`) |
 | Sybase ASE | Yes | No — no public CI license; local opt-in only |
+| Informix | No | Coming soon |
+| CUBRID | No | Coming soon |
+
+Per-engine config and CI detail: [engines.md](docs/engines.md), [integration/README.md](docs/integration/README.md).
 
 ## Install
 

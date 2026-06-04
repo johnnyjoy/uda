@@ -181,6 +181,37 @@ not by default.
 
 ---
 
+## Informix (coming soon)
+
+**Status:** listed on the public matrix as **not in UDA today** / **coming soon**.
+
+| Item | State |
+| ---- | ----- |
+| `Database::connect()` with `driver: informix` | **Not implemented** |
+| Dialect + `UDA\Driver\Informix` | Planned |
+| PHP `pdo_informix` on PHP 8.2+ | Blocker to validate (PECL targets older PHP; forks exist) |
+| Free CI database image | IBM Informix Developer Edition in Docker is plausible; wiring TBD |
+| GHA merge-blocking job | **Coming soon** after driver + extension path is proven |
+
+Until then, do not expect Informix in `uda.json` examples or integration workflows.
+
+---
+
+## CUBRID (coming soon)
+
+**Status:** listed on the public matrix as **not in UDA today** / **coming soon**.
+
+| Item | State |
+| ---- | ----- |
+| `Database::connect()` with `driver: cubrid` | **Not implemented** |
+| Dialect + `UDA\Driver\Cubrid` | Planned |
+| PHP `pdo_cubrid` | Extension exists; UDA connect/dialect path not built |
+| GHA merge-blocking job | **Coming soon** after driver + container/CI path is proven |
+
+Until then, do not expect CUBRID in `uda.json` examples or integration workflows.
+
+---
+
 ## Related
 
 - [README.md](README.md) — current gated matrix
