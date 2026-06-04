@@ -176,6 +176,26 @@ final class Config
     }
 
     /**
+     * Whether persistent PDO connections are used for a connection.
+     *
+     * Persistent connections are the default. Sugar for `PDO::ATTR_PERSISTENT`,
+     * resolved from the connection's `persistent` flag, then `defaults.persistent`,
+     * then true. Set `"persistent": false` to opt out. An explicit
+     * `options[PDO::ATTR_PERSISTENT]` still wins at the Driver layer.
+     *
+     * @param ?string $name  Connection name, or null/empty to use default.
+     *
+     * @return bool
+     */
+    public static function persistent(?string $name = 'default'): bool
+    {
+        $snap = self::requireSnapshot();
+        $resolved = self::resolveConnectionName($snap, $name);
+
+        return $snap->getPersistent($resolved);
+    }
+
+    /**
      * Return the raw validated connection configuration.
      *
      * @param ?string $name  Name value.

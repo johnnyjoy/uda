@@ -11,6 +11,10 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in **persistent connections**: set `"persistent": true` on a connection (or in `defaults`) to keep the PDO handle in PHP's per-process pool and reuse it across requests, eliminating the connect/auth handshake on every request in php-fpm/mod_php/container deployments. It is sugar for `PDO::ATTR_PERSISTENT`; an explicit `options[PDO::ATTR_PERSISTENT]` still takes precedence, and a connection-level flag overrides `defaults.persistent`. For safety, the Driver rolls back any transaction a prior request left open on a pooled handle when it is checked out, so every request starts from a clean session. Exposed via `Config::persistent()`.
+
 ### Fixed
 
 - `WhereBuilder::toSql()` proxies through `end()` like read terminators, so `->where(...)->toSql()` no longer requires a manual `end()` on SELECT builders.

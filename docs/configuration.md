@@ -76,6 +76,7 @@ Each entry in `connections` describes how a database connection is created.
 | **user**       | no       | Username. May reference environment variable `{env:VAR_NAME}`.                                          |
 | **pass**       | no       | Password. May reference environment variable `{env:VAR_NAME}`.                                          |
 | **options**    | no       | Object of PDO options. Keys must be integers (`PDO::*`).                                                |
+| **persistent** | no       | `true` keeps the underlying PDO connection in PHP's process pool for reuse across requests (sugar for `PDO::ATTR_PERSISTENT`). Inherited from `defaults.persistent`. See [Persistent connections](#persistent-connections). |
 | **init_sql**   | no       | Array of SQL statements executed after connection.                                                      |
 | **cache**      | no       | Connection-specific cache policy configuration.                                                         |
 | **trace**      | no       | When `true`, emit **`E_USER_NOTICE`** during ingestion if this connection uses a driver **alias** that normalizes to canonical engine + transport (e.g. `"driver": "dblib"` → sybase). Omit or `false` in production. |
@@ -114,6 +115,35 @@ After ingestion, each connection stores normalized **`engine`** and **`transport
 | **Transport** | `transport` | PDO DSN prefix only when the engine has more than one (today: SQL Server `sqlsrv` vs `dblib`). `UDA\Driver` still performs `new PDO()`; per-engine classes only build the DSN string. |
 
 Microsoft SQL Server over DBLib must set `"driver": "sqlserver", "transport": "dblib"`. `"driver": "dblib"` alone resolves to engine **sybase** + transport **dblib** (not SQL Server).
+
+### Persistent connections
+
+In long-lived deployments (php-fpm, mod_php, containerized workers) the cost of opening a fresh
+database connection on every request is pure overhead. Setting `"persistent": true` keeps the PDO
+handle in PHP's per-process connection pool so subsequent requests reuse it and skip the
+TCP/auth handshake.
+
+```json
+"app": {
+  "driver": "pgsql",
+  "persistent": true,
+  "params": { "host": "db.internal", "dbname": "app" }
+}
+```
+
+Set it once for every connection via `defaults`:
+
+```json
+"defaults": { "connection": "app", "persistent": true }
+```
+
+Notes:
+
+* A connection's own `persistent` overrides `defaults.persistent`; an explicit
+  `options[PDO::ATTR_PERSISTENT]` overrides both.
+* On checkout, UDA rolls back any transaction a prior request left open on a pooled handle, so each
+  request starts from a clean session.
+* `init_sql` still runs on each checkout, since session state of a reused handle is not assumed.
 
 ### Important Rule
 

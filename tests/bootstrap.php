@@ -20,6 +20,9 @@ $connections = [
     'beta' => $baseDir . '/beta.sqlite',
     'cached' => $baseDir . '/cached.sqlite',
     'cached_strict' => $baseDir . '/cached_strict.sqlite',
+    'persist' => $baseDir . '/persist.sqlite',
+    'persist_off' => $baseDir . '/persist_off.sqlite',
+    'persist_disabled' => $baseDir . '/persist_disabled.sqlite',
 ];
 
 $config = [
@@ -62,6 +65,23 @@ $config = [
                 'namespace' => 'UDA_TEST_STRICT',
                 'store' => ['type' => 'array'],
                 'require_table_hints' => true,
+            ],
+        ],
+        'persist' => [
+            'driver' => 'sqlite',
+            'persistent' => true,
+            'params' => ['path' => $connections['persist']],
+            'init_sql' => [
+                'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)',
+            ],
+        ],
+        'persist_off' => [
+            'driver' => 'sqlite',
+            'persistent' => true,
+            'options' => [PDO::ATTR_PERSISTENT => false],
+            'params' => ['path' => $connections['persist_off']],
+            'init_sql' => [
+                'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)',
             ],
         ],
     ],

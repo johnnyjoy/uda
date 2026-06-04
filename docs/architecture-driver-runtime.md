@@ -10,7 +10,7 @@ Shrink `src/UDA/Driver.php` by moving **internal** units into `src/UDA/Driver/` 
 
 | Extracted to `UDA\Driver\*` | Left on `UDA\Driver` |
 | --------------------------- | --------------------- |
-| `Transport` — engine/transport resolution | `executeInternal`, `normalizeSql`, `executeRead` |
+| `Transport` — engine/transport resolution | `executeInternal`, `normalizeSql`, `cacheHit`/`cacheStore` |
 | `Prepared` — per-connection prepared-statement reuse | `isConnectionLost`, `reconnect` |
 | `Oracle` + `Oracle\Returning` — DSN/SQL + RETURNING INTO | `transaction()`, savepoint orchestration |
 

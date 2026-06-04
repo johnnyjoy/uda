@@ -70,6 +70,10 @@ final class Snapshot
             throw new ConfigException('Default options must be an array');
         }
 
+        if (isset($defaults['persistent']) && !is_bool($defaults['persistent'])) {
+            throw new ConfigException('Default persistent must be a boolean');
+        }
+
         return $defaults;
     }
 
@@ -97,6 +101,10 @@ final class Snapshot
 
             if (isset($config['transport']) && !is_string($config['transport'])) {
                 throw new ConfigException("Connection '$name' 'transport' must be a string");
+            }
+
+            if (isset($config['persistent']) && !is_bool($config['persistent'])) {
+                throw new ConfigException("Connection '$name' 'persistent' must be a boolean");
             }
 
             $rawDriver = $config['driver'];
@@ -208,5 +216,29 @@ final class Snapshot
 
         // Preserve numeric keys while allowing overrides to replace defaults
         return $overrides + $defaults;
+    }
+
+    /**
+     * Whether persistent PDO connections are used for a connection.
+     *
+     * Persistent connections are the default. Resolution: the connection's own
+     * `persistent` flag, then `defaults.persistent`, then true. Set
+     * `"persistent": false` to opt a connection (or all connections, via
+     * defaults) out. This is sugar for `PDO::ATTR_PERSISTENT`; an explicit
+     * `options[PDO::ATTR_PERSISTENT]` still takes precedence at the Driver layer.
+     *
+     * @param ?string $name  The connection name.
+     *
+     * @return bool
+     */
+    public function getPersistent(?string $name = 'default'): bool
+    {
+        $conn = $this->getConnection($name);
+
+        if (is_array($conn) && isset($conn['persistent'])) {
+            return (bool) $conn['persistent'];
+        }
+
+        return (bool) ($this->defaults['persistent'] ?? true);
     }
 }
