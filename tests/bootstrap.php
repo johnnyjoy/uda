@@ -84,6 +84,14 @@ $config = [
                 'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)',
             ],
         ],
+        'persist_disabled' => [
+            'driver' => 'sqlite',
+            'persistent' => false,
+            'params' => ['path' => $connections['persist_disabled']],
+            'init_sql' => [
+                'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)',
+            ],
+        ],
     ],
 ];
 

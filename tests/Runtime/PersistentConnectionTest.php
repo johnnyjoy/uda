@@ -32,12 +32,28 @@ final class PersistentConnectionTest extends TestCase
         return $opts;
     }
 
-    public function test_persistent_flag_maps_to_pdo_attr_persistent(): void
+    public function test_connections_are_persistent_by_default(): void
+    {
+        Database::connect('alpha', UDA_TEST_CONFIG);
+        $opts = self::resolvedOptions(Driver::connect('alpha'));
+
+        self::assertTrue($opts[PDO::ATTR_PERSISTENT] ?? null);
+    }
+
+    public function test_explicit_persistent_flag_maps_to_pdo_attr_persistent(): void
     {
         Database::connect('persist', UDA_TEST_CONFIG);
         $opts = self::resolvedOptions(Driver::connect('persist'));
 
         self::assertTrue($opts[PDO::ATTR_PERSISTENT] ?? null);
+    }
+
+    public function test_persistent_false_opts_out(): void
+    {
+        Database::connect('persist_disabled', UDA_TEST_CONFIG);
+        $opts = self::resolvedOptions(Driver::connect('persist_disabled'));
+
+        self::assertFalse((bool) ($opts[PDO::ATTR_PERSISTENT] ?? false));
     }
 
     public function test_explicit_option_overrides_persistent_flag(): void
@@ -48,20 +64,13 @@ final class PersistentConnectionTest extends TestCase
         self::assertFalse($opts[PDO::ATTR_PERSISTENT] ?? null);
     }
 
-    public function test_non_persistent_connection_does_not_set_attr(): void
-    {
-        Database::connect('alpha', UDA_TEST_CONFIG);
-        $opts = self::resolvedOptions(Driver::connect('alpha'));
-
-        self::assertFalse((bool) ($opts[PDO::ATTR_PERSISTENT] ?? false));
-    }
-
     public function test_config_persistent_accessor_reads_flag(): void
     {
         Database::connect('persist', UDA_TEST_CONFIG);
 
         self::assertTrue(Config::persistent('persist'));
-        self::assertFalse(Config::persistent('alpha'));
+        self::assertTrue(Config::persistent('alpha'));
+        self::assertFalse(Config::persistent('persist_disabled'));
     }
 
     public function test_checkout_rolls_back_stray_transaction(): void
@@ -83,6 +92,16 @@ final class PersistentConnectionTest extends TestCase
         $reset->invoke($driver, $pdo);
 
         self::assertFalse($pdo->inTransaction());
+    }
+
+    public function test_persistent_is_the_default_when_unset(): void
+    {
+        $snapshot = new Snapshot(
+            ['plain' => ['driver' => 'sqlite']],
+            [],
+        );
+
+        self::assertTrue($snapshot->getPersistent('plain'));
     }
 
     public function test_defaults_persistent_is_inherited_by_connections(): void

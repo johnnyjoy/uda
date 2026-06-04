@@ -13,7 +13,7 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ### Added
 
-- Opt-in **persistent connections**: set `"persistent": true` on a connection (or in `defaults`) to keep the PDO handle in PHP's per-process pool and reuse it across requests, eliminating the connect/auth handshake on every request in php-fpm/mod_php/container deployments. It is sugar for `PDO::ATTR_PERSISTENT`; an explicit `options[PDO::ATTR_PERSISTENT]` still takes precedence, and a connection-level flag overrides `defaults.persistent`. For safety, the Driver rolls back any transaction a prior request left open on a pooled handle when it is checked out, so every request starts from a clean session. Exposed via `Config::persistent()`.
+- **Persistent connections, on by default**: UDA now keeps the PDO handle in PHP's per-process pool and reuses it across requests, eliminating the connect/auth handshake on every request in php-fpm/mod_php/container deployments. No config is needed to benefit. Set `"persistent": false` on a connection (or in `defaults`) to opt out — useful for one-off CLI scripts or drivers where a long-lived handle is undesirable. Resolution is `connection.persistent` → `defaults.persistent` → `true`; it is sugar for `PDO::ATTR_PERSISTENT`, and an explicit `options[PDO::ATTR_PERSISTENT]` still takes precedence. For safety, the Driver rolls back any transaction a prior request left open on a pooled handle when it is checked out, so every request starts from a clean session. Exposed via `Config::persistent()`.
 
 ### Fixed
 

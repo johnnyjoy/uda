@@ -149,7 +149,7 @@ UDA loads **one JSON file** (`.json` extension). Production default: environment
 | **Engines** | `driver` names the SQL family; aliases like `dblib` normalize at load — see [engines.md](docs/engines.md) |
 | **Multiple DBs** | `Database::connectDefault()`, `connectNamed('reporting')`, `connectWithConfig('/path/uda.json', 'tenant')`, or `Link` with `protected static string $connection` |
 | **Pooling** | Second `connectNamed('app')` is a handle lookup — no config re-read; long-lived workers reuse one PDO per name |
-| **Persistent** | `"persistent": true` (per connection or in `defaults`) reuses the PDO handle across requests for php-fpm/containers, skipping the connect handshake; stray transactions are rolled back on checkout — see [configuration.md](docs/configuration.md#persistent-connections) |
+| **Persistent** | Persistent PDO connections are **on by default** — the handle is reused across requests (php-fpm/containers), skipping the connect handshake, with stray transactions rolled back on checkout. Opt out per connection or in `defaults` with `"persistent": false` — see [configuration.md](docs/configuration.md#persistent-connections) |
 | **Reconnect** | Driver retries once after connection-lost errors, then re-runs `init_sql` from config |
 | **Containers** | Use the DB **service hostname** as `host` (`postgres`), not `localhost` inside the app container |
 | **Validation** | Loaded once at ingestion; failures throw `ConfigException` |
