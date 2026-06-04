@@ -174,12 +174,8 @@ final class Select extends \UDA\Query
     public function from(string $table, ?string $alias = null): self
     {
         // Support inline alias shorthand: ->from('employees e') == ->from('employees', 'e')
-        if ($alias === null && str_contains($table, ' ')) {
-            $parts = preg_split('/\s+/', trim($table), 2);
-
-            if ($parts !== false && count($parts) === 2) {
-                [$table, $alias] = $parts;
-            }
+        if ($alias === null) {
+            [$table, $alias] = $this->splitTableAlias($table);
         }
 
         $clone = clone $this;
@@ -216,27 +212,82 @@ final class Select extends \UDA\Query
     }
 
     /**
-     * @param string  $table  The table to join
-     * @param string  $left   The left column
-     * @param string  $right  The right column
-     * @param string  $type   The join type (INNER, LEFT, RIGHT, etc.)
-     * @param ?string $alias  Optional table alias
+     * Split an inline "table alias" shorthand into a [table, alias] pair.
+     *
+     * @param string $table  Table reference, optionally with a trailing alias.
+     *
+     * @return array{0: string, 1: ?string} Table name and alias (null when absent).
+     */
+    private function splitTableAlias(string $table): array
+    {
+        if (str_contains($table, ' ')) {
+            $parts = preg_split('/\s+/', trim($table), 2);
+
+            if ($parts !== false && count($parts) === 2) {
+                return [$parts[0], $parts[1]];
+            }
+        }
+
+        return [$table, null];
+    }
+
+    /**
+     * Add a JOIN clause.
+     *
+     * Two forms are supported:
+     *  - Column form:  ->join('departments', 'd.id', 'e.department_id', 'INNER', 'd')
+     *  - Inline form:  ->join('departments d', 'd.id = e.department_id')
+     *
+     * In the inline form the third argument is omitted; the second argument is
+     * treated as a raw ON predicate and any trailing alias on the table is parsed.
+     *
+     * @param string  $table           The table to join (may carry an inline alias).
+     * @param string  $leftOrCondition Left column (column form) or raw ON predicate (inline form).
+     * @param ?string $right           Right column (column form); null selects the inline form.
+     * @param string  $type            The join type (INNER, LEFT, RIGHT, etc.).
+     * @param ?string $alias           Optional table alias (column form).
      *
      * @return self
      */
-    public function join(string $table, string $left, string $right, string $type = 'INNER', ?string $alias = null): self
+    public function join(string $table, string $leftOrCondition, ?string $right = null, string $type = 'INNER', ?string $alias = null): self
     {
         $clone = clone $this;
+
+        if ($right === null) {
+            if ($alias === null) {
+                [$table, $alias] = $this->splitTableAlias($table);
+            }
+
+            $condition = $leftOrCondition;
+        } else {
+            $condition = sprintf('%s = %s', $clone->quote($leftOrCondition), $clone->quote($right));
+        }
+
         $clone->joins[] = [
             'type' => strtoupper($type),
             'table' => $table,
             'alias' => $alias,
             'subquery' => null,
-            'condition' => sprintf('%s = %s', $clone->quote($left), $clone->quote($right)),
+            'condition' => $condition,
         ];
         $clone->addHintTable($table);
 
         return $clone;
+    }
+
+    /**
+     * Add a LEFT JOIN clause. Accepts the same two forms as join().
+     *
+     * @param string  $table           The table to join (may carry an inline alias).
+     * @param string  $leftOrCondition Left column (column form) or raw ON predicate (inline form).
+     * @param ?string $right           Right column (column form); null selects the inline form.
+     * @param ?string $alias           Optional table alias (column form).
+     *
+     * @return self
+     */
+    public function leftJoin(string $table, string $leftOrCondition, ?string $right = null, ?string $alias = null): self
+    {
+        return $this->join($table, $leftOrCondition, $right, 'LEFT', $alias);
     }
 
     /**

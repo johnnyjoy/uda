@@ -197,7 +197,6 @@ $db->select('id')
     ->from('employees')
     ->where('status','active')
         ->and('department_id')->in($allowedDepartments)
-        ->end()
     ->rows();
 ```
 
@@ -262,7 +261,6 @@ $db->select('e.id')
         $db->select('1')
             ->from('terminations t')
             ->whereRaw('t.employee_id = e.id')
-            ->end()
     )
     ->rows();
 ```
@@ -777,7 +775,7 @@ Need a trusted raw expression? `Expr::raw()` accepts named parameters:
 
 ```php
 $db->select(
-        Expr::raw('COALESCE(title, :fallback)', [':fallback' => 'Unknown'])->as('title_display')
+        Expr::raw('COALESCE(title, :fallback)', ['fallback' => 'Unknown'])->as('title_display')
     )
     ->from('employees')
     ->rows();
@@ -1016,7 +1014,6 @@ $db->delete()
     ->with('expired', $expired)
     ->table('sessions')
     ->whereRaw('id IN (SELECT id FROM expired)')
-    ->end()
     ->exec();
 ```
 

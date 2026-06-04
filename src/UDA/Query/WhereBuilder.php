@@ -644,6 +644,27 @@ final class WhereBuilder
     }
 
     /**
+     * End the chain and execute the write, returning the affected-row count.
+     *
+     * `exec()` is a terminator, so it closes the WHERE chain automatically; an
+     * explicit `->end()` is not required.
+     *
+     * @return int Affected row count.
+     *
+     * @throws QueryException If the parent builder is not an UPDATE or DELETE.
+     */
+    public function exec(): int
+    {
+        $parent = $this->end();
+
+        if (!$parent instanceof Update && !$parent instanceof Delete) {
+            throw new QueryException('exec() is only available on UPDATE/DELETE builders.');
+        }
+
+        return $parent->exec();
+    }
+
+    /**
      * End the chain and return the first row (or null).
      *
      * @return ?array The first row or null.
