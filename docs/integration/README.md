@@ -34,7 +34,7 @@ Legend:
 | **DB2** | Gated | Gated | Gated | N/A⁴ | Yes | [db2.md](db2.md) · [`db2-integration.yml`](../.github/workflows/db2-integration.yml) |
 | **Firebird** | Gated | Gated | Gated | Gated | Yes | [firebird.md](firebird.md) · [`firebird-integration.yml`](../.github/workflows/firebird-integration.yml) |
 | **Informix** | Soon | — | — | — | Soon | Planned — not connectable today; see [deferred.md](deferred.md) |
-| **CUBRID** | Soon | — | — | — | Soon | Planned — not connectable today; see [deferred.md](deferred.md) |
+| **CUBRID** | Yes | `cubrid/cubrid:11.4` | `pdo_cubrid` | `--privileged` | Pending | Driver + dialect implemented; CI workflow added; merge-blocking after first green run |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT.  

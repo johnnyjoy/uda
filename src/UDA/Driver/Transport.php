@@ -34,6 +34,7 @@ final class Transport
             'oci', 'oracle' => 'oracle',
             'db2' => 'db2',
             'firebird', 'interbase' => 'firebird',
+            'cubrid' => 'cubrid',
             default => strtolower(trim((string) $engine)),
         };
     }

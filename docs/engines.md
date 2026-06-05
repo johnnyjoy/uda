@@ -25,7 +25,7 @@ Set `UDA_CONFIG` to your config file, then `Database::connectDefault()` or
 | Firebird | `firebird` | `pdo_firebird` | Alias `interbase` |
 | Sybase ASE | `sybase` | `pdo_dblib` | Not in upstream CI |
 | Informix | — | — | **Coming soon** — not connectable in UDA today; planned (`pdo_informix`, CI TBD) |
-| CUBRID | — | — | **Coming soon** — not connectable in UDA today; planned (`pdo_cubrid`, CI TBD) |
+| CUBRID | `cubrid` | `pdo_cubrid` | Port 33000; default user `dba` |
 
 ---
 
@@ -202,6 +202,28 @@ filename on the PHP host. More detail: [integration/firebird.md](integration/fir
 
 Legacy config `driver: dblib` maps to engine `sybase`. Local live tests:
 [integration/sybase.md](integration/sybase.md).
+
+---
+
+## CUBRID
+
+```json
+"app": {
+  "driver": "cubrid",
+  "params": {
+    "host": "127.0.0.1",
+    "port": 33000,
+    "dbname": "testdb"
+  },
+  "user": "dba",
+  "pass": ""
+}
+```
+
+CUBRID uses MySQL-compatible SQL: `LIMIT/OFFSET` pagination and `ON DUPLICATE KEY UPDATE`
+upsert. No `RETURNING` clause support. Default admin user is `dba` with an empty password
+in development containers. PHP extension: `pdo_cubrid` (available via PECL). Docker image:
+`cubrid/cubrid:11.4` (requires `--privileged`).
 
 ---
 

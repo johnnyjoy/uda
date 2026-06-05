@@ -30,6 +30,7 @@ final class EngineRoutingTest extends TestCase
             'db2' => ['db2', 'db2'],
             'firebird' => ['firebird', 'firebird'],
             'interbase' => ['interbase', 'firebird'],
+            'cubrid' => ['cubrid', 'cubrid'],
         ];
     }
 

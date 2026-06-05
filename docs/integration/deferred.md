@@ -197,18 +197,20 @@ Until then, do not expect Informix in `uda.json` examples or integration workflo
 
 ---
 
-## CUBRID (coming soon)
+## CUBRID
 
-**Status:** listed on the public matrix as **not in UDA today** / **coming soon**.
+**Status:** driver and dialect implemented; CI workflow added; merge-blocking after first confirmed green run.
 
 | Item | State |
 | ---- | ----- |
-| `Database::connect()` with `driver: cubrid` | **Not implemented** |
-| Dialect + `UDA\Driver\Cubrid` | Planned |
-| PHP `pdo_cubrid` | Extension exists; UDA connect/dialect path not built |
-| GHA merge-blocking job | **Coming soon** after driver + container/CI path is proven |
+| `Database::connect()` with `driver: cubrid` | **Implemented** (`src/UDA/Driver/Cubrid.php`) |
+| Dialect + `UDA\Query\Dialect\Cubrid` | **Implemented** — extends `MariaDb` |
+| PHP `pdo_cubrid` | Extension required (`shivammathur/setup-php` supports it) |
+| GHA workflow | **Added** — `.github/workflows/cubrid-integration.yml` |
+| GHA merge-blocking | **Pending** — promoted once first CI run is confirmed green |
 
-Until then, do not expect CUBRID in `uda.json` examples or integration workflows.
+Docker image: `cubrid/cubrid:11.4`, port 33000, requires `--privileged`.
+Integration tests live in `tests/Cubrid/`; excluded from default `composer test`.
 
 ---
 

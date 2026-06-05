@@ -23,7 +23,7 @@ use UDA\Query\State\Upsert as UpsertState;
 /**
  * MariaDB/MySQL-compatible dialect handling INSERT IGNORE and ON DUPLICATE KEY.
  */
-final class MariaDb extends Dialect
+class MariaDb extends Dialect
 {
     /**
      * Name.

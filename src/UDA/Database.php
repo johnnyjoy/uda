@@ -9,6 +9,7 @@ use UDA\Exception\ConnectionException;
 use UDA\Exception\QueryException;
 use UDA\Query;
 use UDA\Query\Delete;
+use UDA\Query\Dialect\Cubrid as CubridDialect;
 use UDA\Query\Dialect\Db2 as Db2Dialect;
 use UDA\Query\Dialect\Dialect;
 use UDA\Query\Dialect\Firebird as FirebirdDialect;
@@ -631,6 +632,7 @@ final class Database
             'oracle' => new OracleDialect(),
             'db2' => new Db2Dialect(),
             'firebird' => new FirebirdDialect(),
+            'cubrid'   => new CubridDialect(),
             default => throw new QueryException(
                 'No SQL dialect available for engine: ' . $this->driver->engineName()
             ),

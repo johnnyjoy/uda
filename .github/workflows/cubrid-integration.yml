@@ -1,0 +1,51 @@
+name: CUBRID Integration
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  cubrid-integration:
+    runs-on: ubuntu-latest
+    services:
+      cubrid:
+        image: cubrid/cubrid:11.4
+        env:
+          CUBRID_DB: testdb
+        ports:
+          - 33000:33000
+        options: >-
+          --privileged
+          --health-cmd "nc -z localhost 33000 || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 12
+          --health-start-period 60s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: cubrid, pdo_cubrid
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run architecture guardrails
+        run: composer check
+
+      - name: Run CUBRID integration suites
+        env:
+          CUBRID_HOST: 127.0.0.1
+          CUBRID_PORT: 33000
+          CUBRID_DB: testdb
+          CUBRID_USER: dba
+          CUBRID_PASS: ''
+        run: vendor/bin/phpunit --bootstrap tests/cubrid-bootstrap.php tests/Cubrid
+
+      - name: Reference CUBRID integration docs
+        run: echo "See docs/integration/deferred.md for CUBRID status"

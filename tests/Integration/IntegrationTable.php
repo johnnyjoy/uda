@@ -80,6 +80,24 @@ trait IntegrationTable
         }
     }
 
+    protected function seedCubridTable(Database $db): void
+    {
+        $db->exec(
+            'CREATE TABLE IF NOT EXISTS uda_cubrid_ig (
+                id INT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                score INT NOT NULL DEFAULT 0
+            )'
+        );
+        $db->exec('DELETE FROM uda_cubrid_ig');
+        for ($i = 1; $i <= 10; $i++) {
+            $db->exec(
+                'INSERT INTO uda_cubrid_ig (id, name, score) VALUES (:id, :name, :score)',
+                ['id' => $i, 'name' => 'row' . $i, 'score' => $i * 10]
+            );
+        }
+    }
+
     protected function seedFirebirdTable(Database $db): void
     {
         static $initialized = false;

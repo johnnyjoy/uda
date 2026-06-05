@@ -10,6 +10,7 @@
             <exclude>tests/Sybase</exclude>
             <exclude>tests/Db2</exclude>
             <exclude>tests/Firebird</exclude>
+            <exclude>tests/Cubrid</exclude>
         </testsuite>
         <testsuite name="SybaseLive">
             <directory>tests/Sybase</directory>
