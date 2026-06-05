@@ -56,7 +56,7 @@ HTTP / CLI / worker
 | Firebird | Yes | Yes (`pdo_firebird`) |
 | Sybase ASE | Yes | No — no public CI license; local opt-in only |
 | Informix | No | Coming soon |
-| CUBRID | No | Coming soon |
+| CUBRID | Yes | Yes (`pdo_cubrid`) |
 
 Per-engine config and CI detail: [engines.md](docs/engines.md), [integration/README.md](docs/integration/README.md).
 
