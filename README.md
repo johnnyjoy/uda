@@ -55,10 +55,20 @@ HTTP / CLI / worker
 | DB2 | Yes | Yes (`pdo_ibm`) |
 | Firebird | Yes | Yes (`pdo_firebird`) |
 | Sybase ASE | Yes | No — no public CI license; local opt-in only |
-| Informix | No | Coming soon |
+| Informix | No | Not supported — see note below |
 | CUBRID | Yes | Yes (`pdo_cubrid`) |
 
 Per-engine config and CI detail: [engines.md](docs/engines.md), [integration/README.md](docs/integration/README.md).
+
+> **Informix note:** Informix is not currently supported. The PHP PDO ecosystem for
+> Informix has a fundamental compatibility gap: `pdo_informix` requires the IBM
+> Informix Client SDK (CSDK), which is not included in the freely-available
+> `informix-developer-database` Docker image and is not redistributable. The
+> alternative, `pdo_ibm` (IBM DB2 CLI driver connecting via DRDA), ignores
+> `PDO::ATTR_EMULATE_PREPARES` — it calls `SQLNumResultCols` and `SQLDescribeParam`
+> unconditionally after every `SQLPrepare`, and Informix's DRDA server returns
+> error -201 for both on pagination and MERGE statements. Support may be revisited
+> when the PDO driver situation improves.
 
 ## Install
 
