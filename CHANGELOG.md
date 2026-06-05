@@ -13,6 +13,8 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ### Added
 
+- **CUBRID engine support**: `driver: cubrid` is now a first-class, CI-gated engine. `UDA\Driver\Cubrid` supplies the `cubrid:` DSN and backtick quoting; `UDA\Query\Dialect\Cubrid` extends `MariaDb` and inherits `LIMIT/OFFSET` pagination and `ON DUPLICATE KEY UPDATE` upsert. No `RETURNING` clause — the dialect rejects it before PDO. Integration suite: `tests/Cubrid/`; CI job: `cubrid-integration.yml` (`cubrid/cubrid:11.4`, `pdo_cubrid`, `--privileged`).
+
 - **Persistent connections (always on)**: UDA now keeps the PDO handle in PHP's per-process pool and reuses it across requests, eliminating the connect/auth handshake on every request in php-fpm/mod_php/container deployments. This is intrinsic to the runtime, not a setting — `PDO::ATTR_PERSISTENT` is forced exactly like `PDO::ATTR_ERRMODE` and cannot be overridden through connection `options`. For safety, the Driver rolls back any transaction a prior request left open on a pooled handle when it is checked out, so every request starts from a clean session.
 
 ### Fixed

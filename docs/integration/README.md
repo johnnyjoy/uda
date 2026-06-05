@@ -34,12 +34,13 @@ Legend:
 | **DB2** | Gated | Gated | Gated | N/A⁴ | Yes | [db2.md](db2.md) · [`db2-integration.yml`](../.github/workflows/db2-integration.yml) |
 | **Firebird** | Gated | Gated | Gated | Gated | Yes | [firebird.md](firebird.md) · [`firebird-integration.yml`](../.github/workflows/firebird-integration.yml) |
 | **Informix** | Soon | — | — | — | Soon | Planned — not connectable today; see [deferred.md](deferred.md) |
-| **CUBRID** | Yes | `cubrid/cubrid:11.4` | `pdo_cubrid` | `--privileged` | Pending | Driver + dialect implemented; CI workflow added; merge-blocking after first green run |
+| **CUBRID** | Gated | Gated | Gated | N/A⁵ | Yes | [`cubrid-integration.yml`](../.github/workflows/cubrid-integration.yml) · [cubrid.md](cubrid.md) |
 
 ¹ MariaDB dialect rejects `returning()` before PDO (no `RETURNING` in emitted SQL).  
 ² Sybase dialect disables MERGE/UPSERT.  
 ³ No CI workflow — upstream has no ASE license; local `UDA_SYBASE_LIVE=1` only.  
-⁴ Db2 dialect rejects `returning()` before PDO; requires `pdo_ibm` at connect time.
+⁴ Db2 dialect rejects `returning()` before PDO; requires `pdo_ibm` at connect time.  
+⁵ CUBRID has no RETURNING clause; dialect rejects `returning()` before PDO.
 
 Read cache behaviour is covered in the **SQLite** job (`tests/Cache`).
 
@@ -60,6 +61,7 @@ for the exact test classes and methods.
 | Oracle | See [oracle.md](oracle.md) | `oracle-integration` |
 | DB2 | See [db2.md](db2.md) | `db2-integration` |
 | Firebird | See [firebird.md](firebird.md) | `firebird-integration` |
+| CUBRID | See [cubrid.md](cubrid.md) | `cubrid-integration` |
 
 Sybase has **no CI job**. Licensees run `UDA_SYBASE_LIVE=1 composer test:sybase-live` locally — see [sybase.md](sybase.md).
 

@@ -199,18 +199,8 @@ Until then, do not expect Informix in `uda.json` examples or integration workflo
 
 ## CUBRID
 
-**Status:** driver and dialect implemented; CI workflow added; merge-blocking after first confirmed green run.
-
-| Item | State |
-| ---- | ----- |
-| `Database::connect()` with `driver: cubrid` | **Implemented** (`src/UDA/Driver/Cubrid.php`) |
-| Dialect + `UDA\Query\Dialect\Cubrid` | **Implemented** — extends `MariaDb` |
-| PHP `pdo_cubrid` | Extension required (`shivammathur/setup-php` supports it) |
-| GHA workflow | **Added** — `.github/workflows/cubrid-integration.yml` |
-| GHA merge-blocking | **Pending** — promoted once first CI run is confirmed green |
-
-Docker image: `cubrid/cubrid:11.4`, port 33000, requires `--privileged`.
-Integration tests live in `tests/Cubrid/`; excluded from default `composer test`.
+CUBRID is **fully integrated and CI-gated**. See [cubrid.md](cubrid.md) and
+[`cubrid-integration.yml`](../../.github/workflows/cubrid-integration.yml).
 
 ---
 
