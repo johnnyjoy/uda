@@ -11,15 +11,20 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-06
+
 ### Added
 
 - **CUBRID engine support**: `driver: cubrid` is now a first-class, CI-gated engine. `UDA\Driver\Cubrid` supplies the `cubrid:` DSN and backtick quoting; `UDA\Query\Dialect\Cubrid` extends `MariaDb` and inherits `LIMIT/OFFSET` pagination and `ON DUPLICATE KEY UPDATE` upsert. No `RETURNING` clause — the dialect rejects it before PDO. Integration suite: `tests/Cubrid/`; CI job: `cubrid-integration.yml` (`cubrid/cubrid:11.4`, `pdo_cubrid`, `--privileged`).
+
+- **`whereExists` / `whereNotExists` accept a `WhereBuilder` subquery**: correlated subqueries can now be composed directly in the fluent API without raw SQL fragments.
 
 - **Persistent connections (always on)**: UDA now keeps the PDO handle in PHP's per-process pool and reuses it across requests, eliminating the connect/auth handshake on every request in php-fpm/mod_php/container deployments. This is intrinsic to the runtime, not a setting — `PDO::ATTR_PERSISTENT` is forced exactly like `PDO::ATTR_ERRMODE` and cannot be overridden through connection `options`. For safety, the Driver rolls back any transaction a prior request left open on a pooled handle when it is checked out, so every request starts from a clean session.
 
 ### Fixed
 
 - `WhereBuilder::toSql()` proxies through `end()` like read terminators, so `->where(...)->toSql()` no longer requires a manual `end()` on SELECT builders.
+- `COUNT` queries now emit `COUNT(1)` for consistent behaviour across engines.
 - Added architecture guard to keep `Driver::row()` on single-row fetch path (`fetch()`), preventing regression to full-result materialization.
 - Restored the architecture-boundary guard (`tools/check-imports.php`), which previously matched nothing (path-prefix bug) and passed vacuously. It now uses PHP's tokenizer to inspect real code references only (comments/strings ignored) and enforces the domain-takeover invariants: `Query` must not execute via PDO or reach into `Cache`; `Cache` must not execute via PDO or drive via `Driver`; `Driver` must not own a cache backend (`Redis`/`Memcached`/`Predis`) directly.
 
@@ -30,16 +35,15 @@ CI job names and maintainer workflow detail belong in `docs/integration/` or
 - Moved the dialect-compilation state DTOs from `UDA\Query\Dialect` to a new `UDA\Query\State` namespace (`src/UDA/Query/State/`). They are builder-state inputs consumed by dialects, not dialects, so the `Dialect` directory now contains only engine dialects and their base classes. The redundant `State` suffix was dropped from the class names (`UDA\Query\State\Select`/`Insert`/`Update`/`Delete`/`Upsert`) per the namespace-repetition naming rule; consumers import them aliased as `…State` to disambiguate from the same-named query builders in `UDA\Query`.
 - Query-compilation layer made closure-free for shallower, more predictable build paths: dialect state objects (`SelectState`/`InsertState`/`UpdateState`/`DeleteState`/`UpsertState`) bind values via their `ParamBag` and quote identifiers through the shared `Identifier::quoteFor()` helper instead of storing `parameterize`/`quote` closures; `WhereBuilder` quotes through its injected parent builder rather than a stored quoter closure; dialect compilers reuse `quoteColumns()`/`rowPlaceholders()` helpers in place of per-call `array_map(fn …)`; and `Database`/`Link` transactions pass the subject to `Driver::transaction()` directly rather than wrapping the callback. The transaction callback contract is unchanged (`Database` callbacks receive the `Database`; `Link` callbacks need no argument). Internal visibility widened: `Query::param()` and `Query::quote()` are now public.
 - `Driver` read/execute paths are now closure-free and shallow for performance: `row()`, `rows()`, `value()`, `values()`, and `list()` fetch directly (no per-call executor closure), with caching handled by flat `cacheHit()`/`cacheStore()` helpers. `list()` fetches numeric rows via `PDO::FETCH_NUM` directly instead of converting an associative row. The prepared-statement reuse cache (`Driver\Prepared`) exposes `get()`/`put()` so the hot path no longer allocates a `prepare` closure per query, and `Driver\Oracle\Returning` takes the `Driver` directly instead of two wrapper closures.
-- README and integration matrix: **Informix** and **CUBRID** listed as not in UDA yet / coming soon.
 - Hostile docs pass: removed stale/ambiguous wording (`DB2 (stub)`), reduced second-person phrasing in reader-facing docs, and tightened integration/getting-started language for neutral, project-focused tone.
 - Clarified singular-read behavior in docs: `row()` uses single-row fetch path and does not materialize full result sets.
-- Agent skill `skills/uda-dal-layer` renamed to **`skills/uda-data-access`** (clearer name; “DAL layer” was redundant).
+- Agent skills under `skills/` fully rewritten as four focused, user-first guides: `uda-start`, `uda-repository`, `uda-queries`, `uda-deploy`.
 - Composer package name **`johnnyjoy/uda`** (install: `composer require johnnyjoy/uda`).
-- Documentation reorganized for **application developers**: README as full
-  storefront (lead, capabilities, engines, Configuration / Raw SQL / Fluent queries /
-  reuse & bulk insert, Caching sections, `Link` quick start), plus [docs/building-your-dal.md](docs/building-your-dal.md),
-  [docs/engines.md](docs/engines.md), [docs/README.md](docs/README.md) user vs
-  contributor paths; agent skills described as tool-agnostic under `skills/`.
+- Documentation reorganized for **application developers**: README as full storefront (lead, capabilities, engines, Configuration / Raw SQL / Fluent queries / reuse & bulk insert, Caching sections, `Link` quick start), plus [docs/building-your-dal.md](docs/building-your-dal.md), [docs/engines.md](docs/engines.md), [docs/README.md](docs/README.md) user vs contributor paths; agent skills described as tool-agnostic under `skills/`.
+
+### Removed
+
+- **Informix engine support not included**: `pdo_informix` requires the IBM Informix Client SDK (CSDK), which is not included in the freely-available `informix-developer-database` Docker image and is not redistributable. The alternative driver (`pdo_ibm` over DRDA) ignores `PDO::ATTR_EMULATE_PREPARES` and returns error -201 from Informix's DRDA server for pagination and MERGE prepared statements. Support may be revisited when the PHP PDO driver situation improves.
 
 ## [1.0.0] - 2026-06-03
 
