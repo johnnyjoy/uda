@@ -1,40 +1,32 @@
-# UDA agent skills (repository)
+# UDA agent skills
 
-Executable checklists for building and operating a **database abstraction layer**
-on UDA. Skills complement the docs; they do not replace
-[docs/building-your-dal.md](../docs/building-your-dal.md).
-
-**Explicit SQL in repository classes.** One execution path; import only `Database` or `Link` in
-application code.
-
----
-
-## Use with any AI agent
-
-Skills in this tree are **agent-agnostic**. They are plain Markdown with YAML
-front matter (`name`, `description`). Any tool that supports “skills” (or manual
-@‑attachment) can load them:
-
-| How to load | |
-| ----------- | -- |
-| **Path** | `skills/uda-data-access/SKILL.md` (and others below) |
-| **Chat** | Attach or reference the file path your agent supports |
-| **Project bootstrap** | e.g. `AGENTS.md` / `CLAUDE.md`: “For repository/data-access work on UDA, follow `skills/uda-data-access/SKILL.md`.” |
-| **Local copy** | Optional symlink into your agent’s skills folder — never required in git |
-
-Canonical copy lives in **this repo** under `skills/`. Do not depend on IDE-only
-config directories for discovery.
+Four skills that cover everything an application developer needs to use UDA.
+They are plain Markdown with YAML front matter and work with any AI agent that
+supports skills or file attachment.
 
 ---
 
 ## Skill index
 
 | Skill | When to load |
-| ----- | ------------ |
-| [uda-data-access](uda-data-access/SKILL.md) | Your repositories on UDA — `Database` vs `Link`, anti-patterns (renamed from `uda-dal-layer`; DAL already means data access layer) |
-| [uda-sql-and-cache](uda-sql-and-cache/SKILL.md) | Queries, terminators, table hints, cache flush/clear |
-| [uda-config-deploy](uda-config-deploy/SKILL.md) | JSON config, env, Redis/Memcached, FPM vs workers |
-| [uda-change-gates](uda-change-gates/SKILL.md) | Before merge to **UDA itself**: guardrails, tests |
+|---|---|
+| [uda-start](uda-start/SKILL.md) | **Start here.** Install, configure, first query, verify a working connection. |
+| [uda-repository](uda-repository/SKILL.md) | Writing repository classes, `Link` vs `Database`, naming rules, testing with SQLite in-memory, anti-patterns to reject in review. |
+| [uda-queries](uda-queries/SKILL.md) | Named params, terminators, table hints, transactions, `QueryException`, streaming with `each()`, cache flush. |
+| [uda-deploy](uda-deploy/SKILL.md) | Production config, Redis/Memcached, query observer, multiple connections, deployment checklist, failure runbooks. |
+
+---
+
+## How to load
+
+| Method | Example |
+|---|---|
+| **Manual attach** | Attach `skills/uda-start/SKILL.md` in chat |
+| **Project bootstrap** | Add to `AGENTS.md` or `CLAUDE.md`: `"For UDA setup, follow skills/uda-start/SKILL.md"` |
+| **Auto-invocation** | Skills have descriptive front matter — agents that support auto-invocation will load the right skill from the `description` field |
+
+Canonical copies live in **this repo** under `skills/`. Do not depend on IDE-specific
+config directories for the authoritative version.
 
 ---
 
@@ -42,22 +34,19 @@ config directories for discovery.
 
 **Application developers:**
 
-1. [docs/building-your-dal.md](../docs/building-your-dal.md)
-2. [docs/getting-started.md](../docs/getting-started.md)
-3. [docs/engines.md](../docs/engines.md)
-4. [docs/patterns.md](../docs/patterns.md)
-5. [docs/public-api.md](../docs/public-api.md)
-6. [docs/configuration.md](../docs/configuration.md)
-7. [docs/caching.md](../docs/caching.md)
+1. [docs/getting-started.md](../docs/getting-started.md)
+2. [docs/configuration.md](../docs/configuration.md)
+3. [docs/building-your-dal.md](../docs/building-your-dal.md)
+4. [docs/public-api.md](../docs/public-api.md)
+5. [docs/caching.md](../docs/caching.md)
+6. [docs/engines.md](../docs/engines.md)
 
 **Contributors** (changing `src/UDA/`): [docs/README.md#for-contributors](../docs/README.md#for-contributors).
 
-Do not edit `docs/query-cookbook.md` without explicit approval.
-
 ---
 
-## Maintainer-only (`.opencode/skills/`)
+## Maintainer skills (`.opencode/skills/`)
 
-UDA **library** internals (domain bleed, naming for `src/UDA/`) may live under
-`.opencode/skills/`. Use those only when modifying UDA, not when building an
-application DAL.
+UDA library internals (naming, domain model, config authority) live under
+`.opencode/skills/`. Use those only when modifying UDA itself, not when
+building an application.
